@@ -10,6 +10,8 @@
 <meta name="theme-color" content="#0c4a6e">
 <link rel="apple-touch-icon" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%230c4a6e"/><text x="50" y="70" font-size="55" text-anchor="middle">🏊</text></svg>'>
 <link rel="manifest" id="pwa-manifest">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800;900&family=Nunito+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -1091,26 +1093,25 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
     </div>
   </div>
 
-  <!-- ===== CLOUD SYNC ===== -->
+  <!-- ===== CLOUD SYNC (Google Drive) ===== -->
   <div class="card">
     <div class="card-title" style="justify-content:space-between">
-      <span>☁️ Cloud-Sync (Chrome/Edge)</span>
+      <span>☁️ Google Drive Sync</span>
       <span id="sync-status-badge" class="sync-status off"><span class="sync-dot gray"></span>Nicht verbunden</span>
-    </div>
-    <div id="sync-compat-warning" style="display:none;background:#fffbeb;border-left:3px solid #f59e0b;padding:10px 13px;border-radius:8px;margin-bottom:10px;font-size:0.85rem;color:#92400e">
-      ⚠️ Dein Browser unterstützt die File System Access API nicht. Sync funktioniert nur mit Chrome oder Edge am Desktop/Android. Auf iPhone/iPad alternativ: Export/Import verwenden.
     </div>
     <div id="sync-not-connected">
       <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:10px;line-height:1.5">
-        Wähle eine JSON-Datei in deinem OwnCloud-/Google-Drive-Ordner aus. Die App liest & schreibt dort – alle Geräte mit gleicher Datei sind dann synchron.
+        Verbinde deine App mit Google Drive – alle Geräte (Mac, iPhone, iPad, Android) bleiben automatisch synchron.
+        Die App legt beim ersten Verbinden eine Datei <code>pool-manager-sync.json</code> in deinem Drive an.
       </p>
-      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
-        <strong>Tipp:</strong> Lege vorher eine leere Datei <code>pool-sync.json</code> im gewünschten Cloud-Ordner an (Inhalt: <code>{}</code>).
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+        <strong>Datenschutz:</strong> Die App kann nur auf diese eine Datei zugreifen, nicht auf andere Inhalte deines Drives (<code>drive.file</code>-Scope).
       </p>
-      <button class="btn btn-primary btn-sm" onclick="cloudConnect()">🔗 Cloud-Datei auswählen</button>
+      <button class="btn btn-primary btn-sm" onclick="gdriveConnect()">🔗 Mit Google Drive verbinden</button>
     </div>
     <div id="sync-connected" style="display:none">
       <div style="background:var(--pool-surface);border-radius:8px;padding:10px 13px;margin-bottom:10px;font-size:0.85rem">
+        <div><strong>Konto:</strong> <span id="sync-account">–</span></div>
         <div><strong>Datei:</strong> <span id="sync-filename">–</span></div>
         <div><strong>Letzter Sync:</strong> <span id="sync-last-time">–</span></div>
         <div><strong>Status:</strong> <span id="sync-last-status">–</span></div>
@@ -1118,17 +1119,17 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border)">
         <div>
           <div style="font-weight:700;font-size:0.9rem">Auto-Sync</div>
-          <div style="font-size:0.76rem;color:var(--text-muted)">Bei jeder Änderung automatisch speichern</div>
+          <div style="font-size:0.76rem;color:var(--text-muted)">Bei jeder Änderung automatisch in Drive speichern</div>
         </div>
         <input type="checkbox" id="autosync-toggle" onchange="toggleAutoSync(this.checked)" style="width:20px;height:20px;cursor:pointer;accent-color:var(--pool-blue)">
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-        <button class="btn btn-ok btn-sm" onclick="cloudPull()">⬇️ Pull (Laden)</button>
-        <button class="btn btn-primary btn-sm" onclick="cloudPush()">⬆️ Push (Speichern)</button>
-        <button class="btn btn-outline btn-sm" onclick="cloudDisconnect()">🔌 Trennen</button>
+        <button class="btn btn-ok btn-sm" onclick="gdrivePull()">⬇️ Pull (aus Drive laden)</button>
+        <button class="btn btn-primary btn-sm" onclick="gdrivePush()">⬆️ Push (in Drive speichern)</button>
+        <button class="btn btn-outline btn-sm" onclick="gdriveDisconnect()">🔌 Trennen</button>
       </div>
       <p style="font-size:0.76rem;color:var(--text-muted);margin-top:10px;line-height:1.5">
-        <strong>Hinweis:</strong> Nach Seite-Neuladen muss die Datei-Berechtigung einmal erneut bestätigt werden (Browser-Sicherheit).
+        <strong>Hinweis:</strong> Beim Öffnen der App wird Auto-Pull einmal ausgeführt. Der Google-Token wird im Hintergrund erneuert; gelegentlich kann eine erneute Anmeldung nötig sein.
       </p>
     </div>
   </div>
@@ -4617,135 +4618,260 @@ function closePhotoLightbox(){
 }
 
 // ============================================================
-// CLOUD SYNC (File System Access API)
+// CLOUD SYNC (Google Drive via GIS + Drive REST API v3)
 // ============================================================
-let cloudFileHandle=null;
+const GDRIVE_CLIENT_ID='951612301459-ucd2mce5s6tsin7akel0rlmt7v7r2lnm.apps.googleusercontent.com';
+const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const GDRIVE_FILENAME='pool-manager-sync.json';
+
+let gdriveTokenClient=null;
+let gdriveAccessToken=null;
+let gdriveAccessTokenExpiry=0;
+let gdriveFileId=null;
+let gdriveAccountEmail=null;
 let autoSyncEnabled=false;
 let autoSyncTimer=null;
 let lastSyncTime=0;
+let gdriveGapiReady=false;
 
-function isFileSystemAccessSupported(){
-  return typeof window.showOpenFilePicker==='function';
+function gdriveIsConnected(){
+  return !!(gdriveAccessToken&&gdriveFileId);
 }
 
-function openSyncDB(){
-  return new Promise(function(resolve,reject){
-    const req=indexedDB.open('poolSyncDB',1);
-    req.onupgradeneeded=function(){req.result.createObjectStore('handles');};
-    req.onsuccess=function(){resolve(req.result);};
-    req.onerror=function(){reject(req.error);};
+function gdriveTokenValid(){
+  return gdriveAccessToken&&Date.now()<gdriveAccessTokenExpiry-30000;
+}
+
+// Wait for GIS + gapi to load (async <script> tags)
+function gdriveWaitForLibs(){
+  return new Promise(function(resolve){
+    let tries=0;
+    const check=function(){
+      tries++;
+      if(typeof google!=='undefined'&&google.accounts&&google.accounts.oauth2&&typeof gapi!=='undefined'){
+        resolve(true);
+      } else if(tries>50){
+        resolve(false);
+      } else {
+        setTimeout(check,100);
+      }
+    };
+    check();
   });
 }
 
-async function saveFileHandle(handle){
-  try{
-    const db=await openSyncDB();
-    const tx=db.transaction('handles','readwrite');
-    tx.objectStore('handles').put(handle,'cloudFile');
-    await new Promise(function(r){tx.oncomplete=r;});
-  }catch(e){console.warn('saveFileHandle fail',e);}
-}
-
-async function loadFileHandle(){
-  try{
-    const db=await openSyncDB();
-    const tx=db.transaction('handles','readonly');
-    const req=tx.objectStore('handles').get('cloudFile');
-    return await new Promise(function(r){req.onsuccess=function(){r(req.result);};req.onerror=function(){r(null);};});
-  }catch(e){return null;}
-}
-
-async function clearFileHandleDB(){
-  try{
-    const db=await openSyncDB();
-    const tx=db.transaction('handles','readwrite');
-    tx.objectStore('handles').delete('cloudFile');
-    await new Promise(function(r){tx.oncomplete=r;});
-  }catch(e){}
-}
-
-async function verifyPermission(handle,readWrite){
-  const opts=readWrite?{mode:'readwrite'}:{mode:'read'};
-  try{
-    if(await handle.queryPermission(opts)==='granted')return true;
-    if(await handle.requestPermission(opts)==='granted')return true;
-  }catch(e){console.warn('permission check failed',e);}
-  return false;
-}
-
-async function cloudConnect(){
-  if(!isFileSystemAccessSupported()){
-    toast('Browser unterstützt keine File-System-API. Nutze Chrome oder Edge am Desktop.','error',5000);
-    return;
-  }
-  try{
-    const [handle]=await window.showOpenFilePicker({
-      types:[{description:'Pool Sync-Datei (JSON)',accept:{'application/json':['.json']}}],
-      multiple:false,
-      excludeAcceptAllOption:false
+async function gdriveInitGapi(){
+  if(gdriveGapiReady)return true;
+  const ok=await gdriveWaitForLibs();
+  if(!ok)return false;
+  return new Promise(function(resolve){
+    gapi.load('client',async function(){
+      try{
+        await gapi.client.init({});
+        await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
+        gdriveGapiReady=true;
+        resolve(true);
+      }catch(e){
+        console.error('gapi init failed',e);
+        resolve(false);
+      }
     });
-    cloudFileHandle=handle;
-    await saveFileHandle(handle);
-    lastSyncTime=0;
-    sd('sync_last_time',0);
-    sd('sync_last_status','connected');
+  });
+}
+
+function gdriveInitTokenClient(){
+  if(gdriveTokenClient)return;
+  gdriveTokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:GDRIVE_CLIENT_ID,
+    scope:GDRIVE_SCOPE,
+    callback:function(response){
+      if(response.error){
+        toast('Anmeldung fehlgeschlagen: '+response.error,'error',5000);
+        return;
+      }
+      gdriveAccessToken=response.access_token;
+      gdriveAccessTokenExpiry=Date.now()+(response.expires_in||3600)*1000;
+      sd('gdrive_token',gdriveAccessToken);
+      sd('gdrive_token_expiry',gdriveAccessTokenExpiry);
+      if(gapi&&gapi.client)gapi.client.setToken({access_token:gdriveAccessToken});
+      // Continue pending action
+      if(gdrivePendingAction){
+        const action=gdrivePendingAction;
+        gdrivePendingAction=null;
+        action();
+      }
+    }
+  });
+}
+
+let gdrivePendingAction=null;
+function gdriveRequestToken(silent,thenDo){
+  if(!gdriveTokenClient)gdriveInitTokenClient();
+  gdrivePendingAction=thenDo;
+  try{
+    gdriveTokenClient.requestAccessToken({prompt:silent?'':'consent'});
+  }catch(e){
+    toast('Token-Anforderung fehlgeschlagen: '+e.message,'error',4500);
+  }
+}
+
+async function gdriveEnsureToken(silent){
+  if(gdriveTokenValid())return true;
+  return new Promise(function(resolve){
+    gdriveRequestToken(!!silent,function(){resolve(true);});
+    setTimeout(function(){if(!gdriveTokenValid())resolve(false);},15000);
+  });
+}
+
+// Find existing sync file (by name in app folder) or create new
+async function gdriveFindOrCreateFile(){
+  const searchResp=await gapi.client.drive.files.list({
+    q:"name='"+GDRIVE_FILENAME+"' and trashed=false",
+    fields:'files(id,name,modifiedTime)',
+    spaces:'drive',
+    pageSize:10
+  });
+  const files=searchResp.result.files||[];
+  if(files.length>0){
+    return files[0].id;
+  }
+  // Create empty file
+  const createResp=await gapi.client.drive.files.create({
+    resource:{name:GDRIVE_FILENAME,mimeType:'application/json'},
+    fields:'id'
+  });
+  return createResp.result.id;
+}
+
+async function gdriveFetchUserInfo(){
+  try{
+    const resp=await gapi.client.drive.about.get({fields:'user(emailAddress,displayName)'});
+    if(resp.result&&resp.result.user){
+      gdriveAccountEmail=resp.result.user.emailAddress||resp.result.user.displayName||'verbunden';
+      sd('gdrive_email',gdriveAccountEmail);
+    }
+  }catch(e){console.warn('userinfo fail',e);}
+}
+
+async function gdriveConnect(){
+  const libsOk=await gdriveInitGapi();
+  if(!libsOk){toast('Google-Bibliotheken nicht geladen. Bitte Seite neu laden.','error',5000);return;}
+  const tokenOk=await gdriveEnsureToken(false);
+  if(!tokenOk){toast('Anmeldung nicht erfolgt','error',4000);return;}
+  try{
+    toast('Suche/lege Datei in Drive an…','info',2000);
+    gdriveFileId=await gdriveFindOrCreateFile();
+    sd('gdrive_file_id',gdriveFileId);
+    await gdriveFetchUserInfo();
     await updateSyncUI();
-    toast('🔗 Verbunden mit: '+handle.name,'success',3000);
-    // Ask about initial pull
-    setTimeout(function(){
-      if(confirm('Jetzt Daten aus der Cloud-Datei laden (Pull)?\n\n⚠️ Bestehende lokale Daten werden überschrieben!\n\nWenn die Datei leer ist: wähle "Abbrechen" und drücke stattdessen "Push", um deine aktuellen Daten in die Cloud-Datei zu schreiben.')){
-        cloudPull();
+    toast('🔗 Mit Google Drive verbunden','success',2500);
+    // Offer to pull
+    setTimeout(async function(){
+      const hasData=await gdriveFileHasData();
+      if(hasData){
+        if(confirm('Es existieren bereits Daten in der Drive-Datei.\n\nJetzt aus Drive laden (Pull)?\n\n⚠️ Bestehende lokale Daten werden dabei überschrieben.')){
+          gdrivePull();
+        } else {
+          toast('Tipp: Drücke "Push" wenn du deine lokalen Daten in Drive speichern willst.','info',4500);
+        }
+      } else {
+        if(confirm('Drive-Datei ist leer.\n\nJetzt deine lokalen Daten in Drive speichern (Push)?')){
+          gdrivePush();
+        }
       }
     },300);
   }catch(e){
-    if(e.name!=='AbortError'){
-      toast('Verbindung fehlgeschlagen: '+e.message,'error');
-    }
+    toast('Verbindung fehlgeschlagen: '+(e.message||e.result?.error?.message||'unbekannt'),'error',5000);
+    console.error(e);
   }
 }
 
-async function cloudDisconnect(){
-  cloudFileHandle=null;
-  autoSyncEnabled=false;
-  sd('sync_autosync',false);
-  sd('sync_last_status','disconnected');
-  await clearFileHandleDB();
-  await updateSyncUI();
-  toast('🔌 Cloud-Verbindung getrennt','info');
+async function gdriveFileHasData(){
+  try{
+    const resp=await gapi.client.drive.files.get({fileId:gdriveFileId,alt:'media'});
+    const body=resp.body||'';
+    if(!body.trim()||body.trim()==='{}')return false;
+    try{const d=JSON.parse(body);return !!(d.measurements&&d.measurements.length);}catch(e){return false;}
+  }catch(e){return false;}
 }
 
-async function cloudPush(){
-  if(!cloudFileHandle){toast('Keine Datei verbunden','error');return;}
-  const ok=await verifyPermission(cloudFileHandle,true);
-  if(!ok){toast('Schreibrechte nicht gewährt','error');return;}
+async function gdriveDisconnect(){
+  // Revoke token
+  if(gdriveAccessToken&&google&&google.accounts&&google.accounts.oauth2){
+    try{google.accounts.oauth2.revoke(gdriveAccessToken,function(){});}catch(e){}
+  }
+  gdriveAccessToken=null;
+  gdriveAccessTokenExpiry=0;
+  gdriveFileId=null;
+  gdriveAccountEmail=null;
+  autoSyncEnabled=false;
+  sd('gdrive_token',null);
+  sd('gdrive_token_expiry',0);
+  sd('gdrive_file_id',null);
+  sd('gdrive_email',null);
+  sd('sync_autosync',false);
+  sd('sync_last_status','disconnected');
+  await updateSyncUI();
+  toast('🔌 Von Google Drive getrennt','info');
+}
+
+async function gdrivePush(){
+  if(!gdriveFileId){toast('Nicht verbunden','error');return;}
+  const libsOk=await gdriveInitGapi();
+  if(!libsOk){toast('Google-Bibliotheken nicht geladen','error',4000);return;}
+  const tokenOk=await gdriveEnsureToken(true);
+  if(!tokenOk){toast('Anmeldung erforderlich','warn',4000);return;}
   try{
     const data=collectAllData();
     data.syncedAt=new Date().toISOString();
-    data._pushedFrom='pool-manager-TEST';
-    const writable=await cloudFileHandle.createWritable();
-    await writable.write(JSON.stringify(data,null,2));
-    await writable.close();
+    data._pushedFrom='pool-manager';
+    const body=JSON.stringify(data,null,2);
+    // Use upload endpoint for media update
+    const resp=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+gdriveFileId+'?uploadType=media',{
+      method:'PATCH',
+      headers:{
+        'Authorization':'Bearer '+gdriveAccessToken,
+        'Content-Type':'application/json'
+      },
+      body:body
+    });
+    if(!resp.ok){
+      const errTxt=await resp.text();
+      throw new Error('HTTP '+resp.status+': '+errTxt);
+    }
     lastSyncTime=Date.now();
     sd('sync_last_time',lastSyncTime);
     sd('sync_last_status','push OK '+new Date().toLocaleTimeString('de-DE'));
     await updateSyncUI();
-    toast('⬆️ Push erfolgreich','success',2000);
+    toast('⬆️ In Drive gespeichert','success',2000);
   }catch(e){
     sd('sync_last_status','push FEHLER: '+e.message);
     await updateSyncUI();
-    toast('Push fehlgeschlagen: '+e.message,'error',5000);
+    toast('Push fehlgeschlagen: '+e.message,'error',5500);
+    console.error(e);
   }
 }
 
-async function cloudPull(){
-  if(!cloudFileHandle){toast('Keine Datei verbunden','error');return;}
-  const ok=await verifyPermission(cloudFileHandle,false);
-  if(!ok){toast('Leserechte nicht gewährt','error');return;}
+async function gdrivePull(){
+  if(!gdriveFileId){toast('Nicht verbunden','error');return;}
+  const libsOk=await gdriveInitGapi();
+  if(!libsOk){toast('Google-Bibliotheken nicht geladen','error',4000);return;}
+  const tokenOk=await gdriveEnsureToken(true);
+  if(!tokenOk){toast('Anmeldung erforderlich','warn',4000);return;}
   try{
-    const file=await cloudFileHandle.getFile();
-    const text=await file.text();
+    const resp=await fetch('https://www.googleapis.com/drive/v3/files/'+gdriveFileId+'?alt=media',{
+      method:'GET',
+      headers:{'Authorization':'Bearer '+gdriveAccessToken}
+    });
+    if(!resp.ok){
+      if(resp.status===404){
+        throw new Error('Datei nicht mehr in Drive vorhanden – bitte neu verbinden');
+      }
+      throw new Error('HTTP '+resp.status);
+    }
+    const text=await resp.text();
     if(!text.trim()||text.trim()==='{}'){
-      toast('Cloud-Datei ist leer – nichts zu laden. Nutze "Push" um deine Daten hochzuladen.','warn',4500);
+      toast('Drive-Datei ist leer – nichts zu laden. Nutze "Push" um deine Daten hochzuladen.','warn',4500);
       return;
     }
     const data=JSON.parse(text);
@@ -4754,26 +4880,27 @@ async function cloudPull(){
     sd('sync_last_time',lastSyncTime);
     sd('sync_last_status','pull OK '+new Date().toLocaleTimeString('de-DE'));
     await updateSyncUI();
-    toast('⬇️ Pull erfolgreich','success',2000);
+    toast('⬇️ Aus Drive geladen','success',2000);
     renderDashboard();
-    if(document.getElementById('board-historie').classList.contains('active'))renderHistorieList();
+    if(document.getElementById('board-historie')?.classList.contains('active'))renderHistorieList();
   }catch(e){
     sd('sync_last_status','pull FEHLER: '+e.message);
     await updateSyncUI();
-    toast('Pull fehlgeschlagen: '+e.message,'error',5000);
+    toast('Pull fehlgeschlagen: '+e.message,'error',5500);
+    console.error(e);
   }
 }
 
 function queueAutoSync(){
-  if(!autoSyncEnabled||!cloudFileHandle)return;
+  if(!autoSyncEnabled||!gdriveFileId)return;
   clearTimeout(autoSyncTimer);
-  autoSyncTimer=setTimeout(function(){cloudPush();},3000);
+  autoSyncTimer=setTimeout(function(){gdrivePush();},3000);
 }
 
 function toggleAutoSync(on){
   autoSyncEnabled=on;
   sd('sync_autosync',on);
-  if(on){toast('🔄 Auto-Sync aktiviert – Änderungen werden automatisch in die Cloud geschrieben','info',3500);queueAutoSync();}
+  if(on){toast('🔄 Auto-Sync aktiviert – Änderungen werden automatisch in Drive geschrieben','info',3500);queueAutoSync();}
   else toast('Auto-Sync deaktiviert','info',1800);
   updateSyncUI();
 }
@@ -4789,8 +4916,10 @@ function collectAllData(){
     settings:settings,
     timerTodos:timerTodos,
     chemStock:chemStock,
+    coverState:(typeof coverState!=='undefined'?coverState:null),
+    wuensche:(typeof wuensche!=='undefined'?wuensche:[]),
     exportedAt:new Date().toISOString(),
-    schemaVersion:1
+    schemaVersion:2
   };
 }
 
@@ -4804,16 +4933,15 @@ function applyImportedData(d){
   if(d.settings){settings=d.settings;sdRaw('settings',settings);}
   if(d.timerTodos){timerTodos=d.timerTodos;sdRaw('timer_todos',timerTodos);}
   if(d.chemStock){chemStock=d.chemStock;sdRaw('chem_stock_v2',chemStock);}
+  if(d.coverState&&typeof coverState!=='undefined'){coverState=d.coverState;sdRaw('cover_state',coverState);}
+  if(d.wuensche&&typeof wuensche!=='undefined'){wuensche=d.wuensche;sdRaw('wuensche',wuensche);}
 }
 
 async function updateSyncUI(){
-  const supported=isFileSystemAccessSupported();
-  const warnEl=document.getElementById('sync-compat-warning');
-  if(warnEl)warnEl.style.display=supported?'none':'block';
   const nc=document.getElementById('sync-not-connected');
   const c=document.getElementById('sync-connected');
   const badge=document.getElementById('sync-status-badge');
-  if(!cloudFileHandle){
+  if(!gdriveIsConnected()){
     if(nc)nc.style.display='block';
     if(c)c.style.display='none';
     if(badge){badge.innerHTML='<span class="sync-dot gray"></span>Nicht verbunden';badge.className='sync-status off';}
@@ -4821,20 +4949,22 @@ async function updateSyncUI(){
   }
   if(nc)nc.style.display='none';
   if(c)c.style.display='block';
+  const accEl=document.getElementById('sync-account');
+  if(accEl)accEl.textContent=gdriveAccountEmail||'verbunden';
   const fnEl=document.getElementById('sync-filename');
-  if(fnEl)fnEl.textContent=cloudFileHandle.name||'–';
+  if(fnEl)fnEl.textContent=GDRIVE_FILENAME;
   const tEl=document.getElementById('sync-last-time');
   if(tEl)tEl.textContent=lastSyncTime?new Date(lastSyncTime).toLocaleString('de-DE'):'Nie';
   const sEl=document.getElementById('sync-last-status');
-  const status=ld('sync_last_status','–');
+  const status=ld('sync_last_status','bereit');
   if(sEl)sEl.textContent=status;
   const auto=document.getElementById('autosync-toggle');
   if(auto)auto.checked=autoSyncEnabled;
   if(badge){
-    if(status.indexOf('FEHLER')>-1){
+    if(String(status).indexOf('FEHLER')>-1){
       badge.innerHTML='<span class="sync-dot red"></span>Fehler';
       badge.className='sync-status error';
-    } else if(status.indexOf('OK')>-1){
+    } else if(String(status).indexOf('OK')>-1){
       badge.innerHTML='<span class="sync-dot green"></span>Synchron';
       badge.className='sync-status synced';
     } else {
@@ -4845,18 +4975,44 @@ async function updateSyncUI(){
 }
 
 async function initCloudSync(){
-  if(!isFileSystemAccessSupported()){
-    await updateSyncUI();
-    return;
+  // Load saved state
+  gdriveAccessToken=ld('gdrive_token',null);
+  gdriveAccessTokenExpiry=ld('gdrive_token_expiry',0);
+  gdriveFileId=ld('gdrive_file_id',null);
+  gdriveAccountEmail=ld('gdrive_email',null);
+  lastSyncTime=ld('sync_last_time',0);
+  autoSyncEnabled=ld('sync_autosync',false);
+  await updateSyncUI();
+  if(!gdriveFileId)return;
+  // Try auto-pull on startup if token still valid
+  const libsOk=await gdriveInitGapi();
+  if(!libsOk)return;
+  if(gdriveAccessToken&&gapi&&gapi.client){
+    gapi.client.setToken({access_token:gdriveAccessToken});
   }
-  const handle=await loadFileHandle();
-  if(handle){
-    cloudFileHandle=handle;
-    lastSyncTime=ld('sync_last_time',0);
-    autoSyncEnabled=ld('sync_autosync',false);
+  // Silent token refresh attempt if expired
+  if(!gdriveTokenValid()){
+    // Try silent refresh via GIS (no prompt)
+    try{
+      gdriveInitTokenClient();
+      await new Promise(function(resolve){
+        gdrivePendingAction=function(){resolve(true);};
+        gdriveTokenClient.requestAccessToken({prompt:''});
+        setTimeout(function(){resolve(false);},4000);
+      });
+    }catch(e){console.warn('silent refresh failed',e);}
+  }
+  if(gdriveTokenValid()){
+    // Auto-pull latest on startup (non-blocking)
+    setTimeout(function(){
+      if(confirm('Neueste Daten aus Google Drive laden?\n\nLokale Änderungen seit dem letzten Sync gehen dabei verloren. Bei "Abbrechen" bleiben deine lokalen Daten; drücke dann "Push" um sie in Drive zu schreiben.')){
+        gdrivePull();
+      }
+    },800);
   }
   await updateSyncUI();
 }
+
 
 // Wrap sd() to trigger autosync after DATA writes only (not UI-prefs)
 const sdRaw=sd;
