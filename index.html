@@ -172,8 +172,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .example-row:last-child{border-bottom:none}
 /* ===== POOL STATUS GAUGE ===== */
 .pool-gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:10px 0 4px}
-.pool-gauge-svg{width:220px;height:135px}
-.gauge-score-val{font-family:'Nunito',sans-serif;font-weight:900;font-size:2.4rem;fill:var(--pool-dark)}
+.pool-gauge-svg{width:220px;height:148px}
+.gauge-score-val{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.7rem;fill:var(--pool-dark)}
 .gauge-score-lbl{font-size:0.72rem;fill:var(--text-muted)}
 /* ===== WASSERTEMPERATUR WIDGET ===== */
 .temp-swim-indicator{border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:0.88rem;margin-top:8px}
@@ -546,7 +546,7 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
     <div class="card">
       <div class="card-title">🎯 Pool-Qualität</div>
       <div class="pool-gauge-wrap">
-        <svg class="pool-gauge-svg" viewBox="0 0 200 122" id="dash-gauge-svg">
+        <svg class="pool-gauge-svg" viewBox="0 0 200 148" id="dash-gauge-svg">
           <defs>
             <linearGradient id="gauge-grad-ok" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" style="stop-color:#22c55e"/>
@@ -566,11 +566,11 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
           <circle cx="100" cy="100" r="7" fill="white" stroke="#0c4a6e" stroke-width="2"/>
           <circle cx="100" cy="100" r="3.5" fill="#0c4a6e"/>
           <!-- score text -->
-          <text id="gauge-score-text" x="100" y="76" text-anchor="middle" class="gauge-score-val">–</text>
-          <text x="100" y="94" text-anchor="middle" class="gauge-score-lbl" id="gauge-score-label">Werte eingeben</text>
+          <text id="gauge-score-text" x="100" y="118" text-anchor="middle" class="gauge-score-val">–</text>
+          <text x="100" y="133" text-anchor="middle" class="gauge-score-lbl" id="gauge-score-label">Werte eingeben</text>
           <!-- labels: left=Schlecht, right=Gut -->
-          <text x="18" y="118" text-anchor="middle" style="font-size:9px;fill:#ef4444;font-weight:800">Schlecht</text>
-          <text x="182" y="118" text-anchor="middle" style="font-size:9px;fill:#22c55e;font-weight:800">Gut</text>
+          <text x="18" y="110" text-anchor="middle" style="font-size:9px;fill:#ef4444;font-weight:800">Schlecht</text>
+          <text x="182" y="110" text-anchor="middle" style="font-size:9px;fill:#22c55e;font-weight:800">Gut</text>
         </svg>
       </div>
       <div id="messwerte-dashboard"></div>
@@ -1634,9 +1634,8 @@ function clearMeasurementForm(){
 function renderMessung(){
   const last=getLastMeasurement();
   if(last){
-    if(last.ph!==undefined)document.getElementById('input-ph').value=last.ph;
-    if(last.chlor!==undefined)document.getElementById('input-chlor').value=last.chlor;
-    if(last.algizid!==undefined)document.getElementById('input-algizid').value=last.algizid;
+    // Nur Temperatur vorausfüllen – chemische Werte NICHT, damit eine reine
+    // Temp-/Druckeingabe nicht versehentlich alte Chlor-/pH-Werte speichert
     if(last.temp!==undefined)document.getElementById('input-temp').value=last.temp;
   }
   const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
@@ -1806,7 +1805,13 @@ function renderEmpfehlungen(id){
   if(last.chlor!==undefined){
     if(last.chlor<s.chlor.min)tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} mg/l) → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
     else if(last.chlor>s.chlor.max)tips.push({type:'warn',msg:`Chlor zu hoch (${last.chlor} mg/l) – Badeverbot bis <${s.chlor.max}`,helpIdx:6,btnLabel:'➡ Hilfe starten'});
-    else if(last.chlor>s.chlor.target+0.5)tips.push({type:'tip',msg:`Chlor leicht erhöht (${last.chlor} mg/l) → beim nächsten Chloren nur 2 Tabs statt 3`});
+    else if(last.chlor>s.chlor.target+0.5){
+      // Tipp nur zeigen wenn keine Chlorgabe NACH der letzten Messung stattfand.
+      // Sobald neue Werte eingetragen werden, wird der Tipp neu bewertet.
+      const chlorTask=maintenanceTasks.find(t=>t.id==='chlor_tabs');
+      const chlorNachMessung=chlorTask?.lastDone&&new Date(chlorTask.lastDone)>new Date(last.time);
+      if(!chlorNachMessung)tips.push({type:'tip',msg:`Chlor leicht erhöht (${last.chlor} mg/l) → beim nächsten Chloren nur 2 Tabs statt 3`});
+    }
   }
   if(last.algizid!==undefined&&last.algizid<s.algizid.min)tips.push({type:'warn',msg:`Algizid zu niedrig (${last.algizid} ppm) → Algenschutz dosieren`,helpIdx:2,btnLabel:'➡ Hilfe starten'});
   maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>2)tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${d}d überfällig)`})});
@@ -1946,8 +1951,23 @@ function confirmTask(){
     sd('chem_stock_v2',chemStock);
     renderStockDashboard();
   }
+  // BUG 4: Badeverbot setzen wenn nötig
+  const TASK_BAN_MAP={
+    algischutz:{hours:2,name:'Algenschutz'},
+    poolklar:  {hours:2,name:'Poolklar'},
+  };
+  const banInfo=TASK_BAN_MAP[id];
+  if(banInfo){
+    const until=new Date(Date.now()+banInfo.hours*3600000).toISOString().slice(0,16);
+    const newBan={until,reason:`${banInfo.name} angewendet`,setAt:new Date().toISOString()};
+    if(setOrKeepLongerBan(newBan)){
+      logHistory({type:'ban',time:new Date().toISOString(),note:`Badeverbot nach ${banInfo.name} bis ${new Date(until).toLocaleString('de-DE')}`});
+      addTimerTodo(`Nach ${banInfo.name}: Wasser messen`,banInfo.hours);
+      if(typeof toast==='function')toast(`🚫 Badeverbot ${banInfo.hours}h nach ${banInfo.name} gesetzt`,'warn',4000);
+    }
+  }
   closeModal('modal-task-confirm');
-  renderTasksDashboard();
+  renderDashboard();
   renderMaintenanceList&&renderMaintenanceList();
 }
 
@@ -3746,54 +3766,54 @@ function renderPoolGauge(){
   const svg=document.getElementById('dash-gauge-svg');
   if(!needle||!txt||!svg)return;
 
-  // Calculate score
   const score=calcPoolScore();
 
-  // Draw segmented arc via canvas-style path segments in SVG
-  // Remove old dynamic arcs if present
+  // Alte dynamische Bögen entfernen
   svg.querySelectorAll('.gauge-dyn').forEach(e=>e.remove());
 
-  // Semicircle: center (100,100), r=80, from 180° to 0° (left to right)
-  function polarToXY(deg,r=80){
-    const rad=deg*Math.PI/180;
-    return{x:100+r*Math.cos(rad),y:100+r*Math.sin(rad)};
+  // Korrekte Hilfsfunktionen:
+  // Punkt bei pct (0=links, 100=rechts) entlang des OBEREN Halbkreises
+  // x = 100 - r*cos(pct*π/100)  |  y = 100 - r*sin(pct*π/100)
+  function gPoint(pct,r=80){
+    const a=pct/100*Math.PI;
+    return{x:(100-r*Math.cos(a)).toFixed(2),y:(100-r*Math.sin(a)).toFixed(2)};
   }
-  function arcPath(startDeg,endDeg,r=80){
-    const s=polarToXY(startDeg,r);
-    const e=polarToXY(endDeg,r);
-    const large=Math.abs(endDeg-startDeg)>180?1:0;
+  function gArc(p1,p2,r=80){
+    const s=gPoint(p1,r),e=gPoint(p2,r);
+    const large=(p2-p1)>50?1:0;
     return`M${s.x},${s.y} A${r},${r} 0 ${large} 1 ${e.x},${e.y}`;
   }
 
-  // Color zones mapped to 180°→0° (left to right = 0→100 score)
-  // Zones: 0-20 = rot, 20-40 = orange, 40-60 = gelb, 60-80 = hellgrün, 80-100 = grün
-  const zones=[
-    {from:0,  to:20,  color:'#ef4444'},
-    {from:20, to:40,  color:'#f97316'},
-    {from:40, to:60,  color:'#fbbf24'},
-    {from:60, to:80,  color:'#86efac'},
-    {from:80, to:100, color:'#22c55e'},
-  ];
-  // Background track first
+  // Hintergrund-Bogen (grau)
   const bgPath=document.createElementNS('http://www.w3.org/2000/svg','path');
-  bgPath.setAttribute('d',arcPath(180,0));
+  bgPath.setAttribute('d',gArc(0,100));
   bgPath.setAttribute('fill','none');bgPath.setAttribute('stroke','#e2e8f0');bgPath.setAttribute('stroke-width','16');bgPath.setAttribute('stroke-linecap','round');
   bgPath.classList.add('gauge-dyn');
   svg.insertBefore(bgPath,needle);
-  // Draw colored zone segments
-  zones.forEach(z=>{
-    const startDeg=180-(z.from/100)*180;
-    const endDeg=180-(z.to/100)*180;
+
+  // Farbverlauf rot→gelb→grün in 60 Segmenten
+  function lerpRGB(r1,g1,b1,r2,g2,b2,t){
+    return[Math.round(r1+(r2-r1)*t),Math.round(g1+(g2-g1)*t),Math.round(b1+(b2-b1)*t)];
+  }
+  function gaugeColor(pct){
+    const p=pct/100;
+    let rgb;
+    if(p<0.5)      rgb=lerpRGB(220,38,38,  251,191,36, p/0.5);   // rot→gelb
+    else           rgb=lerpRGB(251,191,36,  22,163,74,  (p-0.5)/0.5); // gelb→grün
+    return`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+  }
+  const STEPS=60;
+  for(let i=0;i<STEPS;i++){
+    const p1=(i/STEPS)*100,p2=((i+1)/STEPS)*100;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',arcPath(startDeg,endDeg));
+    path.setAttribute('d',gArc(p1,p2));
     path.setAttribute('fill','none');
-    path.setAttribute('stroke',z.color);
+    path.setAttribute('stroke',gaugeColor((p1+p2)/2));
     path.setAttribute('stroke-width','14');
     path.setAttribute('stroke-linecap','butt');
-    path.setAttribute('opacity','0.85');
     path.classList.add('gauge-dyn');
     svg.insertBefore(path,needle);
-  });
+  }
 
   if(score===null){
     txt.textContent='–';lbl.textContent='Werte eingeben';
@@ -4112,7 +4132,9 @@ function openQMess(){
   qmessVals={};
   QMESS_PARAMS.forEach(p=>{
     if(p.key==='druck') qmessVals[p.key]=lastDruck?.druck??null;
-    else qmessVals[p.key]=last?.[p.key]??null;
+    else if(p.key==='temp') qmessVals[p.key]=last?.temp??null;
+    // pH/Chlor/Algizid starten leer (null), damit nicht versehentlich alte Werte mitgespeichert werden
+    else qmessVals[p.key]=null;
   });
   renderQMessRows();
   document.getElementById('qmess-note').value='';
@@ -4648,9 +4670,10 @@ function gdriveWaitForLibs(){
     let tries=0;
     const check=function(){
       tries++;
-      if(typeof google!=='undefined'&&google.accounts&&google.accounts.oauth2&&typeof gapi!=='undefined'){
+      // Nur GIS wird benötigt; gapi-Abhängigkeit entfernt
+      if(typeof google!=='undefined'&&google.accounts&&google.accounts.oauth2){
         resolve(true);
-      } else if(tries>50){
+      } else if(tries>80){
         resolve(false);
       } else {
         setTimeout(check,100);
@@ -4662,21 +4685,10 @@ function gdriveWaitForLibs(){
 
 async function gdriveInitGapi(){
   if(gdriveGapiReady)return true;
+  // Nur GIS (google.accounts.oauth2) wird benötigt – alle Drive-Calls laufen via fetch
   const ok=await gdriveWaitForLibs();
-  if(!ok)return false;
-  return new Promise(function(resolve){
-    gapi.load('client',async function(){
-      try{
-        await gapi.client.init({});
-        await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
-        gdriveGapiReady=true;
-        resolve(true);
-      }catch(e){
-        console.error('gapi init failed',e);
-        resolve(false);
-      }
-    });
-  });
+  gdriveGapiReady=ok;
+  return ok;
 }
 
 function gdriveInitTokenClient(){
@@ -4693,7 +4705,6 @@ function gdriveInitTokenClient(){
       gdriveAccessTokenExpiry=Date.now()+(response.expires_in||3600)*1000;
       sd('gdrive_token',gdriveAccessToken);
       sd('gdrive_token_expiry',gdriveAccessTokenExpiry);
-      if(gapi&&gapi.client)gapi.client.setToken({access_token:gdriveAccessToken});
       // Continue pending action
       if(gdrivePendingAction){
         const action=gdrivePendingAction;
@@ -4723,31 +4734,37 @@ async function gdriveEnsureToken(silent){
   });
 }
 
-// Find existing sync file (by name in app folder) or create new
+// Find existing sync file or create new – via fetch (kein gapi.client benötigt)
 async function gdriveFindOrCreateFile(){
-  const searchResp=await gapi.client.drive.files.list({
-    q:"name='"+GDRIVE_FILENAME+"' and trashed=false",
-    fields:'files(id,name,modifiedTime)',
-    spaces:'drive',
-    pageSize:10
+  const q=encodeURIComponent("name='"+GDRIVE_FILENAME+"' and trashed=false");
+  const searchResp=await fetch(
+    'https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name)&spaces=drive',
+    {headers:{'Authorization':'Bearer '+gdriveAccessToken}}
+  );
+  if(!searchResp.ok)throw new Error('Drive-Suche fehlgeschlagen: HTTP '+searchResp.status);
+  const data=await searchResp.json();
+  const files=data.files||[];
+  if(files.length>0)return files[0].id;
+  // Neue Datei anlegen
+  const createResp=await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+gdriveAccessToken,'Content-Type':'application/json'},
+    body:JSON.stringify({name:GDRIVE_FILENAME,mimeType:'application/json'})
   });
-  const files=searchResp.result.files||[];
-  if(files.length>0){
-    return files[0].id;
-  }
-  // Create empty file
-  const createResp=await gapi.client.drive.files.create({
-    resource:{name:GDRIVE_FILENAME,mimeType:'application/json'},
-    fields:'id'
-  });
-  return createResp.result.id;
+  if(!createResp.ok)throw new Error('Drive-Datei konnte nicht erstellt werden: HTTP '+createResp.status);
+  const file=await createResp.json();
+  return file.id;
 }
 
 async function gdriveFetchUserInfo(){
   try{
-    const resp=await gapi.client.drive.about.get({fields:'user(emailAddress,displayName)'});
-    if(resp.result&&resp.result.user){
-      gdriveAccountEmail=resp.result.user.emailAddress||resp.result.user.displayName||'verbunden';
+    const resp=await fetch(
+      'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)',
+      {headers:{'Authorization':'Bearer '+gdriveAccessToken}}
+    );
+    if(resp.ok){
+      const data=await resp.json();
+      gdriveAccountEmail=data.user?.emailAddress||data.user?.displayName||'verbunden';
       sd('gdrive_email',gdriveAccountEmail);
     }
   }catch(e){console.warn('userinfo fail',e);}
@@ -4987,9 +5004,7 @@ async function initCloudSync(){
   // Try auto-pull on startup if token still valid
   const libsOk=await gdriveInitGapi();
   if(!libsOk)return;
-  if(gdriveAccessToken&&gapi&&gapi.client){
-    gapi.client.setToken({access_token:gdriveAccessToken});
-  }
+  // Token wird nur in fetch-Headers genutzt, kein gapi.client mehr nötig
   // Silent token refresh attempt if expired
   if(!gdriveTokenValid()){
     // Try silent refresh via GIS (no prompt)
@@ -5521,7 +5536,26 @@ if(typeof quickLogTask==='function'){
       const hint=getTaskDoseHint(id);
       logHistory({type:'wartung',time:task.lastDone,note:'Erledigt: '+task.name+(hint?' | '+hint.replace(/^→\s*/,''):'')});
       sel.value='';renderTasksDashboard();
-      toast('✅ "'+task.name+'" eingetragen','success',2000);
+      // BUG 3: Mittelverbrauch abziehen
+    const stockNameQLT=TASK_STOCK_MAP[id];
+    const pQLT=stockNameQLT?STOCK_PRODUCTS[stockNameQLT]:null;
+    if(pQLT&&chemStock[stockNameQLT]){
+      chemStock[stockNameQLT].qty=Math.max(0,chemStock[stockNameQLT].qty-pQLT.perUse);
+      sd('chem_stock_v2',chemStock);
+      renderStockDashboard();
+    }
+    // BUG 4: Badeverbot wenn nötig
+    const TASK_BAN_MAP_QLT={algischutz:{hours:2,name:'Algenschutz'},poolklar:{hours:2,name:'Poolklar'}};
+    const banInfoQLT=TASK_BAN_MAP_QLT[id];
+    if(banInfoQLT){
+      const untilQLT=new Date(Date.now()+banInfoQLT.hours*3600000).toISOString().slice(0,16);
+      if(setOrKeepLongerBan({until:untilQLT,reason:banInfoQLT.name+' angewendet',setAt:new Date().toISOString()})){
+        logHistory({type:'ban',time:new Date().toISOString(),note:'Badeverbot nach '+banInfoQLT.name+' (aus Schnelleintrag)'});
+        addTimerTodo('Nach '+banInfoQLT.name+': Wasser messen',banInfoQLT.hours);
+        if(typeof toast==='function')toast('🚫 Badeverbot '+banInfoQLT.hours+'h nach '+banInfoQLT.name+' gesetzt','warn',4000);
+      }
+    }
+    toast('✅ "'+task.name+'" eingetragen','success',2000);
       if(navigator.vibrate)navigator.vibrate(40);
     }
   };
