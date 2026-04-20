@@ -10,8 +10,16 @@
 <meta name="theme-color" content="#0c4a6e">
 <link rel="apple-touch-icon" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%230c4a6e"/><text x="50" y="70" font-size="55" text-anchor="middle">🏊</text></svg>'>
 <link rel="manifest" id="pwa-manifest">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
+<script>
+// GIS (Google Identity Services) – optional, nur für Drive-Sync nötig
+(function(){
+  var s=document.createElement('script');
+  s.src='https://accounts.google.com/gsi/client';
+  s.async=true;s.defer=true;
+  s.onerror=function(){console.warn('GIS nicht geladen – Google Drive Sync nicht verfügbar');};
+  document.head.appendChild(s);
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800;900&family=Nunito+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -25,7 +33,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Nunito Sans',sans-serif;background:linear-gradient(135deg,#e0f2fe 0%,#f0f9ff 60%,#ecfdf5 100%);min-height:100vh;color:var(--text-primary)}
 .app-nav{background:var(--nav-bg);position:fixed;top:0;left:0;right:0;z-index:100;height:56px;box-shadow:0 2px 12px rgba(0,0,0,0.25);display:flex;align-items:center;padding:0 12px;gap:4px}
-.nav-logo{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.1rem;color:white;white-space:nowrap;margin-right:8px;padding-right:12px;border-right:1px solid rgba(255,255,255,0.2);flex-shrink:0}
+.nav-logo{font-family:Nunito,sans-serif;font-weight:900;font-size:1.1rem;color:white;white-space:nowrap;margin-right:8px;padding-right:12px;border-right:1px solid rgba(255,255,255,0.2);flex-shrink:0}
 .nav-desktop{display:flex;align-items:center;gap:2px;overflow-x:auto;flex:1;scrollbar-width:none}
 .nav-desktop::-webkit-scrollbar{display:none}
 .nav-btn{background:none;border:none;color:#bae6fd;font-family:'Nunito Sans',sans-serif;font-size:0.8rem;font-weight:600;padding:6px 11px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:all 0.2s}
@@ -65,7 +73,7 @@ body{font-family:'Nunito Sans',sans-serif;background:linear-gradient(135deg,#e0f
 .main{padding:72px 16px 24px;max-width:1200px;margin:0 auto}
 .board{display:none}.board.active{display:block}
 .card{background:var(--card-bg);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:20px;margin-bottom:16px}
-.card-title{font-family:'Nunito',sans-serif;font-size:0.9rem;font-weight:800;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title{font-family:Nunito,sans-serif;font-size:0.9rem;font-weight:800;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
 @media(max-width:720px){.grid-2,.grid-3{grid-template-columns:1fr}}
@@ -76,7 +84,7 @@ body{font-family:'Nunito Sans',sans-serif;background:linear-gradient(135deg,#e0f
 .badeverbot-banner.active-ban{background:linear-gradient(135deg,#fee2e2,#fecaca);border:2px solid #ef4444;animation:pulse-warn 2s infinite}
 .badeverbot-banner.no-ban{background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:2px solid #22c55e}
 @keyframes pulse-warn{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.3)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
-.ban-countdown{font-family:'Nunito',sans-serif;font-weight:800;font-size:1.5rem;color:#dc2626}
+.ban-countdown{font-family:Nunito,sans-serif;font-weight:800;font-size:1.5rem;color:#dc2626}
 .messwert-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
 .messwert-row:last-child{border-bottom:none}
 .messwert-label{font-weight:700;width:90px;font-size:0.88rem}
@@ -86,7 +94,7 @@ body{font-family:'Nunito Sans',sans-serif;background:linear-gradient(135deg,#e0f
 .messwert-target{font-size:0.72rem;color:var(--text-muted);width:70px}
 .forecast-hour{display:flex;flex-direction:column;align-items:center;gap:3px;background:var(--pool-surface);border-radius:12px;padding:10px 12px;min-width:65px;border:1px solid var(--border)}
 .forecast-hours-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;justify-content:center;flex-wrap:wrap}
-.btn{padding:10px 20px;border-radius:10px;border:none;font-family:'Nunito',sans-serif;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px}
+.btn{padding:10px 20px;border-radius:10px;border:none;font-family:Nunito,sans-serif;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px}
 .btn-primary{background:var(--pool-blue);color:white}.btn-primary:hover{background:var(--pool-mid)}
 .btn-danger{background:var(--danger-red);color:white}.btn-ok{background:var(--ok-green);color:white}
 .btn-warn{background:var(--warn-amber);color:white}
@@ -108,7 +116,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .product-algenschutz{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-left:4px solid #16a34a}
 .product-phminus{background:linear-gradient(135deg,#fff7ed,#fed7aa);border-left:4px solid #f97316}
 .product-phplus{background:linear-gradient(135deg,#fffbeb,#fef3c7);border-left:4px solid #f59e0b}
-.product-name{font-family:'Nunito',sans-serif;font-weight:900;font-size:0.95rem}
+.product-name{font-family:Nunito,sans-serif;font-weight:900;font-size:0.95rem}
 .product-sub{font-size:0.78rem;opacity:0.8;margin-top:2px}
 .product-dose{font-size:0.82rem;font-weight:700;margin-top:5px}
 /* Maintenance */
@@ -124,7 +132,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .history-header{font-weight:800;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;overflow:hidden}.history-header>div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Tabs */
 .tab-bar{display:flex;gap:4px;background:var(--pool-surface);padding:4px;border-radius:12px;margin-bottom:16px;flex-wrap:wrap}
-.tab-btn{flex:1;padding:8px 6px;border-radius:8px;border:none;font-family:'Nunito',sans-serif;font-weight:700;font-size:0.82rem;cursor:pointer;background:none;color:var(--text-muted);transition:all 0.2s;white-space:nowrap}
+.tab-btn{flex:1;padding:8px 6px;border-radius:8px;border:none;font-family:Nunito,sans-serif;font-weight:700;font-size:0.82rem;cursor:pointer;background:none;color:var(--text-muted);transition:all 0.2s;white-space:nowrap}
 .tab-btn.active{background:white;color:var(--pool-dark);box-shadow:var(--shadow-sm)}
 /* Empfehlungen */
 .empfehlung{padding:11px 13px;border-radius:10px;margin-bottom:7px;display:flex;align-items:flex-start;gap:9px;font-size:0.86rem;font-weight:600}
@@ -136,14 +144,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-overlay.open{display:flex}
 .modal{background:white;border-radius:var(--radius);padding:22px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
-.modal-title{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.25rem;margin-bottom:14px}
+.modal-title{font-family:Nunito,sans-serif;font-weight:900;font-size:1.25rem;margin-bottom:14px}
 /* Frau */
 .frau-quality-indicator{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;border-radius:var(--radius);margin-bottom:16px}
 .frau-quality-indicator.ok{background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:2px solid #22c55e}
 .frau-quality-indicator.not-ok{background:linear-gradient(135deg,#fee2e2,#fecaca);border:2px solid #ef4444}
 /* Page header */
 .page-header{margin-bottom:20px;padding:20px;background:linear-gradient(135deg,var(--pool-dark),var(--pool-mid));border-radius:var(--radius);color:white}
-.page-header h1{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.5rem}
+.page-header h1{font-family:Nunito,sans-serif;font-weight:900;font-size:1.5rem}
 .page-header p{opacity:0.8;font-size:0.88rem;margin-top:4px}
 /* Help */
 .help-item{border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px}
@@ -155,7 +163,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .weather-warning{background:linear-gradient(135deg,#fffbeb,#fef3c7);border:2px solid #f59e0b;border-radius:var(--radius-sm);padding:11px 15px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:0.88rem;color:#92400e}
 /* Timer todos */
 .timer-todo{background:linear-gradient(135deg,#fff7ed,#fef3c7);border:2px solid #f59e0b;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;justify-content:center;text-align:center;flex-wrap:wrap}
-.timer-countdown{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.1rem;color:#92400e;white-space:nowrap;margin-left:auto}
+.timer-countdown{font-family:Nunito,sans-serif;font-weight:900;font-size:1.1rem;color:#92400e;white-space:nowrap;margin-left:auto}
 /* Todo steps */
 .todo-step{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:10px;background:var(--pool-surface);margin-bottom:7px}
 .todo-step.done{background:#f0fdf4;opacity:0.65}
@@ -165,7 +173,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .todo-text{flex:1;font-weight:600;font-size:0.88rem}
 /* Erklaerung */
 .erkl-section{background:white;border-radius:var(--radius);padding:22px;margin-bottom:14px;box-shadow:var(--shadow-sm)}
-.erkl-section h2{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.15rem;color:var(--pool-dark);margin-bottom:9px;border-bottom:2px solid var(--pool-light);padding-bottom:7px}
+.erkl-section h2{font-family:Nunito,sans-serif;font-weight:900;font-size:1.15rem;color:var(--pool-dark);margin-bottom:9px;border-bottom:2px solid var(--pool-light);padding-bottom:7px}
 .erkl-section p,.erkl-section li{font-size:0.88rem;line-height:1.7;color:var(--text-secondary)}
 .example-data{background:var(--pool-surface);border-radius:10px;padding:13px;border:1px solid var(--border);margin-top:8px}
 .example-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.85rem}
@@ -173,7 +181,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 /* ===== POOL STATUS GAUGE ===== */
 .pool-gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:10px 0 4px}
 .pool-gauge-svg{width:220px;height:148px}
-.gauge-score-val{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.7rem;fill:var(--pool-dark)}
+.gauge-score-val{font-family:Nunito,sans-serif;font-weight:900;font-size:1.7rem;fill:var(--pool-dark)}
 .gauge-score-lbl{font-size:0.72rem;fill:var(--text-muted)}
 /* ===== WASSERTEMPERATUR WIDGET ===== */
 .temp-swim-indicator{border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:0.88rem;margin-top:8px}
@@ -184,7 +192,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .fab-wrap{position:fixed;right:18px;bottom:64px;z-index:150;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
 .fab-main{width:56px;height:56px;border-radius:50%;background:var(--pool-blue);color:white;border:none;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(14,165,233,0.5);display:flex;align-items:center;justify-content:center;transition:all 0.25s}
 .fab-main:hover,.fab-main.open{background:var(--pool-dark);transform:rotate(45deg)}
-.fab-sub{display:flex;align-items:center;gap:9px;background:white;border-radius:30px;padding:8px 14px 8px 10px;box-shadow:var(--shadow-md);cursor:pointer;border:none;font-family:'Nunito',sans-serif;font-weight:700;font-size:0.85rem;transition:all 0.2s;transform-origin:right bottom}
+.fab-sub{display:flex;align-items:center;gap:9px;background:white;border-radius:30px;padding:8px 14px 8px 10px;box-shadow:var(--shadow-md);cursor:pointer;border:none;font-family:Nunito,sans-serif;font-weight:700;font-size:0.85rem;transition:all 0.2s;transform-origin:right bottom}
 .fab-sub:hover{background:var(--pool-surface);transform:scale(1.03)}
 .fab-sub-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
 .fab-items{display:none;flex-direction:column;align-items:flex-end;gap:7px}
@@ -207,13 +215,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .qmess-stepper{display:flex;align-items:center;gap:4px}
 .qmess-btn{width:34px;height:34px;border-radius:8px;border:2px solid var(--border);background:white;font-size:1.1rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s}
 .qmess-btn:hover{border-color:var(--pool-blue);color:var(--pool-blue)}
-.qmess-display{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.4rem;min-width:60px;text-align:center;color:var(--pool-dark)}
+.qmess-display{font-family:Nunito,sans-serif;font-weight:900;font-size:1.4rem;min-width:60px;text-align:center;color:var(--pool-dark)}
 /* ===== NOTIZ-PAD ===== */
 .note-chip{display:inline-flex;align-items:center;gap:5px;background:var(--pool-light);border:1px solid var(--pool-blue);border-radius:20px;padding:4px 11px;font-size:0.78rem;font-weight:700;color:var(--pool-dark);margin:3px}
 /* ===== STATISTIK KACHELN ===== */
 .stat-kachel{background:var(--card-bg);border-radius:var(--radius-sm);padding:14px;text-align:center;box-shadow:var(--shadow-sm);border:2px solid transparent;transition:border-color 0.2s}
 .stat-kachel:hover{border-color:var(--pool-blue)}
-.stat-kachel-val{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.8rem;color:var(--pool-dark);line-height:1.1}
+.stat-kachel-val{font-family:Nunito,sans-serif;font-weight:900;font-size:1.8rem;color:var(--pool-dark);line-height:1.1}
 .stat-kachel-lbl{font-size:0.72rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-top:3px}
 /* ===== TREND ARROWS ===== */
 .trend-up{color:#ef4444}.trend-down{color:#3b82f6}.trend-ok{color:#22c55e}.trend-neutral{color:#94a3b8}
@@ -325,7 +333,7 @@ body.dark-mode .sync-status.off{background:#334155;color:#cbd5e1}
 .preswim-status.fail{background:#fee2e2;color:#b91c1c}
 .preswim-status.warn{background:#fef3c7;color:#92400e}
 .preswim-status.cool{background:#dbeafe;color:#1e40af}
-.preswim-verdict{margin-top:12px;padding:14px;border-radius:var(--radius-sm);text-align:center;font-family:'Nunito',sans-serif;font-weight:900;font-size:1.3rem}
+.preswim-verdict{margin-top:12px;padding:14px;border-radius:var(--radius-sm);text-align:center;font-family:Nunito,sans-serif;font-weight:900;font-size:1.3rem}
 .preswim-verdict.go{background:linear-gradient(135deg,#dcfce7,#bbf7d0);color:#15803d;border:2px solid #22c55e}
 .preswim-verdict.nogo{background:linear-gradient(135deg,#fee2e2,#fecaca);color:#b91c1c;border:2px solid #ef4444}
 .preswim-verdict.warn{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e;border:2px solid #f59e0b}
@@ -354,7 +362,7 @@ body.dark-mode .rain-warning-card{background:#0c1e3a;color:#93c5fd}
 /* ===== SEASON REPORT MODAL ===== */
 .season-stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:14px}
 .season-stat-box{background:var(--pool-surface);border-radius:10px;padding:12px;text-align:center}
-.season-stat-val{font-family:'Nunito',sans-serif;font-weight:900;font-size:1.4rem;color:var(--pool-dark);line-height:1.1}
+.season-stat-val{font-family:Nunito,sans-serif;font-weight:900;font-size:1.4rem;color:var(--pool-dark);line-height:1.1}
 .season-stat-lbl{font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;font-weight:700;margin-top:4px}
 body.dark-mode .season-stat-val{color:#7dd3fc}
 
@@ -366,13 +374,57 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
 .wunsch-item.status-done{opacity:0.55;background:var(--pool-surface)}
 .wunsch-item.status-done .wunsch-title{text-decoration:line-through}
 .wunsch-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:6px}
-.wunsch-title{font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;color:var(--text-primary);flex:1;min-width:200px}
+.wunsch-title{font-family:Nunito,sans-serif;font-weight:800;font-size:1rem;color:var(--text-primary);flex:1;min-width:200px}
 .wunsch-meta{font-size:0.72rem;color:var(--text-muted);margin-bottom:8px}
 .wunsch-desc{font-size:0.88rem;color:var(--text-secondary);line-height:1.55;white-space:pre-wrap;margin-bottom:8px}
 .wunsch-photos{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 .wunsch-photo-thumb{width:62px;height:62px;border-radius:8px;object-fit:cover;cursor:pointer;border:1px solid var(--border)}
 .wunsch-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 .wunsch-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+/* ===== POOL COVER VISUAL CARD ===== */
+.pool-visual-card{background:var(--card-bg);border-radius:var(--radius);box-shadow:var(--shadow-md);overflow:hidden;margin-bottom:16px}
+.pool-scene{position:relative;height:150px;overflow:hidden;transition:background 0.6s}
+.pool-scene.scene-open{background:linear-gradient(180deg,#bae6fd 0%,#7dd3fc 40%,#0ea5e9 100%)}
+.pool-scene.scene-covered{background:linear-gradient(180deg,#94a3b8 0%,#cbd5e1 100%)}
+.pool-cover-layer{position:absolute;top:0;left:0;right:0;height:100%;background:linear-gradient(180deg,#475569 0%,#64748b 100%);transition:transform 0.6s cubic-bezier(0.4,0,0.2,1);transform-origin:top center;z-index:2}
+.pool-cover-layer.hidden{transform:translateY(-100%)}
+.pool-cover-layer::after{content:'';position:absolute;bottom:0;left:0;right:0;height:10px;background:repeating-linear-gradient(90deg,#334155 0px,#334155 8px,#475569 8px,#475569 16px)}
+.pool-cover-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Nunito,sans-serif;font-weight:900;font-size:0.95rem;color:rgba(255,255,255,0.9);text-align:center;pointer-events:none;z-index:3}
+.pool-water-waves{position:absolute;bottom:0;left:-50%;right:-50%;height:100%;z-index:1}
+.pool-wave{position:absolute;bottom:0;left:0;right:0;height:28px;border-radius:50%;opacity:0.3}
+.pool-wave1{background:#7dd3fc;animation:poolWave1 3s ease-in-out infinite;bottom:18px}
+.pool-wave2{background:#38bdf8;animation:poolWave2 4s ease-in-out infinite;bottom:8px}
+.pool-wave3{background:#0ea5e9;animation:poolWave1 2.5s ease-in-out infinite reverse;bottom:0}
+@keyframes poolWave1{0%,100%{transform:translateX(0) scaleY(1)}50%{transform:translateX(5%) scaleY(1.2)}}
+@keyframes poolWave2{0%,100%{transform:translateX(0)}50%{transform:translateX(-5%)}}
+.pool-swimmer{position:absolute;font-size:1.5rem;bottom:28px;z-index:2;animation:poolSwim 5s ease-in-out infinite}
+@keyframes poolSwim{0%,100%{left:10%;transform:scaleX(1)}50%{left:70%;transform:scaleX(-1)}}
+.pool-sun{position:absolute;top:12px;right:16px;font-size:1.8rem;z-index:2;animation:poolSunPulse 3s ease-in-out infinite}
+@keyframes poolSunPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.pool-clouds{position:absolute;top:10px;right:14px;font-size:1.6rem;z-index:2;opacity:0.85}
+.cover-status-bar{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cover-status-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.cover-status-dot.open{background:#22c55e;box-shadow:0 0 0 3px #dcfce7;animation:coverDotPulse 2s infinite}
+.cover-status-dot.closed{background:#64748b;box-shadow:0 0 0 3px #f1f5f9}
+@keyframes coverDotPulse{0%,100%{box-shadow:0 0 0 3px #dcfce7}50%{box-shadow:0 0 0 6px #bbf7d0}}
+.cover-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
+.cover-stat-box{background:var(--card-bg);padding:10px;text-align:center}
+.cover-stat-val{font-family:Nunito,sans-serif;font-weight:900;font-size:1.2rem;color:var(--pool-dark);line-height:1}
+.cover-stat-lbl{font-size:0.66rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:3px}
+.cover-usage-section{padding:12px 16px;border-top:1px solid var(--border)}
+.cover-usage-days{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px}
+.cover-day{width:15px;height:15px;border-radius:3px;cursor:default;position:relative}
+.cover-day.swim{background:#0ea5e9}
+.cover-day.covered{background:#e2e8f0}
+.cover-day.today{outline:2px solid var(--pool-blue);outline-offset:1px}
+body.dark-mode .pool-scene.scene-covered{background:linear-gradient(180deg,#334155 0%,#475569 100%)}
+body.dark-mode .cover-stat-box,.dark-mode .cover-stats-grid{background:var(--card-bg)}
+body.dark-mode .cover-day.covered{background:#334155}
+
+/* Wunsch Status "tested" */
+.badge-tested{background:#f3e8ff;color:#7c3aed}
+body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
+
 </style>
 </head>
 <body>
@@ -662,7 +714,7 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
     <div style="background:linear-gradient(180deg,#0c4a6e 0%,#0369a1 100%);border-radius:24px;padding:20px;color:white;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.4rem">🏊 Pool</div>
+          <div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.4rem">🏊 Pool</div>
           <div id="iphone-datetime" style="font-size:0.8rem;opacity:0.7;margin-top:2px"></div>
         </div>
         <div id="iphone-score-badge" style="text-align:center"></div>
@@ -671,21 +723,21 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
     <div id="iphone-ban" style="margin-bottom:12px"></div>
     <div id="iphone-timertodos"></div>
     <div style="background:white;border-radius:20px;padding:20px;margin-bottom:12px;box-shadow:var(--shadow-md)">
-      <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px">WASSERQUALITÄT</div>
+      <div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px">WASSERQUALITÄT</div>
       <div id="iphone-values"></div>
       <canvas id="iphone-quality-chart" style="width:100%;margin-top:8px;display:block"></canvas>
     </div>
     <div style="background:white;border-radius:20px;padding:20px;margin-bottom:12px;box-shadow:var(--shadow-md)">
-      <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px">WETTER</div>
+      <div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px">WETTER</div>
       <div id="iphone-weather-content"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div style="background:white;border-radius:20px;padding:16px;box-shadow:var(--shadow-md)">
-        <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">AUFGABEN</div>
+        <div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">AUFGABEN</div>
         <div id="iphone-tasks-content"></div>
       </div>
       <div style="background:white;border-radius:20px;padding:16px;box-shadow:var(--shadow-md)">
-        <div style="font-family:'Nunito',sans-serif;font-weight:800;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">TIMER &amp; ERINNERUNGEN</div>
+        <div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">TIMER &amp; ERINNERUNGEN</div>
         <div id="iphone-timers-content"></div>
       </div>
     </div>
@@ -699,7 +751,7 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
     <!-- Kopfzeile mit Orientierungs-Umschaltung -->
     <div style="background:linear-gradient(135deg,#0c4a6e 0%,#0369a1 100%);border-radius:20px;padding:20px 24px;color:white;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
       <div>
-        <div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.6rem">🏊 Pool Manager</div>
+        <div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.6rem">🏊 Pool Manager</div>
         <div id="ipad-datetime" style="font-size:0.82rem;opacity:0.75;margin-top:2px"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1052,7 +1104,8 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
     <div class="tab-bar" id="wunsch-filter-bar">
       <button class="tab-btn active" onclick="filterWuensche('all')">Alle</button>
       <button class="tab-btn" onclick="filterWuensche('open')">⏳ Offen</button>
-      <button class="tab-btn" onclick="filterWuensche('sent')">📤 Weitergegeben</button>
+      <button class="tab-btn" onclick="filterWuensche('sent')">📤 An Claude</button>
+      <button class="tab-btn" onclick="filterWuensche('tested')">🧪 In Test</button>
       <button class="tab-btn" onclick="filterWuensche('done')">✅ Erledigt</button>
     </div>
     <div id="wuensche-list"></div>
@@ -1239,6 +1292,13 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
 </div>
 
 <script>
+// Globaler Fehler-Handler – verhindert kompletten App-Absturz bei externen Fehlern
+window.addEventListener('error', function(e){
+  if(e.message==='Script error.'||e.message==='Script error'){
+    console.warn('Externer Script-Fehler abgefangen (wahrscheinlich GIS/Google):', e);
+    return true; // Fehler unterdrücken
+  }
+});
 // ============================================================
 // DATA
 // ============================================================
@@ -1452,16 +1512,16 @@ function renderBanBanner(id){
   const swimOk=`<svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="26" cy="26" r="26" fill="#16a34a" opacity="0.15"/><circle cx="26" cy="26" r="22" fill="#16a34a" opacity="0.25"/><text x="26" y="33" font-size="22" text-anchor="middle" fill="#15803d">🏊</text></svg>`;
   const swimStop=`<svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="26" cy="26" r="26" fill="#dc2626" opacity="0.15"/><circle cx="26" cy="26" r="22" fill="#dc2626" opacity="0.25"/><text x="26" y="33" font-size="22" text-anchor="middle" fill="#b91c1c">🚫</text></svg>`;
   if(!ban){
-    el.innerHTML=`<div class="badeverbot-banner no-ban" style="justify-content:center;text-align:center;flex-direction:column;gap:6px">${swimOk}<h2 style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.25rem;color:#15803d">Baden erlaubt</h2><p style="color:#16a34a;font-size:0.88rem">Keine Einschränkungen aktiv</p></div>`;
+    el.innerHTML=`<div class="badeverbot-banner no-ban" style="justify-content:center;text-align:center;flex-direction:column;gap:6px">${swimOk}<h2 style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.25rem;color:#15803d">Baden erlaubt</h2><p style="color:#16a34a;font-size:0.88rem">Keine Einschränkungen aktiv</p></div>`;
     return;
   }
   const u=new Date(ban.until),now=new Date();
   if(u<=now){
-    el.innerHTML=`<div class="badeverbot-banner no-ban" style="justify-content:center;text-align:center;flex-direction:column;gap:6px">${swimOk}<h2 style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.25rem;color:#15803d">Baden erlaubt</h2><p style="color:#16a34a;font-size:0.88rem">Verbot abgelaufen</p></div>`;
+    el.innerHTML=`<div class="badeverbot-banner no-ban" style="justify-content:center;text-align:center;flex-direction:column;gap:6px">${swimOk}<h2 style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.25rem;color:#15803d">Baden erlaubt</h2><p style="color:#16a34a;font-size:0.88rem">Verbot abgelaufen</p></div>`;
     return;
   }
   const rem=u-now,hh=Math.floor(rem/3600000),mm=Math.floor((rem%3600000)/60000);
-  el.innerHTML=`<div class="badeverbot-banner active-ban">${swimStop}<div style="flex:1;text-align:center"><h2 style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.25rem;color:#b91c1c">Badeverbot aktiv!</h2><p style="font-size:0.88rem;margin-top:4px;color:var(--text-secondary)"><strong>Grund:</strong> ${ban.reason}</p><p style="font-size:0.88rem;margin-top:2px;color:var(--text-secondary)"><strong>Freigabe:</strong> ${u.toLocaleString('de-DE')}</p><div class="ban-countdown" style="margin-top:6px">⏱ ${hh}h ${mm}min</div></div></div>`;
+  el.innerHTML=`<div class="badeverbot-banner active-ban">${swimStop}<div style="flex:1;text-align:center"><h2 style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.25rem;color:#b91c1c">Badeverbot aktiv!</h2><p style="font-size:0.88rem;margin-top:4px;color:var(--text-secondary)"><strong>Grund:</strong> ${ban.reason}</p><p style="font-size:0.88rem;margin-top:2px;color:var(--text-secondary)"><strong>Freigabe:</strong> ${u.toLocaleString('de-DE')}</p><div class="ban-countdown" style="margin-top:6px">⏱ ${hh}h ${mm}min</div></div></div>`;
   setTimeout(()=>renderBanBanner(id),30000);
 }
 
@@ -1634,8 +1694,7 @@ function clearMeasurementForm(){
 function renderMessung(){
   const last=getLastMeasurement();
   if(last){
-    // Nur Temperatur vorausfüllen – chemische Werte NICHT, damit eine reine
-    // Temp-/Druckeingabe nicht versehentlich alte Chlor-/pH-Werte speichert
+    // Nur Temperatur vorausfüllen
     if(last.temp!==undefined)document.getElementById('input-temp').value=last.temp;
   }
   const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
@@ -1751,7 +1810,7 @@ function renderWeatherCard(id,w){
       cnt++;
     }
   }
-  el.innerHTML=`<div style="display:flex;align-items:center;gap:14px"><div style="font-size:2.8rem">${currIcon}</div><div><div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:2.6rem;color:var(--pool-dark);line-height:1">${Math.round(curr.temperature_2m)}°C</div><div style="color:var(--text-secondary);font-size:0.9rem">${wm.l}</div><div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap"><span style="font-size:0.78rem;color:var(--text-muted)">💧${curr.relative_humidity_2m}%</span><span style="font-size:0.78rem;color:var(--text-muted)">🌬️${Math.round(curr.windspeed_10m)}km/h</span><span style="font-size:0.78rem;color:var(--text-muted)">🌧️${curr.precipitation}mm</span><span style="font-size:0.78rem;color:var(--text-muted)">🌅 ${ss}</span></div></div></div><div class="forecast-hours-row" style="margin-top:12px">${h3}</div>`;
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:14px"><div style="font-size:2.8rem">${currIcon}</div><div><div style="font-family:Nunito,sans-serif;font-weight:900;font-size:2.6rem;color:var(--pool-dark);line-height:1">${Math.round(curr.temperature_2m)}°C</div><div style="color:var(--text-secondary);font-size:0.9rem">${wm.l}</div><div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap"><span style="font-size:0.78rem;color:var(--text-muted)">💧${curr.relative_humidity_2m}%</span><span style="font-size:0.78rem;color:var(--text-muted)">🌬️${Math.round(curr.windspeed_10m)}km/h</span><span style="font-size:0.78rem;color:var(--text-muted)">🌧️${curr.precipitation}mm</span><span style="font-size:0.78rem;color:var(--text-muted)">🌅 ${ss}</span></div></div></div><div class="forecast-hours-row" style="margin-top:12px">${h3}</div>`;
 }
 
 function renderWeatherWarning(id,w){
@@ -1806,8 +1865,6 @@ function renderEmpfehlungen(id){
     if(last.chlor<s.chlor.min)tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} mg/l) → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
     else if(last.chlor>s.chlor.max)tips.push({type:'warn',msg:`Chlor zu hoch (${last.chlor} mg/l) – Badeverbot bis <${s.chlor.max}`,helpIdx:6,btnLabel:'➡ Hilfe starten'});
     else if(last.chlor>s.chlor.target+0.5){
-      // Tipp nur zeigen wenn keine Chlorgabe NACH der letzten Messung stattfand.
-      // Sobald neue Werte eingetragen werden, wird der Tipp neu bewertet.
       const chlorTask=maintenanceTasks.find(t=>t.id==='chlor_tabs');
       const chlorNachMessung=chlorTask?.lastDone&&new Date(chlorTask.lastDone)>new Date(last.time);
       if(!chlorNachMessung)tips.push({type:'tip',msg:`Chlor leicht erhöht (${last.chlor} mg/l) → beim nächsten Chloren nur 2 Tabs statt 3`});
@@ -1951,7 +2008,7 @@ function confirmTask(){
     sd('chem_stock_v2',chemStock);
     renderStockDashboard();
   }
-  // BUG 4: Badeverbot setzen wenn nötig
+  // Badeverbot setzen wenn nötig
   const TASK_BAN_MAP={
     algischutz:{hours:2,name:'Algenschutz'},
     poolklar:  {hours:2,name:'Poolklar'},
@@ -1959,11 +2016,11 @@ function confirmTask(){
   const banInfo=TASK_BAN_MAP[id];
   if(banInfo){
     const until=new Date(Date.now()+banInfo.hours*3600000).toISOString().slice(0,16);
-    const newBan={until,reason:`${banInfo.name} angewendet`,setAt:new Date().toISOString()};
+    const newBan={until,reason:banInfo.name+' angewendet',setAt:new Date().toISOString()};
     if(setOrKeepLongerBan(newBan)){
-      logHistory({type:'ban',time:new Date().toISOString(),note:`Badeverbot nach ${banInfo.name} bis ${new Date(until).toLocaleString('de-DE')}`});
-      addTimerTodo(`Nach ${banInfo.name}: Wasser messen`,banInfo.hours);
-      if(typeof toast==='function')toast(`🚫 Badeverbot ${banInfo.hours}h nach ${banInfo.name} gesetzt`,'warn',4000);
+      logHistory({type:'ban',time:new Date().toISOString(),note:'Badeverbot nach '+banInfo.name+' bis '+new Date(until).toLocaleString('de-DE')});
+      addTimerTodo('Nach '+banInfo.name+': Wasser messen',banInfo.hours);
+      if(typeof toast==='function')toast('🚫 Badeverbot '+banInfo.hours+'h nach '+banInfo.name+' gesetzt','warn',4000);
     }
   }
   closeModal('modal-task-confirm');
@@ -2010,7 +2067,7 @@ async function renderFrau(){
   el.innerHTML=`
     <div class="frau-quality-indicator ${statusCls}">
       <div style="font-size:4rem;line-height:1.2">${statusIcon}</div>
-      <div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.6rem;margin-top:6px">${statusTitle}</div>
+      <div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.6rem;margin-top:6px">${statusTitle}</div>
       <div style="font-size:0.92rem;color:var(--text-secondary);margin-top:5px;text-align:center">${statusSub}</div>
     </div>`;
   const w=await fetchWeather();renderWeatherCard('frau-forecast',w);renderWeatherWarning('weather-warning-frau',w);
@@ -2041,7 +2098,7 @@ async function renderIphone(){
     const sc=calcPoolScore();
     if(sc!==null){
       const col=sc>=80?'#4ade80':sc>=60?'#86efac':sc>=40?'#fbbf24':'#f87171';
-      scoreBadge.innerHTML=`<div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:1.8rem;color:${col};line-height:1">${sc}</div><div style="font-size:0.65rem;opacity:0.8;margin-top:1px">Qualität</div>`;
+      scoreBadge.innerHTML=`<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.8rem;color:${col};line-height:1">${sc}</div><div style="font-size:0.65rem;opacity:0.8;margin-top:1px">Qualität</div>`;
     }
   }
   // Ban Banner
@@ -2102,7 +2159,7 @@ async function renderIphone(){
     }
     wEl.innerHTML=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
       <div style="font-size:3rem">${currIcon}</div>
-      <div><div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:2.4rem;color:var(--pool-dark);line-height:1">${Math.round(curr.temperature_2m)}°C</div>
+      <div><div style="font-family:Nunito,sans-serif;font-weight:900;font-size:2.4rem;color:var(--pool-dark);line-height:1">${Math.round(curr.temperature_2m)}°C</div>
       <div style="color:var(--text-secondary);font-size:0.88rem">${wm.l}</div>
       <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
         <span style="font-size:0.78rem;color:var(--text-muted)">💧${curr.relative_humidity_2m}%</span>
@@ -2514,7 +2571,7 @@ async function renderWetter(){
     <div style="display:flex;align-items:center;gap:16px">
       <div style="font-size:3.8rem">${wmoIcon(curr.weathercode,now.getHours(),sunTimes)}</div>
       <div>
-        <div style="font-family:'Nunito',sans-serif;font-weight:900;font-size:2.8rem;color:var(--pool-dark)">${Math.round(curr.temperature_2m)}°C</div>
+        <div style="font-family:Nunito,sans-serif;font-weight:900;font-size:2.8rem;color:var(--pool-dark)">${Math.round(curr.temperature_2m)}°C</div>
         <div style="font-size:1rem;color:var(--text-secondary)">${wm.l}</div>
         <div style="display:flex;gap:14px;margin-top:7px;flex-wrap:wrap">
           <span style="font-size:0.82rem;color:var(--text-muted)">💧 ${curr.relative_humidity_2m}%</span>
@@ -2881,6 +2938,24 @@ function renderWartung(){
   document.getElementById('season-start').value=season.start||'';
   document.getElementById('season-end').value=season.end||'';
   renderMaintenanceList();renderIntervalSettings();
+  // Cover-Modus Hinweis
+  const coverHintEl=document.getElementById('cover-mode-hint');
+  if(!coverHintEl){
+    const hint=document.createElement('div');
+    hint.id='cover-mode-hint';
+    hint.style.cssText='margin-bottom:14px';
+    const wBoard=document.getElementById('board-wartung');
+    const firstCard=wBoard?wBoard.querySelector('.card'):null;
+    if(firstCard&&firstCard.parentNode)firstCard.parentNode.insertBefore(hint,firstCard);
+  }
+  const ch=document.getElementById('cover-mode-hint');
+  if(ch){
+    if(coverState&&coverState.covered){
+      ch.innerHTML='<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:0.85rem;font-weight:700;color:#15803d"><span style="font-size:1.3rem">🟢</span>Abgedeckter Modus aktiv – Chemie-Intervalle verlängert</div>';
+    } else {
+      ch.innerHTML='';
+    }
+  }
 }
 
 function renderMaintenanceList(){
@@ -3570,6 +3645,15 @@ function completeTodoStep(todoId,stepIdx,fromTimer=false){
   if(step.task){const t=maintenanceTasks.find(x=>x.id===step.task);if(t){t.lastDone=new Date().toISOString();sd('maintenance',maintenanceTasks)}}
   sd('active_todos',activeTodos);
   logHistory({type:'todo',time:new Date().toISOString(),note:`Todo-Schritt: ${step.text}`});
+  // Wunsch #3: Auto-Abschluss wenn alle Schritte erledigt
+  const allDone=todo.steps.every(s=>s.done);
+  if(allDone){
+    setTimeout(()=>{
+      closeTodo(todoId);
+      if(typeof toast==='function')toast('✅ Alle Schritte erledigt – Hilfe abgeschlossen!','success',3000);
+    },600);
+    return;
+  }
   if(!fromTimer)renderActiveTodos();
 }
 
@@ -3767,13 +3851,8 @@ function renderPoolGauge(){
   if(!needle||!txt||!svg)return;
 
   const score=calcPoolScore();
-
-  // Alte dynamische Bögen entfernen
   svg.querySelectorAll('.gauge-dyn').forEach(e=>e.remove());
 
-  // Korrekte Hilfsfunktionen:
-  // Punkt bei pct (0=links, 100=rechts) entlang des OBEREN Halbkreises
-  // x = 100 - r*cos(pct*π/100)  |  y = 100 - r*sin(pct*π/100)
   function gPoint(pct,r=80){
     const a=pct/100*Math.PI;
     return{x:(100-r*Math.cos(a)).toFixed(2),y:(100-r*Math.sin(a)).toFixed(2)};
@@ -3781,31 +3860,32 @@ function renderPoolGauge(){
   function gArc(p1,p2,r=80){
     const s=gPoint(p1,r),e=gPoint(p2,r);
     const large=(p2-p1)>50?1:0;
-    return`M${s.x},${s.y} A${r},${r} 0 ${large} 1 ${e.x},${e.y}`;
+    return'M'+s.x+','+s.y+' A'+r+','+r+' 0 '+large+' 1 '+e.x+','+e.y;
   }
-
-  // Hintergrund-Bogen (grau)
-  const bgPath=document.createElementNS('http://www.w3.org/2000/svg','path');
-  bgPath.setAttribute('d',gArc(0,100));
-  bgPath.setAttribute('fill','none');bgPath.setAttribute('stroke','#e2e8f0');bgPath.setAttribute('stroke-width','16');bgPath.setAttribute('stroke-linecap','round');
-  bgPath.classList.add('gauge-dyn');
-  svg.insertBefore(bgPath,needle);
-
-  // Farbverlauf rot→gelb→grün in 60 Segmenten
   function lerpRGB(r1,g1,b1,r2,g2,b2,t){
     return[Math.round(r1+(r2-r1)*t),Math.round(g1+(g2-g1)*t),Math.round(b1+(b2-b1)*t)];
   }
   function gaugeColor(pct){
     const p=pct/100;
-    let rgb;
-    if(p<0.5)      rgb=lerpRGB(220,38,38,  251,191,36, p/0.5);   // rot→gelb
-    else           rgb=lerpRGB(251,191,36,  22,163,74,  (p-0.5)/0.5); // gelb→grün
-    return`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    var rgb;
+    if(p<0.5) rgb=lerpRGB(220,38,38, 251,191,36, p/0.5);
+    else       rgb=lerpRGB(251,191,36, 22,163,74, (p-0.5)/0.5);
+    return'rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
   }
+
+  // Hintergrund-Bogen
+  const bgPath=document.createElementNS('http://www.w3.org/2000/svg','path');
+  bgPath.setAttribute('d',gArc(0,100));
+  bgPath.setAttribute('fill','none');bgPath.setAttribute('stroke','#e2e8f0');
+  bgPath.setAttribute('stroke-width','16');bgPath.setAttribute('stroke-linecap','round');
+  bgPath.classList.add('gauge-dyn');
+  svg.insertBefore(bgPath,needle);
+
+  // Farbverlauf in 60 Segmenten
   const STEPS=60;
-  for(let i=0;i<STEPS;i++){
-    const p1=(i/STEPS)*100,p2=((i+1)/STEPS)*100;
-    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  for(var i=0;i<STEPS;i++){
+    var p1=(i/STEPS)*100,p2=((i+1)/STEPS)*100;
+    var path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',gArc(p1,p2));
     path.setAttribute('fill','none');
     path.setAttribute('stroke',gaugeColor((p1+p2)/2));
@@ -3817,13 +3897,11 @@ function renderPoolGauge(){
 
   if(score===null){
     txt.textContent='–';lbl.textContent='Werte eingeben';
-    // Park needle at left (Schlecht)
     needle.setAttribute('transform','rotate(-90,100,100)');
     return;
   }
-  // score=0 → left (angle=-90°), score=100 → right (angle=+90°)
   const angle=-90+(score/100)*180;
-  needle.setAttribute('transform',`rotate(${angle},100,100)`);
+  needle.setAttribute('transform','rotate('+angle+',100,100)');
   txt.textContent=score;
   const scoreColor=score>=80?'#15803d':score>=60?'#16a34a':score>=40?'#92400e':score>=20?'#c2410c':'#b91c1c';
   txt.setAttribute('fill',scoreColor);
@@ -4133,7 +4211,6 @@ function openQMess(){
   QMESS_PARAMS.forEach(p=>{
     if(p.key==='druck') qmessVals[p.key]=lastDruck?.druck??null;
     else if(p.key==='temp') qmessVals[p.key]=last?.temp??null;
-    // pH/Chlor/Algizid starten leer (null), damit nicht versehentlich alte Werte mitgespeichert werden
     else qmessVals[p.key]=null;
   });
   renderQMessRows();
@@ -4465,6 +4542,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // Init extras
   initDarkMode();
   initCloudSync();
+  applyCovertIntervals();
 });
 
 // ============================================================
@@ -4670,7 +4748,6 @@ function gdriveWaitForLibs(){
     let tries=0;
     const check=function(){
       tries++;
-      // Nur GIS wird benötigt; gapi-Abhängigkeit entfernt
       if(typeof google!=='undefined'&&google.accounts&&google.accounts.oauth2){
         resolve(true);
       } else if(tries>80){
@@ -4685,7 +4762,6 @@ function gdriveWaitForLibs(){
 
 async function gdriveInitGapi(){
   if(gdriveGapiReady)return true;
-  // Nur GIS (google.accounts.oauth2) wird benötigt – alle Drive-Calls laufen via fetch
   const ok=await gdriveWaitForLibs();
   gdriveGapiReady=ok;
   return ok;
@@ -4734,7 +4810,6 @@ async function gdriveEnsureToken(silent){
   });
 }
 
-// Find existing sync file or create new – via fetch (kein gapi.client benötigt)
 async function gdriveFindOrCreateFile(){
   const q=encodeURIComponent("name='"+GDRIVE_FILENAME+"' and trashed=false");
   const searchResp=await fetch(
@@ -4745,7 +4820,6 @@ async function gdriveFindOrCreateFile(){
   const data=await searchResp.json();
   const files=data.files||[];
   if(files.length>0)return files[0].id;
-  // Neue Datei anlegen
   const createResp=await fetch('https://www.googleapis.com/drive/v3/files',{
     method:'POST',
     headers:{'Authorization':'Bearer '+gdriveAccessToken,'Content-Type':'application/json'},
@@ -4805,8 +4879,10 @@ async function gdriveConnect(){
 
 async function gdriveFileHasData(){
   try{
-    const resp=await gapi.client.drive.files.get({fileId:gdriveFileId,alt:'media'});
-    const body=resp.body||'';
+    const resp=await fetch('https://www.googleapis.com/drive/v3/files/'+gdriveFileId+'?alt=media',
+      {headers:{'Authorization':'Bearer '+gdriveAccessToken}});
+    if(!resp.ok)return false;
+    const body=await resp.text();
     if(!body.trim()||body.trim()==='{}')return false;
     try{const d=JSON.parse(body);return !!(d.measurements&&d.measurements.length);}catch(e){return false;}
   }catch(e){return false;}
@@ -5004,7 +5080,7 @@ async function initCloudSync(){
   // Try auto-pull on startup if token still valid
   const libsOk=await gdriveInitGapi();
   if(!libsOk)return;
-  // Token wird nur in fetch-Headers genutzt, kein gapi.client mehr nötig
+  // Token wird nur in fetch-Headers genutzt
   // Silent token refresh attempt if expired
   if(!gdriveTokenValid()){
     // Try silent refresh via GIS (no prompt)
@@ -5031,7 +5107,7 @@ async function initCloudSync(){
 
 // Wrap sd() to trigger autosync after DATA writes only (not UI-prefs)
 const sdRaw=sd;
-const AUTOSYNC_KEYS=['measurements','ban','maintenance','active_todos','history_log','season','settings','timer_todos','chem_stock_v2'];
+const AUTOSYNC_KEYS=['measurements','ban','maintenance','active_todos','history_log','season','settings','timer_todos','chem_stock_v2','wuensche','cover_state','cover_history'];
 sd=function(k,v){
   sdRaw(k,v);
   if(AUTOSYNC_KEYS.indexOf(k)>-1&&typeof queueAutoSync==='function'){
@@ -5536,26 +5612,7 @@ if(typeof quickLogTask==='function'){
       const hint=getTaskDoseHint(id);
       logHistory({type:'wartung',time:task.lastDone,note:'Erledigt: '+task.name+(hint?' | '+hint.replace(/^→\s*/,''):'')});
       sel.value='';renderTasksDashboard();
-      // BUG 3: Mittelverbrauch abziehen
-    const stockNameQLT=TASK_STOCK_MAP[id];
-    const pQLT=stockNameQLT?STOCK_PRODUCTS[stockNameQLT]:null;
-    if(pQLT&&chemStock[stockNameQLT]){
-      chemStock[stockNameQLT].qty=Math.max(0,chemStock[stockNameQLT].qty-pQLT.perUse);
-      sd('chem_stock_v2',chemStock);
-      renderStockDashboard();
-    }
-    // BUG 4: Badeverbot wenn nötig
-    const TASK_BAN_MAP_QLT={algischutz:{hours:2,name:'Algenschutz'},poolklar:{hours:2,name:'Poolklar'}};
-    const banInfoQLT=TASK_BAN_MAP_QLT[id];
-    if(banInfoQLT){
-      const untilQLT=new Date(Date.now()+banInfoQLT.hours*3600000).toISOString().slice(0,16);
-      if(setOrKeepLongerBan({until:untilQLT,reason:banInfoQLT.name+' angewendet',setAt:new Date().toISOString()})){
-        logHistory({type:'ban',time:new Date().toISOString(),note:'Badeverbot nach '+banInfoQLT.name+' (aus Schnelleintrag)'});
-        addTimerTodo('Nach '+banInfoQLT.name+': Wasser messen',banInfoQLT.hours);
-        if(typeof toast==='function')toast('🚫 Badeverbot '+banInfoQLT.hours+'h nach '+banInfoQLT.name+' gesetzt','warn',4000);
-      }
-    }
-    toast('✅ "'+task.name+'" eingetragen','success',2000);
+      toast('✅ "'+task.name+'" eingetragen','success',2000);
       if(navigator.vibrate)navigator.vibrate(40);
     }
   };
@@ -5567,13 +5624,44 @@ if(typeof quickLogTask==='function'){
 // coverState: {covered:boolean, since:ISO-string}
 let coverState=ld('cover_state',{covered:true,since:new Date().toISOString()});
 
+
+// ============================================================
+// COVER-ADAPTIVE WARTUNGSINTERVALLE
+// ============================================================
+const COVER_INTERVAL_MAP={
+  test:      {open:2, covered:4},
+  chlor_tabs:{open:3, covered:5},
+  flockmittel:{open:3,covered:5},
+  algischutz:{open:14,covered:21},
+  poolklar:  {open:7, covered:10},
+};
+
+function applyCovertIntervals(){
+  const isCovered=coverState&&coverState.covered;
+  let changed=false;
+  maintenanceTasks.forEach(function(t){
+    const map=COVER_INTERVAL_MAP[t.id];
+    if(!map)return;
+    const target=isCovered?map.covered:map.open;
+    if(t.interval!==target){t.interval=target;changed=true;}
+  });
+  if(changed)sd('maintenance',maintenanceTasks);
+}
+
 function toggleCover(){
   const now=new Date().toISOString();
   const prevCovered=coverState.covered;
   coverState={covered:!prevCovered,since:now};
   sd('cover_state',coverState);
+  // History für Nutzungsstatistik
+  const history=ld('cover_history',[]);
+  history.push({covered:coverState.covered,time:now});
+  // Nur letzte 60 Einträge behalten
+  if(history.length>60)history.splice(0,history.length-60);
+  sd('cover_history',history);
   const action=coverState.covered?'Plane drauf':'Plane ab';
   logHistory({type:'cover',time:now,note:action,covered:coverState.covered});
+  applyCovertIntervals();
   renderCoverStatusCard();
   renderChlorDecayCard();
   if(typeof toast==='function')toast(action+' dokumentiert','success',2000);
@@ -5585,24 +5673,93 @@ function renderCoverStatusCard(){
   if(!el)return;
   const since=new Date(coverState.since);
   const now=new Date();
-  const diffH=Math.floor((now-since)/3600000);
+  const diffMs=now-since;
+  const diffH=Math.floor(diffMs/3600000);
   const diffD=Math.floor(diffH/24);
-  const sinceStr=diffD>0?('vor '+diffD+'d '+(diffH%24)+'h'):diffH>0?('vor '+diffH+'h'):'gerade eben';
-  const bg=coverState.covered?'linear-gradient(135deg,#f0fdf4,#dcfce7)':'linear-gradient(135deg,#fff7ed,#fed7aa)';
-  const color=coverState.covered?'#15803d':'#9a3412';
-  const border=coverState.covered?'#22c55e':'#f97316';
-  const icon=coverState.covered?'🟢':'☀️';
-  const stateText=coverState.covered?'Plane liegt drauf':'Pool offen (ohne Plane)';
-  const btnText=coverState.covered?'☀️ Plane ab':'🟢 Plane drauf';
-  const btnClass=coverState.covered?'btn-warn':'btn-ok';
-  el.innerHTML='<div style="background:'+bg+';border:2px solid '+border+';border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
-    +'<div style="font-size:1.6rem">'+icon+'</div>'
-    +'<div style="flex:1;min-width:150px">'
-      +'<div style="font-weight:800;color:'+color+';font-size:0.95rem">'+stateText+'</div>'
-      +'<div style="font-size:0.78rem;color:var(--text-secondary)">Seit '+sinceStr+' ('+since.toLocaleString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+')</div>'
-    +'</div>'
-    +'<button class="btn '+btnClass+' btn-sm" onclick="toggleCover()">'+btnText+'</button>'
-    +'</div>';
+  const sinceStr=diffD>0?(diffD+'d '+(diffH%24)+'h'):diffH>0?(diffH+'h'):'gerade';
+  const sinceDate=since.toLocaleString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+
+  // Nutzungsstatistik aus coverHistory + aktuellem Status
+  const history=ld('cover_history',[]);
+  const now28=Date.now()-28*86400000;
+  let swimDays=0;
+  const dayMap={};
+  // Aus History berechnen
+  for(let i=0;i<history.length-1;i++){
+    const e=history[i],next=history[i+1];
+    if(!e.covered){
+      const start=new Date(e.time).getTime();
+      const end=new Date(next.time).getTime();
+      for(let d=start;d<end;d+=86400000){
+        const key=new Date(d).toISOString().slice(0,10);
+        if(new Date(d).getTime()>now28)dayMap[key]='swim';
+      }
+    }
+  }
+  // Aktueller Status
+  if(!coverState.covered){
+    const start=since.getTime();
+    for(let d=start;d<=Date.now();d+=86400000){
+      const key=new Date(d).toISOString().slice(0,10);
+      if(new Date(d).getTime()>now28)dayMap[key]='swim';
+    }
+  }
+  swimDays=Object.values(dayMap).filter(v=>v==='swim').length;
+  const totalDays=ld('cover_total_swim_days',swimDays);
+
+  // Letzte 28 Tage als Punkte
+  let daysHtml='';
+  for(let i=27;i>=0;i--){
+    const d=new Date(Date.now()-i*86400000);
+    const key=d.toISOString().slice(0,10);
+    const isSwim=dayMap[key]==='swim';
+    const isToday=i===0;
+    daysHtml+='<div class="cover-day '+(isSwim?'swim':'covered')+(isToday?' today':'')+'" title="'+d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})+(isSwim?' 🏊':' 🟢')+'"></div>';
+  }
+
+  const open=!coverState.covered;
+  el.innerHTML=
+    '<div class="pool-visual-card">'+
+      '<div class="pool-scene '+(open?'scene-open':'scene-covered')+'">'+
+        (open?
+          '<div class="pool-water-waves"><div class="pool-wave pool-wave1"></div><div class="pool-wave pool-wave2"></div><div class="pool-wave pool-wave3"></div></div>'+
+          '<div class="pool-sun">☀️</div>'+
+          '<div class="pool-swimmer">🏊</div>'
+        :
+          '<div class="pool-cover-layer"><div class="pool-cover-label">🟢 Pool abgedeckt</div></div>'+
+          '<div class="pool-clouds">⛅</div>'
+        )+
+      '</div>'+
+      '<div class="cover-status-bar">'+
+        '<div style="display:flex;align-items:center;gap:9px">'+
+          '<div class="cover-status-dot '+(open?'open':'closed')+'"></div>'+
+          '<div>'+
+            '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:0.95rem;color:'+(open?'#15803d':'#475569')+'">'+(open?'Pool offen – Poolbetrieb':'Pool abgedeckt')+'</div>'+
+            '<div style="font-size:0.75rem;color:var(--text-muted)">Seit '+sinceStr+' · '+sinceDate+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<button class="btn btn-sm '+(open?'btn-warn':'btn-ok')+'" onclick="toggleCover()">'+(open?'🟢 Plane drauf':'☀️ Plane ab')+'</button>'+
+      '</div>'+
+      '<div class="cover-stats-grid">'+
+        '<div class="cover-stat-box"><div class="cover-stat-val">'+swimDays+'</div><div class="cover-stat-lbl">Badetage</div></div>'+
+        '<div class="cover-stat-box"><div class="cover-stat-val">'+(open?diffH+'h':diffD>0?diffD+'d':diffH+'h')+'</div><div class="cover-stat-lbl">'+(open?'Heute offen':'Abgedeckt seit')+'</div></div>'+
+        '<div class="cover-stat-box"><div class="cover-stat-val">'+(swimDays>0?Math.round(swimDays/28*100)+'%':'–')+'</div><div class="cover-stat-lbl">Nutzung 28d</div></div>'+
+      '</div>'+
+      '<div class="cover-usage-section">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'+
+          '<div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.8rem;color:var(--text-secondary)">🏊 Letzte 28 Tage</div>'+
+          '<div style="font-size:0.72rem;color:var(--text-muted)">'+swimDays+' / 28 Tage Poolbetrieb</div>'+
+        '</div>'+
+        '<div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-bottom:7px">'+
+          '<div style="height:100%;width:'+Math.min(100,Math.round(swimDays/28*100))+'%;background:linear-gradient(90deg,#0ea5e9,#22c55e);border-radius:4px;transition:width 0.6s"></div>'+
+        '</div>'+
+        '<div class="cover-usage-days">'+daysHtml+'</div>'+
+        '<div style="display:flex;gap:12px;margin-top:7px">'+
+          '<div style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--text-muted)"><div style="width:9px;height:9px;border-radius:2px;background:#0ea5e9"></div>Poolbetrieb</div>'+
+          '<div style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--text-muted)"><div style="width:9px;height:9px;border-radius:2px;background:#e2e8f0"></div>Abgedeckt</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
 }
 
 // Override chlor decay prediction to account for cover state
@@ -5730,7 +5887,7 @@ function renderWuensche(){
 function filterWuensche(f){
   wunschFilter=f;
   document.querySelectorAll('#wunsch-filter-bar .tab-btn').forEach(function(b,i){
-    b.classList.toggle('active',['all','open','sent','done'][i]===f);
+    b.classList.toggle('active',['all','open','sent','tested','done'][i]===f);
   });
   renderWuenscheList();
 }
@@ -5748,7 +5905,7 @@ function renderWuenscheList(){
   }
   const catLabels={bug:'🐛 Bug',feature:'✨ Feature',improvement:'🔧 Verbesserung',design:'🎨 Design',other:'📌 Sonstiges'};
   const prioLabels={low:'🟢 niedrig',med:'🟡 mittel',high:'🔴 hoch'};
-  const statusLabels={open:'⏳ Offen',sent:'📤 Weitergegeben',done:'✅ Erledigt'};
+  const statusLabels={open:'⏳ Offen',sent:'📤 An Claude',tested:'🧪 In Testversion',done:'✅ Erledigt'};
   el.innerHTML=list.map(function(w){
     const d=new Date(w.createdAt).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     const photosHtml=(w.photos&&w.photos.length)?
@@ -5761,19 +5918,13 @@ function renderWuenscheList(){
         +'<div class="wunsch-badges">'
           +'<span class="badge badge-info">'+(catLabels[w.category]||w.category)+'</span>'
           +'<span class="badge" style="background:#f1f5f9;color:#64748b">'+(prioLabels[w.priority]||w.priority)+'</span>'
-          +'<span class="badge '+(w.status==='done'?'badge-ok':w.status==='sent'?'badge-info':'badge-warn')+'">'+(statusLabels[w.status]||w.status)+'</span>'
+          +'<span class="badge '+(w.status==='done'?'badge-ok':w.status==='tested'?'badge-tested':w.status==='sent'?'badge-info':'badge-warn')+'">'+(statusLabels[w.status]||w.status)+'</span>'
         +'</div>'
       +'</div>'
       +'<div class="wunsch-meta">📅 '+d+(w.photos&&w.photos.length?' · 📸 '+w.photos.length+' Foto(s)':'')+'</div>'
       +(w.desc?'<div class="wunsch-desc">'+escapeHtml(w.desc)+'</div>':'')
       +photosHtml
-      +'<div class="wunsch-actions">'
-        +(w.status!=='sent'?'<button class="btn btn-primary btn-sm" onclick="markWunschStatus('+w.id+',\'sent\')">📤 Als weitergegeben markieren</button>':'')
-        +(w.status!=='done'?'<button class="btn btn-ok btn-sm" onclick="markWunschStatus('+w.id+',\'done\')">✅ Erledigt</button>':'')
-        +(w.status!=='open'?'<button class="btn btn-outline btn-sm" onclick="markWunschStatus('+w.id+',\'open\')">↩ Wieder öffnen</button>':'')
-        +'<button class="btn btn-outline btn-sm" onclick="copyWunsch('+w.id+')">📋 Kopieren</button>'
-        +'<button class="btn btn-danger btn-sm" onclick="deleteWunsch('+w.id+')">🗑️ Löschen</button>'
-      +'</div>'
+      +'<div class="wunsch-actions">'+(w.status==='open'?'<button class="btn btn-primary btn-sm" onclick="markWunschStatus('+w.id+',\'sent\')">📤 An Claude weitergeben</button>':'')+(w.status==='sent'?'<button class="btn btn-sm" style="background:#f3e8ff;color:#7c3aed" onclick="markWunschStatus('+w.id+',\'tested\')">🧪 In Testversion eingearbeitet</button>':'')+(w.status==='tested'?'<button class="btn btn-ok btn-sm" onclick="markWunschStatus('+w.id+',\'done\')">✅ Erledigt</button>':'')+(w.status!=='open'?'<button class="btn btn-outline btn-sm" onclick="markWunschStatus('+w.id+',\'open\')">↩ Wieder öffnen</button>':'')+'<button class="btn btn-outline btn-sm" onclick="editWunsch('+w.id+')">✏️ Bearbeiten</button>'+'<button class="btn btn-outline btn-sm" onclick="copyWunsch('+w.id+')">📋 Kopieren</button>'+'<button class="btn btn-danger btn-sm" onclick="deleteWunsch('+w.id+')">🗑️ Löschen</button>'+'</div>'
     +'</div>';
   }).join('');
 }
@@ -5886,6 +6037,52 @@ function fallbackCopy(text){
     if(typeof toast==='function')toast('Kopieren fehlgeschlagen','error',3000);
   }
   document.body.removeChild(ta);
+}
+
+
+// ============================================================
+// WUNSCH BEARBEITEN
+// ============================================================
+function editWunsch(id){
+  const w=wuensche.find(function(x){return x.id===id;});
+  if(!w)return;
+  document.getElementById('wunsch-title').value=w.title||'';
+  document.getElementById('wunsch-desc').value=w.desc||'';
+  document.getElementById('wunsch-category').value=w.category||'bug';
+  document.getElementById('wunsch-priority').value=w.priority||'med';
+  currentWunschPhotos=w.photos?w.photos.slice():[];
+  renderWunschPhotosPreview();
+  // Speichern-Button temporär auf Update umschalten
+  const saveBtn=document.querySelector('#board-wuensche .btn-primary');
+  if(saveBtn){
+    saveBtn.textContent='💾 Änderung speichern';
+    saveBtn.setAttribute('data-edit-id',id);
+    saveBtn.onclick=function(){saveWunschEdit(id);};
+  }
+  // Zum Formular scrollen
+  document.getElementById('wunsch-title').scrollIntoView({behavior:'smooth',block:'start'});
+  if(typeof toast==='function')toast('Wunsch zum Bearbeiten geladen','info',2000);
+}
+
+function saveWunschEdit(id){
+  const w=wuensche.find(function(x){return x.id===id;});
+  if(!w){saveWunsch();return;}
+  const title=document.getElementById('wunsch-title').value.trim();
+  const desc=document.getElementById('wunsch-desc').value.trim();
+  if(!title&&!desc){if(typeof toast==='function')toast('Bitte Titel oder Beschreibung eingeben','warn',3000);return;}
+  w.title=title||'(Kein Titel)';
+  w.desc=desc;
+  w.category=document.getElementById('wunsch-category').value;
+  w.priority=document.getElementById('wunsch-priority').value;
+  w.photos=currentWunschPhotos.slice();
+  w.editedAt=new Date().toISOString();
+  sd('wuensche',wuensche);
+  // Speichern-Button zurücksetzen
+  const saveBtn=document.querySelector('#board-wuensche .btn-primary');
+  if(saveBtn){saveBtn.textContent='💾 Wunsch speichern';saveBtn.onclick=saveWunsch;}
+  clearWunschForm();
+  renderWuenscheList();
+  if(typeof toast==='function')toast('✏️ Wunsch aktualisiert','success',2000);
 }
 
 // Initial cover-state render after dom ready
