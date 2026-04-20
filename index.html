@@ -413,10 +413,13 @@ body.dark-mode .season-stat-val{color:#7dd3fc}
 .cover-stat-lbl{font-size:0.66rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:3px}
 .cover-usage-section{padding:12px 16px;border-top:1px solid var(--border)}
 .cover-usage-days{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px}
-.cover-day{width:15px;height:15px;border-radius:3px;cursor:default;position:relative}
-.cover-day.swim{background:#0ea5e9}
+.cover-day{width:13px;height:13px;border-radius:3px;cursor:default;position:relative;flex-shrink:0}
+.cover-day.swim{background:#0ea5e9 !important}
 .cover-day.covered{background:#e2e8f0}
 .cover-day.today{outline:2px solid var(--pool-blue);outline-offset:1px}
+body.dark-mode .cover-day.swim{background:#0ea5e9 !important}
+body.dark-mode .cover-day.covered{background:#334155}
+@media(max-width:400px){.cover-day{width:10px;height:10px;border-radius:2px}}
 body.dark-mode .pool-scene.scene-covered{background:linear-gradient(180deg,#334155 0%,#475569 100%)}
 body.dark-mode .cover-stat-box,.dark-mode .cover-stats-grid{background:var(--card-bg)}
 body.dark-mode .cover-day.covered{background:#334155}
@@ -424,6 +427,14 @@ body.dark-mode .cover-day.covered{background:#334155}
 /* Wunsch Status "tested" */
 .badge-tested{background:#f3e8ff;color:#7c3aed}
 body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
+
+/* ===== COVER HISTORY MODAL ===== */
+.cover-hist-entry{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.cover-hist-entry:last-child{border-bottom:none}
+.cover-hist-icon{font-size:1.2rem;width:28px;text-align:center;flex-shrink:0}
+.cover-hist-info{flex:1;min-width:0}
+.cover-hist-time{font-weight:700;font-size:0.85rem}
+.cover-hist-label{font-size:0.75rem;color:var(--text-muted)}
 
 </style>
 </head>
@@ -1288,6 +1299,65 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     </div>
     <input type="hidden" id="timer-measure-id">
     <div style="display:flex;gap:8px"><button class="btn btn-primary" onclick="saveTimerMeasure()">💾 Messung speichern</button><button class="btn btn-outline" onclick="closeModal('modal-timer-measure')">Später</button></div>
+  </div>
+</div>
+
+
+<!-- ===== COVER HISTORY MODAL ===== -->
+<div class="modal-overlay" id="modal-cover-history">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">🟢 Planenstatus – Verlauf & Nachtragen</div>
+    <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px">Einträge bearbeiten oder neuen Status nachtragen. Die Badestatistik wird automatisch neu berechnet.</p>
+    
+    <!-- Neuer Eintrag -->
+    <div style="background:var(--pool-surface);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-weight:800;font-size:0.85rem;margin-bottom:10px">➕ Status nachtragen</div>
+      <div class="grid-2" style="gap:10px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Datum & Uhrzeit</label>
+          <input type="datetime-local" id="cover-hist-new-time">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Status</label>
+          <select id="cover-hist-new-status">
+            <option value="false">☀️ Plane ab (Pool offen)</option>
+            <option value="true">🟢 Plane drauf (abgedeckt)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addCoverHistEntry()">➕ Eintrag hinzufügen</button>
+    </div>
+
+    <!-- Bestehende Einträge -->
+    <div id="cover-hist-list" style="max-height:320px;overflow-y:auto"></div>
+
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn btn-outline" onclick="closeModal('modal-cover-history')">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit-Modal für einzelnen Cover-Eintrag -->
+<div class="modal-overlay" id="modal-cover-edit">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">✏️ Eintrag bearbeiten</div>
+    <div class="form-group">
+      <label class="form-label">Datum & Uhrzeit</label>
+      <input type="datetime-local" id="cover-edit-time">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Status</label>
+      <select id="cover-edit-status">
+        <option value="false">☀️ Plane ab (Pool offen)</option>
+        <option value="true">🟢 Plane drauf (abgedeckt)</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveCoverEdit()">💾 Speichern</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteCoverEdit()">🗑️ Löschen</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-cover-edit')">Abbrechen</button>
+    </div>
+    <input type="hidden" id="cover-edit-idx">
   </div>
 </div>
 
@@ -5618,6 +5688,108 @@ if(typeof quickLogTask==='function'){
   };
 }
 
+
+// ============================================================
+// COVER HISTORY – Nachtragen & Bearbeiten
+// ============================================================
+
+function openCoverHistory(){
+  renderCoverHistList();
+  // Aktuelle Zeit als Default
+  const now=new Date();
+  now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
+  document.getElementById('cover-hist-new-time').value=now.toISOString().slice(0,16);
+  document.getElementById('cover-hist-new-status').value='false';
+  document.getElementById('modal-cover-history').classList.add('open');
+}
+
+function renderCoverHistList(){
+  const el=document.getElementById('cover-hist-list');if(!el)return;
+  const history=ld('cover_history',[]);
+  // Aktuellen Status auch anzeigen
+  const allEntries=[...history,{covered:coverState.covered,time:coverState.since,isCurrent:true}]
+    .sort((a,b)=>new Date(b.time)-new Date(a.time));
+  if(!allEntries.length){el.innerHTML='<p style="color:var(--text-muted);padding:10px">Noch keine Einträge.</p>';return;}
+  el.innerHTML=allEntries.map((e,i)=>{
+    const d=new Date(e.time).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const icon=e.covered?'🟢':'☀️';
+    const label=e.covered?'Plane drauf (abgedeckt)':'Plane ab (Pool offen)';
+    const currentBadge=e.isCurrent?'<span style="background:#dbeafe;color:#1d4ed8;font-size:0.65rem;font-weight:800;padding:2px 6px;border-radius:8px;margin-left:6px">AKTUELL</span>':'';
+    const histIdx=history.findIndex(h=>h.time===e.time&&h.covered===e.covered);
+    return'<div class="cover-hist-entry">'+
+      '<div class="cover-hist-icon">'+icon+'</div>'+
+      '<div class="cover-hist-info">'+
+        '<div class="cover-hist-time">'+d+currentBadge+'</div>'+
+        '<div class="cover-hist-label">'+label+'</div>'+
+      '</div>'+
+      (!e.isCurrent?'<button class="btn btn-outline btn-sm" onclick="openCoverEdit('+histIdx+')" style="font-size:0.75rem;padding:5px 9px">✏️</button>':'')+
+    '</div>';
+  }).join('');
+}
+
+function addCoverHistEntry(){
+  const timeVal=document.getElementById('cover-hist-new-time').value;
+  const coveredVal=document.getElementById('cover-hist-new-status').value==='true';
+  if(!timeVal){if(typeof toast==='function')toast('Bitte Datum und Uhrzeit eingeben','warn',3000);return;}
+  const history=ld('cover_history',[]);
+  history.push({covered:coveredVal,time:new Date(timeVal).toISOString()});
+  history.sort((a,b)=>new Date(a.time)-new Date(b.time));
+  // Nur letzte 120 Einträge
+  if(history.length>120)history.splice(0,history.length-120);
+  sd('cover_history',history);
+  logHistory({type:'cover',time:new Date(timeVal).toISOString(),note:(coveredVal?'Plane drauf':'Plane ab')+' (nachgetragen)',covered:coveredVal});
+  renderCoverHistList();
+  renderCoverStatusCard();
+  if(typeof toast==='function')toast('Eintrag nachgetragen – Statistik aktualisiert','success',2500);
+}
+
+function openCoverEdit(idx){
+  const history=ld('cover_history',[]);
+  const e=history[idx];if(!e)return;
+  const dt=new Date(e.time);
+  dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
+  document.getElementById('cover-edit-time').value=dt.toISOString().slice(0,16);
+  document.getElementById('cover-edit-status').value=String(e.covered);
+  document.getElementById('cover-edit-idx').value=idx;
+  document.getElementById('modal-cover-edit').classList.add('open');
+}
+
+function saveCoverEdit(){
+  const idx=parseInt(document.getElementById('cover-edit-idx').value);
+  const history=ld('cover_history',[]);
+  if(idx<0||idx>=history.length)return;
+  const timeVal=document.getElementById('cover-edit-time').value;
+  const coveredVal=document.getElementById('cover-edit-status').value==='true';
+  history[idx]={covered:coveredVal,time:new Date(timeVal).toISOString()};
+  history.sort((a,b)=>new Date(a.time)-new Date(b.time));
+  sd('cover_history',history);
+  closeModal('modal-cover-edit');
+  renderCoverHistList();
+  renderCoverStatusCard();
+  if(typeof toast==='function')toast('Eintrag aktualisiert','success',2000);
+}
+
+function deleteCoverEdit(){
+  if(!confirm('Eintrag wirklich löschen?'))return;
+  const idx=parseInt(document.getElementById('cover-edit-idx').value);
+  const history=ld('cover_history',[]);
+  if(idx<0||idx>=history.length)return;
+  const deleted=history.splice(idx,1)[0];
+  sd('cover_history',history);
+  closeModal('modal-cover-edit');
+  renderCoverHistList();
+  renderCoverStatusCard();
+  if(typeof toast==='function'){
+    toast('Eintrag gelöscht','info',5000,{label:'↩ Rückgängig',onClick:function(){
+      history.splice(idx,0,deleted);
+      history.sort((a,b)=>new Date(a.time)-new Date(b.time));
+      sd('cover_history',history);
+      renderCoverStatusCard();
+      toast('Wiederhergestellt','success',1800);
+    }});
+  }
+}
+
 // ============================================================
 // POOL-ABDECKUNG (Plane)
 // ============================================================
@@ -5684,25 +5856,40 @@ function renderCoverStatusCard(){
   const now28=Date.now()-28*86400000;
   let swimDays=0;
   const dayMap={};
-  // Aus History berechnen
-  for(let i=0;i<history.length-1;i++){
-    const e=history[i],next=history[i+1];
+  // Alle History-Segmente auswerten
+  // Vollständige Timeline: history-Einträge + aktueller Status
+  const timeline=[...history].sort((a,b)=>new Date(a.time)-new Date(b.time));
+  // Aktuellen Zustand ans Ende anhängen (als Marker)
+  const nowMs=Date.now();
+  for(let i=0;i<timeline.length;i++){
+    const e=timeline[i];
+    const segEnd=i+1<timeline.length?new Date(timeline[i+1].time).getTime():nowMs;
     if(!e.covered){
-      const start=new Date(e.time).getTime();
-      const end=new Date(next.time).getTime();
-      for(let d=start;d<end;d+=86400000){
-        const key=new Date(d).toISOString().slice(0,10);
-        if(new Date(d).getTime()>now28)dayMap[key]='swim';
+      // Dieser Zeitraum: Pool offen
+      const segStart=new Date(e.time).getTime();
+      for(let d=segStart;d<segEnd;d+=86400000){
+        if(d>now28){
+          const key=new Date(d).toISOString().slice(0,10);
+          dayMap[key]='swim';
+        }
       }
     }
   }
-  // Aktueller Status
+  // Aktueller Status bis jetzt (wenn history leer oder letzter Eintrag nicht covered=current)
   if(!coverState.covered){
     const start=since.getTime();
-    for(let d=start;d<=Date.now();d+=86400000){
-      const key=new Date(d).toISOString().slice(0,10);
-      if(new Date(d).getTime()>now28)dayMap[key]='swim';
+    for(let d=start;d<=nowMs;d+=86400000){
+      if(d>now28){
+        const key=new Date(d).toISOString().slice(0,10);
+        dayMap[key]='swim';
+      }
     }
+  }
+  // Wenn history komplett leer: coverState seit Beginn anwenden
+  if(timeline.length===0&&!coverState.covered){
+    // Heute immer markieren wenn offen
+    const todayKey=new Date().toISOString().slice(0,10);
+    dayMap[todayKey]='swim';
   }
   swimDays=Object.values(dayMap).filter(v=>v==='swim').length;
   const totalDays=ld('cover_total_swim_days',swimDays);
@@ -5738,7 +5925,7 @@ function renderCoverStatusCard(){
             '<div style="font-size:0.75rem;color:var(--text-muted)">Seit '+sinceStr+' · '+sinceDate+'</div>'+
           '</div>'+
         '</div>'+
-        '<button class="btn btn-sm '+(open?'btn-warn':'btn-ok')+'" onclick="toggleCover()">'+(open?'🟢 Plane drauf':'☀️ Plane ab')+'</button>'+
+        '<button class="btn btn-sm '+(open?'btn-warn':'btn-ok')+'" onclick="toggleCover()">'+(open?'🟢 Plane drauf':'☀️ Plane ab')+'</button>'+'<button class="btn btn-outline btn-sm" onclick="openCoverHistory()" style="font-size:0.75rem">📋 Verlauf</button>'+
       '</div>'+
       '<div class="cover-stats-grid">'+
         '<div class="cover-stat-box"><div class="cover-stat-val">'+swimDays+'</div><div class="cover-stat-lbl">Badetage</div></div>'+
