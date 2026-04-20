@@ -1031,6 +1031,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <button class="tab-btn" onclick="filterHistorie('dosierung')" id="htab-dosierung">⚗️ Dosierung</button>
     <button class="tab-btn" onclick="filterHistorie('todo')" id="htab-todo">✅ Todos</button>
     <button class="tab-btn" onclick="filterHistorie('ban')" id="htab-ban">🚫 Verbote</button>
+  <button class="tab-btn" onclick="filterHistorie('cover')" id="htab-cover">🟢 Plane</button>
   </div>
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
@@ -3381,8 +3382,8 @@ function renderHistorieList(){
   all.sort((a,b)=>new Date(b.time)-new Date(a.time));
   if(histFilter!=='all')all=all.filter(e=>e._type===histFilter);
   if(!all.length){el.innerHTML='<p style="color:var(--text-muted);padding:14px">Keine Einträge vorhanden.</p>';return}
-  const icons={wartung:'🔧',todo:'✅',ban:'🚫',dosierung:'⚗️'};
-  const typeBg={ban:'#fff1f2',dosierung:'#eff6ff',todo:'#f0fdf4',wartung:'#f8fafc'};
+  const icons={wartung:'🔧',todo:'✅',ban:'🚫',dosierung:'⚗️',cover:'🟢'};
+  const typeBg={ban:'#fff1f2',dosierung:'#eff6ff',todo:'#f0fdf4',wartung:'#f8fafc',cover:'#f0fdf4'};
   el.innerHTML=all.map(e=>{
     const d=new Date(e.time).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const chk=historieSelectMode?`<input type="checkbox" class="hist-row-chk" data-key="${e._key}" style="width:16px;height:16px;accent-color:var(--danger-red)" ${historieSelected.has(e._key)?'checked':''} onchange="toggleHistRow('${e._key}',this)">`:'<div></div>';
@@ -5893,20 +5894,45 @@ function renderCoverStatusCard(){
 
   const swimDays=Object.values(dayMap).filter(v=>v==='swim').length;
 
-  // Tagespunkte: von displayStart bis heute
-  let daysHtml='';
-  const totalDisplayDays=Math.round((nowMs-displayStart)/86400000)+1;
-  // Safari-Fix: divs mit explizitem style statt nur class
+  // Tagespunkte: Canvas-basiert (Safari-kompatibel)
+  const totalDisplayDays=Math.max(1,Math.round((nowMs-displayStart)/86400000)+1);
+  // Canvas-ID für späteren Render
+  const canvasId='cover-days-canvas-'+Date.now();
+  const todayKey=new Date().toISOString().slice(0,10);
+  // Daten als JSON für Canvas-Render
+  const dayDataArr=[];
   for(let i=0;i<totalDisplayDays;i++){
     const d=new Date(displayStart+i*86400000);
     const key=d.toISOString().slice(0,10);
-    const isSwim=dayMap[key]==='swim';
-    const isToday=key===new Date().toISOString().slice(0,10);
-    const bg=isSwim?'#0ea5e9':'#e2e8f0';
-    const outline=isToday?'outline:2px solid #0ea5e9;outline-offset:1px;':'';
-    daysHtml+='<div class="cover-day" style="background:'+bg+';'+outline+'" title="'+
-      d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})+(isSwim?' 🏊':' 🟢')+'"></div>';
+    dayDataArr.push({swim:dayMap[key]==='swim',today:key===todayKey,
+      label:d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})});
   }
+  const daysHtml='<canvas id="'+canvasId+'" style="width:100%;display:block"></canvas>';
+  // Canvas nach DOM-Einfügung rendern
+  setTimeout(function(){
+    const canvas=document.getElementById(canvasId);
+    if(!canvas)return;
+    const DOT=12,GAP=3,COLS=Math.floor((canvas.parentElement.offsetWidth||280)/(DOT+GAP));
+    const ROWS=Math.ceil(dayDataArr.length/COLS);
+    canvas.width=canvas.parentElement.offsetWidth||280;
+    canvas.height=ROWS*(DOT+GAP);
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    function roundRectPath(cx,x,y,w,h,r){
+      if(cx.roundRect){cx.roundRect(x,y,w,h,r);}
+      else{cx.rect(x,y,w,h);}  // Safari-Fallback
+    }
+    dayDataArr.forEach(function(day,i){
+      const col=i%COLS,row=Math.floor(i/COLS);
+      const x=col*(DOT+GAP),y=row*(DOT+GAP);
+      ctx.fillStyle=day.swim?'#0ea5e9':'#e2e8f0';
+      ctx.beginPath();roundRectPath(ctx,x,y,DOT,DOT,3);ctx.fill();
+      if(day.today){
+        ctx.strokeStyle='#0369a1';ctx.lineWidth=2;
+        ctx.beginPath();roundRectPath(ctx,x+1,y+1,DOT-2,DOT-2,2);ctx.stroke();
+      }
+    });
+  },80);
 
   const open=!coverState.covered;
   el.innerHTML=
