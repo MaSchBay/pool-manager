@@ -1085,9 +1085,9 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="form-group">
       <label class="form-label">Priorität</label>
       <select id="wunsch-priority">
-        <option value="low">🟢 Niedrig</option>
-        <option value="med" selected>🟡 Mittel</option>
         <option value="high">🔴 Hoch</option>
+        <option value="med" selected>🟡 Mittel</option>
+        <option value="low">🟢 Niedrig</option>
       </select>
     </div>
     <div class="form-group">
@@ -5853,55 +5853,59 @@ function renderCoverStatusCard(){
 
   // Nutzungsstatistik aus coverHistory + aktuellem Status
   const history=ld('cover_history',[]);
-  const now28=Date.now()-28*86400000;
-  let swimDays=0;
-  const dayMap={};
-  // Alle History-Segmente auswerten
-  // Vollständige Timeline: history-Einträge + aktueller Status
-  const timeline=[...history].sort((a,b)=>new Date(a.time)-new Date(b.time));
-  // Aktuellen Zustand ans Ende anhängen (als Marker)
   const nowMs=Date.now();
+  const dayMap={};
+
+  // Saisonstart ermitteln (frühester Zeitpunkt für Anzeige)
+  const seasonStart=season&&season.start?new Date(season.start).getTime():null;
+  // Anzeige-Startpunkt: Saisonstart falls vorhanden, sonst frühester History-Eintrag, sonst heute
+  const history_sorted=[...history].sort((a,b)=>new Date(a.time)-new Date(b.time));
+  let displayStart=seasonStart||
+    (history_sorted.length>0?new Date(history_sorted[0].time).getTime():nowMs);
+  // Nicht älter als 180 Tage anzeigen
+  displayStart=Math.max(displayStart,nowMs-180*86400000);
+
+  // Timeline-Segmente auswerten
+  const timeline=history_sorted;
   for(let i=0;i<timeline.length;i++){
     const e=timeline[i];
     const segEnd=i+1<timeline.length?new Date(timeline[i+1].time).getTime():nowMs;
     if(!e.covered){
-      // Dieser Zeitraum: Pool offen
-      const segStart=new Date(e.time).getTime();
+      const segStart=Math.max(new Date(e.time).getTime(),displayStart);
       for(let d=segStart;d<segEnd;d+=86400000){
-        if(d>now28){
-          const key=new Date(d).toISOString().slice(0,10);
-          dayMap[key]='swim';
-        }
-      }
-    }
-  }
-  // Aktueller Status bis jetzt (wenn history leer oder letzter Eintrag nicht covered=current)
-  if(!coverState.covered){
-    const start=since.getTime();
-    for(let d=start;d<=nowMs;d+=86400000){
-      if(d>now28){
         const key=new Date(d).toISOString().slice(0,10);
         dayMap[key]='swim';
       }
     }
   }
-  // Wenn history komplett leer: coverState seit Beginn anwenden
-  if(timeline.length===0&&!coverState.covered){
-    // Heute immer markieren wenn offen
-    const todayKey=new Date().toISOString().slice(0,10);
-    dayMap[todayKey]='swim';
+  // Aktueller Status bis jetzt
+  if(!coverState.covered){
+    const segStart=Math.max(since.getTime(),displayStart);
+    for(let d=segStart;d<=nowMs;d+=86400000){
+      const key=new Date(d).toISOString().slice(0,10);
+      dayMap[key]='swim';
+    }
   }
-  swimDays=Object.values(dayMap).filter(v=>v==='swim').length;
-  const totalDays=ld('cover_total_swim_days',swimDays);
+  // Wenn history leer und Pool offen: heute markieren
+  if(timeline.length===0&&!coverState.covered){
+    dayMap[new Date().toISOString().slice(0,10)]='swim';
+  }
 
-  // Letzte 28 Tage als Punkte
+  const swimDays=Object.values(dayMap).filter(v=>v==='swim').length;
+
+  // Tagespunkte: von displayStart bis heute
   let daysHtml='';
-  for(let i=27;i>=0;i--){
-    const d=new Date(Date.now()-i*86400000);
+  const totalDisplayDays=Math.round((nowMs-displayStart)/86400000)+1;
+  // Safari-Fix: divs mit explizitem style statt nur class
+  for(let i=0;i<totalDisplayDays;i++){
+    const d=new Date(displayStart+i*86400000);
     const key=d.toISOString().slice(0,10);
     const isSwim=dayMap[key]==='swim';
-    const isToday=i===0;
-    daysHtml+='<div class="cover-day '+(isSwim?'swim':'covered')+(isToday?' today':'')+'" title="'+d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})+(isSwim?' 🏊':' 🟢')+'"></div>';
+    const isToday=key===new Date().toISOString().slice(0,10);
+    const bg=isSwim?'#0ea5e9':'#e2e8f0';
+    const outline=isToday?'outline:2px solid #0ea5e9;outline-offset:1px;':'';
+    daysHtml+='<div class="cover-day" style="background:'+bg+';'+outline+'" title="'+
+      d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})+(isSwim?' 🏊':' 🟢')+'"></div>';
   }
 
   const open=!coverState.covered;
@@ -5930,12 +5934,12 @@ function renderCoverStatusCard(){
       '<div class="cover-stats-grid">'+
         '<div class="cover-stat-box"><div class="cover-stat-val">'+swimDays+'</div><div class="cover-stat-lbl">Badetage</div></div>'+
         '<div class="cover-stat-box"><div class="cover-stat-val">'+(open?diffH+'h':diffD>0?diffD+'d':diffH+'h')+'</div><div class="cover-stat-lbl">'+(open?'Heute offen':'Abgedeckt seit')+'</div></div>'+
-        '<div class="cover-stat-box"><div class="cover-stat-val">'+(swimDays>0?Math.round(swimDays/28*100)+'%':'–')+'</div><div class="cover-stat-lbl">Nutzung 28d</div></div>'+
+        '<div class="cover-stat-box"><div class="cover-stat-val">'+(swimDays>0?Math.round(swimDays/28*100)+'%':'–')+'</div><div class="cover-stat-lbl">Nutzung Saison</div></div>'+
       '</div>'+
       '<div class="cover-usage-section">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'+
           '<div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.8rem;color:var(--text-secondary)">🏊 Letzte 28 Tage</div>'+
-          '<div style="font-size:0.72rem;color:var(--text-muted)">'+swimDays+' / 28 Tage Poolbetrieb</div>'+
+          '<div style="font-size:0.72rem;color:var(--text-muted)">'+swimDays+' / Badetage ab Saisonstart</div>'+
         '</div>'+
         '<div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-bottom:7px">'+
           '<div style="height:100%;width:'+Math.min(100,Math.round(swimDays/28*100))+'%;background:linear-gradient(90deg,#0ea5e9,#22c55e);border-radius:4px;transition:width 0.6s"></div>'+
@@ -6082,7 +6086,18 @@ function filterWuensche(f){
 function renderWuenscheList(){
   const el=document.getElementById('wuensche-list');
   if(!el)return;
-  let list=wuensche.slice();
+  const prioOrder={high:0,med:1,low:2};
+  let list=wuensche.slice().sort(function(a,b){
+    // Erledigte immer ans Ende
+    if(a.status==='done'&&b.status!=='done')return 1;
+    if(b.status==='done'&&a.status!=='done')return -1;
+    // Nach Priorität sortieren
+    const pa=prioOrder[a.priority]??1;
+    const pb=prioOrder[b.priority]??1;
+    if(pa!==pb)return pa-pb;
+    // Gleiche Priorität: neueste zuerst
+    return new Date(b.createdAt)-new Date(a.createdAt);
+  });
   if(wunschFilter!=='all')list=list.filter(function(w){return w.status===wunschFilter;});
   const titleEl=document.getElementById('wunsch-list-title');
   if(titleEl)titleEl.textContent='📋 Gesammelte Wünsche ('+list.length+(wunschFilter!=='all'?' von '+wuensche.length:'')+')';
