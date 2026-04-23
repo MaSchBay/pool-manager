@@ -6741,7 +6741,7 @@ function renderCoverStatusCard(){
       '<div class="cover-stats-grid">'+
         '<div class="cover-stat-box"><div class="cover-stat-val">'+swimDays+'</div><div class="cover-stat-lbl">Badetage</div></div>'+
         '<div class="cover-stat-box"><div class="cover-stat-val">'+(open?diffH+'h':diffD>0?diffD+'d':diffH+'h')+'</div><div class="cover-stat-lbl">'+(open?'Heute offen':'Abgedeckt seit')+'</div></div>'+
-        '<div class="cover-stat-box"><div class="cover-stat-val">'+(swimDays>0?Math.round(swimDays/28*100)+'%':'–')+'</div><div class="cover-stat-lbl">Nutzung Saison</div></div>'+
+        '<div class="cover-stat-box"><div class="cover-stat-val">'+(swimDays>0?Math.round(swimDays/Math.max(1,totalDisplayDays)*100)+'%':'–')+'</div><div class="cover-stat-lbl">Nutzung Saison</div></div>'+
       '</div>'+
       '<div class="cover-usage-section">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'+
@@ -6749,7 +6749,7 @@ function renderCoverStatusCard(){
           '<div style="font-size:0.72rem;color:var(--text-muted)">'+swimDays+' / Badetage ab Saisonstart</div>'+
         '</div>'+
         '<div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-bottom:7px">'+
-          '<div style="height:100%;width:'+Math.min(100,Math.round(swimDays/28*100))+'%;background:linear-gradient(90deg,#0ea5e9,#22c55e);border-radius:4px;transition:width 0.6s"></div>'+
+          '<div style="height:100%;width:'+Math.min(100,Math.round(swimDays/Math.max(1,totalDisplayDays)*100))+'%;background:linear-gradient(90deg,#0ea5e9,#22c55e);border-radius:4px;transition:width 0.6s"></div>'+
         '</div>'+
         '<div class="cover-usage-days">'+daysHtml+'</div>'+
         '<div style="display:flex;gap:12px;margin-top:7px">'+
