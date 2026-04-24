@@ -181,7 +181,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .example-row:last-child{border-bottom:none}
 /* ===== POOL STATUS GAUGE ===== */
 .pool-gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:10px 0 4px}
-.pool-gauge-svg{width:220px;height:168px}
+.pool-gauge-svg{width:220px;height:178px}
 .gauge-score-val{font-family:Nunito,sans-serif;font-weight:900;font-size:1.7rem;fill:var(--pool-dark)}
 .gauge-score-lbl{font-size:0.72rem;fill:var(--text-muted)}
 /* ===== WASSERTEMPERATUR WIDGET ===== */
@@ -786,7 +786,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="card">
       <div class="card-title">🎯 Pool-Qualität</div>
       <div class="pool-gauge-wrap">
-        <svg class="pool-gauge-svg" viewBox="0 0 200 168" id="dash-gauge-svg">
+        <svg class="pool-gauge-svg" viewBox="0 0 200 178" id="dash-gauge-svg">
           <defs>
             <linearGradient id="gauge-grad-ok" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" style="stop-color:#22c55e"/>
@@ -806,8 +806,8 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
           <circle cx="100" cy="100" r="7" fill="white" stroke="#0c4a6e" stroke-width="2"/>
           <circle cx="100" cy="100" r="3.5" fill="#0c4a6e"/>
           <!-- score text -->
-          <text id="gauge-score-text" x="100" y="138" text-anchor="middle" class="gauge-score-val">–</text>
-          <text x="100" y="152" text-anchor="middle" class="gauge-score-lbl" id="gauge-score-label">Werte eingeben</text>
+          <text id="gauge-score-text" x="100" y="150" text-anchor="middle" class="gauge-score-val">–</text>
+          <text x="100" y="163" text-anchor="middle" class="gauge-score-lbl" id="gauge-score-label">Werte eingeben</text>
           <!-- labels: left=Schlecht, right=Gut -->
           <text x="18" y="110" text-anchor="middle" style="font-size:9px;fill:#ef4444;font-weight:800">Schlecht</text>
           <text x="182" y="110" text-anchor="middle" style="font-size:9px;fill:#22c55e;font-weight:800">Gut</text>
@@ -3031,8 +3031,10 @@ async function renderWetter(){
   // 7-day
   const tbody=document.getElementById('week-tbody');let tb='';
   // Fetch sunrise from API for each day
+  const todayMidnight=new Date();todayMidnight.setHours(0,0,0,0);
   for(let i=0;i<Math.min(7,w.daily.time.length);i++){
     const date=new Date(w.daily.time[i]),wd=wmo(w.daily.weathercode[i]);
+    if(date<todayMidnight)continue; // vergangene Tage überspringen
     const max=Math.round(w.daily.temperature_2m_max[i]),min2=Math.round(w.daily.temperature_2m_min[i]);
     const ss=w.daily.sunset?w.daily.sunset[i].slice(11,16):'–';
     const pt=poolTempEstimate(i,w.daily.temperature_2m_max[i],w.daily.temperature_2m_min[i],w.daily.weathercode[i]);
@@ -6449,6 +6451,12 @@ Antworte NUR mit einem JSON-Objekt, kein Text davor oder danach:
           '<p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">✏️ Werte wurden eingetragen – bitte prüfen und ggf. korrigieren bevor du speicherst.</p>'+
         '</div>';
     }
+    // Teststreifen-Vorrat abziehen (wie bei manueller Messung)
+    if(chemStock&&chemStock['teststreifen']){
+      chemStock['teststreifen'].qty=Math.max(0,(chemStock['teststreifen'].qty||0)-1);
+      sd('chem_stock_v2',chemStock);
+      renderStockDashboard&&renderStockDashboard();
+    }
     if(typeof toast==='function')toast('✅ Teststreifen ausgewertet – bitte Werte prüfen','success',3500);
 
   }catch(err){
@@ -6658,7 +6666,8 @@ function kinderBanState(){
 }
 
 function setKinderBan(name,days){
-  const state=kinderBanState();
+  // Immer frisch aus localStorage lesen um andere Kinder nicht zu überschreiben
+  const state=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
   const until=new Date(Date.now()+days*86400000).toISOString();
   state[name]={until,setAt:new Date().toISOString(),days};
   sd('kinder_ban',state);
@@ -6672,7 +6681,7 @@ function setKinderBan(name,days){
 }
 
 function aufhebenKinderBan(name){
-  const state=kinderBanState();
+  const state=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
   state[name]=null;
   sd('kinder_ban',state);
   logHistory({type:'kinder_ban',time:new Date().toISOString(),
@@ -6893,22 +6902,30 @@ function renderCoverStatusCard(){
 
   const swimDays=Object.values(dayMap).filter(v=>v==='swim').length;
 
-  // Tagespunkte: reine div-Lösung (Safari-kompatibel, kein Canvas)
+  // Tagespunkte: SVG-basiert (maximale Safari-Kompatibilität)
   const todayStart=new Date();todayStart.setHours(0,0,0,0);
   const totalDisplayDays=Math.max(1,Math.round((todayStart.getTime()-displayStart)/86400000)+1);
   const todayKey=new Date().toISOString().slice(0,10);
-  let daysHtml='<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">';
+  // SVG zeichnen – funktioniert in allen Browsern ohne Canvas/roundRect
+  const DOT=12,GAP=3;
+  const COLS=Math.min(totalDisplayDays,28); // max 28 pro Zeile
+  const ROWS=Math.ceil(totalDisplayDays/COLS);
+  const svgW=COLS*(DOT+GAP)-GAP;
+  const svgH=ROWS*(DOT+GAP)-GAP;
+  let rects='';
   for(let i=0;i<totalDisplayDays;i++){
     const d=new Date(displayStart+i*86400000);
     const key=d.toISOString().slice(0,10);
     const isSwim=dayMap[key]==='swim';
     const isToday=key===todayKey;
-    const bg=isSwim?'#0ea5e9':'#e2e8f0';
-    const outline=isToday?';outline:2px solid #0369a1;outline-offset:1px':'';
+    const col=i%COLS,row=Math.floor(i/COLS);
+    const x=col*(DOT+GAP),y=row*(DOT+GAP);
+    const fill=isSwim?'#0ea5e9':'#e2e8f0';
+    const stroke=isToday?' stroke="#0369a1" stroke-width="2"':'';
     const lbl=d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})+(isSwim?' 🏊':' 🟢');
-    daysHtml+='<div title="'+lbl+'" style="width:12px;height:12px;border-radius:3px;background:'+bg+outline+';flex-shrink:0"></div>';
+    rects+=`<rect x="${x}" y="${y}" width="${DOT}" height="${DOT}" rx="3" fill="${fill}"${stroke}><title>${lbl}</title></rect>`;
   }
-  daysHtml+='</div>';
+  const daysHtml=`<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" style="display:block;max-width:100%">${rects}</svg>`;
 
   const open=!coverState.covered;
   el.innerHTML=
