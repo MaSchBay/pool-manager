@@ -6152,6 +6152,7 @@ function addCoverHistEntry(){
   if(history.length>120)history.splice(0,history.length-120);
   sd('cover_history',history);
   logHistory({type:'cover',time:new Date(timeVal).toISOString(),note:(coveredVal?'Plane drauf':'Plane ab')+' (nachgetragen)',covered:coveredVal});
+  queueAutoSync();
   renderCoverHistList();
   renderCoverStatusCard();
   if(typeof toast==='function')toast('Eintrag nachgetragen – Statistik aktualisiert','success',2500);
@@ -6768,6 +6769,7 @@ function toggleCover(){
   sd('cover_history',history);
   const action=coverState.covered?'Plane drauf':'Plane ab';
   logHistory({type:'cover',time:now,note:action,covered:coverState.covered});
+  queueAutoSync(); // Cover-Status sofort synchronisieren
   applyCovertIntervals();
   renderCoverStatusCard();
   renderChlorDecayCard();
