@@ -1334,6 +1334,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <button class="btn btn-outline btn-sm" onclick="clearAnthropicKey()">🗑️ Löschen</button>
       </div>
       <div id="anthropic-key-status" style="font-size:0.75rem;margin-top:6px;color:var(--text-muted)"></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="testAnthropicConnection()">🔌 Verbindung testen</button>
     </div>
   </div>
   <div class="card">
@@ -6364,26 +6365,24 @@ async function analyzeTeststreifen(file,key){
       img.src=url;
     });
 
-    // Claude API aufrufen (XMLHttpRequest für Safari-Kompatibilität)
-    const response=await new Promise(function(resolve,reject){
-      const xhr=new XMLHttpRequest();
-      xhr.open('POST','https://api.anthropic.com/v1/messages',true);
-      xhr.setRequestHeader('Content-Type','application/json');
-      xhr.setRequestHeader('x-api-key',key);
-      xhr.setRequestHeader('anthropic-version','2023-06-01');
-      xhr.setRequestHeader('anthropic-dangerous-client-side-api-key-allowed','true');
-      xhr.onload=function(){
-        resolve({ok:xhr.status>=200&&xhr.status<300,status:xhr.status,
-          json:function(){return Promise.resolve(JSON.parse(xhr.responseText));},
-          text:function(){return Promise.resolve(xhr.responseText);}
-        });
-      };
-      xhr.onerror=function(){reject(new Error('Netzwerkfehler – bitte Verbindung prüfen'));};
-      xhr.ontimeout=function(){reject(new Error('Zeitüberschreitung'));};
-      xhr.timeout=30000;
-      xhr.send(JSON.stringify({
-        model:'claude-opus-4-5',
-        max_tokens:500,
+    // API-Key Validierung
+    if(!key||key.length<20){throw new Error('Kein gültiger API-Key – bitte in Einstellungen prüfen');}
+
+    // Claude API aufrufen
+    let response;
+    try{
+      response=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        mode:'cors',
+        headers:{
+          'Content-Type':'application/json',
+          'x-api-key':key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-client-side-api-key-allowed':'true'
+        },
+        body:JSON.stringify({
+          model:'claude-haiku-4-5-20251001',
+        max_tokens:300,
         messages:[{
           role:'user',
           content:[
@@ -6401,8 +6400,11 @@ Antworte NUR mit einem JSON-Objekt, kein Text davor oder danach:
 {"ph": 7.2, "chlor": 1.5, "algizid": 10, "confidence": "hoch", "hinweis": "optionaler kurzer Hinweis falls Bild unscharf etc."}`}
           ]
         }]
-      }));
-    });
+      })
+      });
+    }catch(fetchErr){
+      throw new Error('Verbindung fehlgeschlagen ('+fetchErr.message+'). Bitte prüfe: 1) Internetverbindung, 2) API-Key in Einstellungen, 3) Guthaben auf platform.anthropic.com');
+    }
 
     if(!response.ok){
       const err=await response.json();
@@ -6456,6 +6458,43 @@ Antworte NUR mit einem JSON-Objekt, kein Text davor oder danach:
     if(typeof toast==='function')toast('❌ KI-Auswertung fehlgeschlagen: '+err.message,'error',5000);
   }finally{
     if(loadEl)loadEl.style.display='none';
+  }
+}
+
+
+// ============================================================
+// API VERBINDUNGSTEST
+// ============================================================
+async function testAnthropicConnection(){
+  const key=getAnthropicKey();
+  if(!key){if(typeof toast==='function')toast('Kein Key gespeichert','warn',3000);return;}
+  if(typeof toast==='function')toast('🔄 Verbindungstest läuft…','info',3000);
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      mode:'cors',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-client-side-api-key-allowed':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:10,
+        messages:[{role:'user',content:'Hi'}]
+      })
+    });
+    const txt=await resp.text();
+    if(resp.ok){
+      if(typeof toast==='function')toast('✅ API-Verbindung OK! (Status '+resp.status+')','success',4000);
+    } else {
+      if(typeof toast==='function')toast('❌ API Fehler '+resp.status+': '+txt.slice(0,100),'error',6000);
+    }
+  }catch(e){
+    // CORS oder Netzwerk
+    if(typeof toast==='function')toast('❌ '+e.message+' | Öffne Browser-Konsole (F12) für Details','error',8000);
+    console.error('API Test Fehler:',e);
   }
 }
 
