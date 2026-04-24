@@ -6371,14 +6371,13 @@ async function analyzeTeststreifen(file,key){
     // Claude API aufrufen
     let response;
     try{
-      response=await fetch('https://api.anthropic.com/v1/messages',{
+      response=await fetch('https://pool-anthropic-proxy.markus-schmidt-bay.workers.dev/',{
         method:'POST',
         mode:'cors',
         headers:{
           'Content-Type':'application/json',
           'x-api-key':key,
           'anthropic-version':'2023-06-01',
-          'anthropic-dangerous-client-side-api-key-allowed':'true'
         },
         body:JSON.stringify({
           model:'claude-haiku-4-5-20251001',
@@ -6470,14 +6469,14 @@ async function testAnthropicConnection(){
   if(!key){if(typeof toast==='function')toast('Kein Key gespeichert','warn',3000);return;}
   if(typeof toast==='function')toast('🔄 Verbindungstest läuft…','info',3000);
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const resp=await fetch('https://pool-anthropic-proxy.markus-schmidt-bay.workers.dev/',{
       method:'POST',
       mode:'cors',
       headers:{
         'Content-Type':'application/json',
         'x-api-key':key,
         'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-client-side-api-key-allowed':'true'
+        'anthropic-dangerous-direct-browser-access':'true'
       },
       body:JSON.stringify({
         model:'claude-haiku-4-5-20251001',
