@@ -5264,8 +5264,8 @@ async function gdriveDisconnect(){
   toast('🔌 Von Google Drive getrennt','info');
 }
 
-async function gdrivePush(){
-  if(!gdriveFileId){toast('Nicht verbunden','error');return;}
+async function gdrivePush(silent){
+  if(!gdriveFileId){if(!silent)toast('Nicht verbunden','error');return;}
   const libsOk=await gdriveInitGapi();
   if(!libsOk){toast('Google-Bibliotheken nicht geladen','error',4000);return;}
   const tokenOk=await gdriveEnsureToken(true);
@@ -5292,7 +5292,7 @@ async function gdrivePush(){
     sd('sync_last_time',lastSyncTime);
     sd('sync_last_status','push OK '+new Date().toLocaleTimeString('de-DE'));
     await updateSyncUI();
-    toast('⬆️ In Drive gespeichert','success',2000);
+    if(!silent)toast('⬆️ In Drive gespeichert','success',2000);
   }catch(e){
     sd('sync_last_status','push FEHLER: '+e.message);
     await updateSyncUI();
@@ -5340,36 +5340,36 @@ async function gdrivePull(){
   }
 }
 
+let _syncInProgress=false;
+
 async function gdriveSyncBoth(){
-  // Erst Pull (merge), dann Push – so gehen keine Daten verloren
-  if(!gdriveFileId||!autoSyncEnabled)return;
+  if(!gdriveFileId||!autoSyncEnabled||_syncInProgress)return;
+  _syncInProgress=true;
   try{
-    // Pull mit Merge
     const tokenOk=await gdriveEnsureToken(false);
-    if(!tokenOk)return;
+    if(!tokenOk){_syncInProgress=false;return;}
     const resp=await fetch('https://www.googleapis.com/drive/v3/files/'+gdriveFileId+'?alt=media',
       {headers:{'Authorization':'Bearer '+gdriveAccessToken}});
     if(resp.ok){
       const text=await resp.text();
       if(text&&text.trim()&&text.trim()!=='{}'){
         const remote=JSON.parse(text);
-        applyImportedData(remote,true); // merge=true
+        applyImportedData(remote,true);
       }
     }
-    // Dann Push mit gemergten Daten
-    await gdrivePush();
+    await gdrivePush(true); // silent beim AutoSync
   }catch(e){
     console.warn('Sync-Both Fehler:',e);
-    // Fallback: nur Push
-    gdrivePush();
+    try{await gdrivePush(true);}catch(e2){}
+  }finally{
+    _syncInProgress=false;
   }
 }
 
 function queueAutoSync(){
-  if(!autoSyncEnabled||!gdriveFileId)return;
+  if(!autoSyncEnabled||!gdriveFileId||_syncInProgress)return;
   clearTimeout(autoSyncTimer);
-  // Pull+Push statt nur Push
-  autoSyncTimer=setTimeout(function(){gdriveSyncBoth();},3000);
+  autoSyncTimer=setTimeout(function(){gdriveSyncBoth();},15000); // 15s Debounce
 }
 
 function toggleAutoSync(on){
@@ -5594,7 +5594,7 @@ const sdRaw=sd;
 const AUTOSYNC_KEYS=['measurements','ban','maintenance','active_todos','history_log','season','settings','timer_todos','chem_stock_v2','wuensche','cover_state','cover_history','kinder_ban','pool_parties'];
 sd=function(k,v){
   sdRaw(k,v);
-  if(AUTOSYNC_KEYS.indexOf(k)>-1&&typeof queueAutoSync==='function'){
+  if(AUTOSYNC_KEYS.indexOf(k)>-1&&typeof queueAutoSync==='function'&&!_syncInProgress){
     queueAutoSync();
   }
 };
