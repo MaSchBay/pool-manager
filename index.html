@@ -199,7 +199,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .fab-items{display:none;flex-direction:column;align-items:flex-end;gap:7px}
 .fab-items.open{display:flex}
 /* ===== CHEMIKALIEN-VORRAT ===== */
-.stock-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);min-width:0;overflow:hidden;word-break:break-word}
+.stock-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);overflow:hidden;min-width:0}
 .stock-item:last-child{border-bottom:none}
 .stock-bar-wrap{flex:1;height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden}
 .stock-bar-fill{height:100%;border-radius:5px;transition:width 0.4s}
@@ -499,7 +499,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   .qmess-btn{min-width:36px !important;min-height:36px !important;font-size:1.1rem !important}
   
   /* Wartungsaufgaben */
-  .task-item{padding:10px !important}
+  .task-item{padding:10px !important;overflow:hidden;min-width:0}
   .task-item > div{min-width:0;word-break:break-word;overflow-wrap:anywhere}
   .task-item{overflow:hidden}
   
@@ -598,6 +598,13 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     min-width:0;
     overflow:hidden;
   }
+}
+
+@media(max-width:480px){
+  .stock-item{flex-wrap:nowrap;overflow:hidden}
+  .stock-item > *{min-width:0;overflow:hidden}
+  .stock-bar-wrap{min-width:40px;max-width:120px;flex-shrink:1}
+  .task-name,.task-hint{max-width:calc(100vw - 100px)}
 }
 
 </style>
@@ -2274,7 +2281,7 @@ function renderTasksDashboard(){
     shown++;
     const doseHint=getTaskDoseHint(t.id);
     const isDruck=t.id==='druck_check';
-    html+=`<div class="task-item ${cls}" style="display:flex;align-items:flex-start;gap:10px;padding:9px;border-radius:10px;margin-bottom:5px"><input type="checkbox" style="width:18px;height:18px;cursor:pointer;accent-color:var(--pool-blue);flex-shrink:0;margin-top:2px" onchange="quickCompleteTask('${t.id}')"><div style="flex:1"><div style="font-weight:600;font-size:0.88rem">${t.name}</div>${doseHint?`<div style="font-size:0.78rem;color:var(--pool-mid);margin-top:2px">${doseHint}</div>`:''}</div><div style="display:flex;gap:5px;align-items:center;flex-shrink:0">${isDruck?`<button class="btn btn-warn btn-sm" onclick="openDruckModal()">📊</button>`:''}<div style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${lbl}</div></div></div>`;
+    html+=`<div class="task-item ${cls}" style="display:flex;align-items:flex-start;gap:10px;padding:9px;border-radius:10px;margin-bottom:5px;overflow:hidden"><input type="checkbox" style="width:18px;height:18px;cursor:pointer;accent-color:var(--pool-blue);flex-shrink:0;margin-top:2px" onchange="quickCompleteTask('${t.id}')"><div style="flex:1;min-width:0;overflow:hidden"><div style="font-weight:600;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.name}</div>${doseHint?`<div style="font-size:0.78rem;color:var(--pool-mid);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doseHint}</div>`:''}</div><div style="display:flex;gap:5px;align-items:center;flex-shrink:0">${isDruck?`<button class="btn btn-warn btn-sm" onclick="openDruckModal()">📊</button>`:''}<div style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap">${lbl}</div></div></div>`;
   });
   el.innerHTML=shown===0?'<p style="color:var(--ok-green);font-weight:700;padding:8px">✅ Keine offenen Aufgaben in 3 Tagen!</p>':html;
 }
@@ -4466,10 +4473,10 @@ function renderStockDashboard(){
     const barCls=pct>=50?'stock-bar-ok':pct>=25?'stock-bar-warn':'stock-bar-empty';
     const warn=pct<20?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
     const qtyStr=p.unit==='Stk'?`${s.qty} Stk`:(p.unit==='ml'&&s.qty>=1000?`${(s.qty/1000).toFixed(1)} L`:`${s.qty} ${p.unit}`);
-    return`<div class="stock-item">
-      <div style="font-size:0.8rem;font-weight:700;min-width:118px;color:var(--text-primary)">${name}${warn}</div>
-      <div class="stock-bar-wrap"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>
-      <div style="font-weight:800;font-size:0.78rem;min-width:52px;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
+    return`<div class="stock-item" style="overflow:hidden">
+      <div style="font-size:0.8rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">${name}${warn}</div>
+      <div class="stock-bar-wrap" style="flex:2;min-width:40px"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>
+      <div style="font-weight:800;font-size:0.78rem;width:52px;flex-shrink:0;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
     </div>`;
   }).join('');
 }
@@ -4797,7 +4804,7 @@ function renderMesswerteCardEnhanced(targetId, metaId){
           // Temp: blue=cold, green=ok, red=hot
           c=mv<s.min?'#3b82f6':mv>s.max?'#ef4444':'#10b981';
         } else {
-          c=mv<s.min||mv>s.max?'#ef4444':Math.abs(mv-((s.min+s.max)/2))<(s.max-s.min)*0.25?'#22c55e':'#fbbf24';
+          c=mv<s.min||mv>s.max?'#ef4444':'#22c55e'; // außerhalb=rot, innerhalb=grün
         }
         ctx.strokeStyle=c;ctx.lineWidth=2;
         ctx.beginPath();ctx.moveTo(xs[i-1],ys[i-1]);ctx.lineTo(xs[i],ys[i]);ctx.stroke();
@@ -5333,10 +5340,36 @@ async function gdrivePull(){
   }
 }
 
+async function gdriveSyncBoth(){
+  // Erst Pull (merge), dann Push – so gehen keine Daten verloren
+  if(!gdriveFileId||!autoSyncEnabled)return;
+  try{
+    // Pull mit Merge
+    const tokenOk=await gdriveEnsureToken(false);
+    if(!tokenOk)return;
+    const resp=await fetch('https://www.googleapis.com/drive/v3/files/'+gdriveFileId+'?alt=media',
+      {headers:{'Authorization':'Bearer '+gdriveAccessToken}});
+    if(resp.ok){
+      const text=await resp.text();
+      if(text&&text.trim()&&text.trim()!=='{}'){
+        const remote=JSON.parse(text);
+        applyImportedData(remote,true); // merge=true
+      }
+    }
+    // Dann Push mit gemergten Daten
+    await gdrivePush();
+  }catch(e){
+    console.warn('Sync-Both Fehler:',e);
+    // Fallback: nur Push
+    gdrivePush();
+  }
+}
+
 function queueAutoSync(){
   if(!autoSyncEnabled||!gdriveFileId)return;
   clearTimeout(autoSyncTimer);
-  autoSyncTimer=setTimeout(function(){gdrivePush();},3000);
+  // Pull+Push statt nur Push
+  autoSyncTimer=setTimeout(function(){gdriveSyncBoth();},3000);
 }
 
 function toggleAutoSync(on){
@@ -5359,24 +5392,126 @@ function collectAllData(){
     timerTodos:timerTodos,
     chemStock:chemStock,
     coverState:(typeof coverState!=='undefined'?coverState:null),
+    coverHistory:ld('cover_history',[]),
     wuensche:(typeof wuensche!=='undefined'?wuensche:[]),
+    kinderBan:ld('kinder_ban',{}),
+    poolParties:ld('pool_parties',[]),
     exportedAt:new Date().toISOString(),
-    schemaVersion:2
+    schemaVersion:3,
+    deviceId:ld('device_id',(function(){var id='dev_'+Date.now();sd('device_id',id);return id;})())
   };
 }
 
-function applyImportedData(d){
-  if(d.measurements){measurements=d.measurements;sdRaw('measurements',measurements);}
-  if(d.ban!==undefined){ban=d.ban;sdRaw('ban',ban);}
-  if(d.maintenanceTasks){maintenanceTasks=d.maintenanceTasks;sdRaw('maintenance',maintenanceTasks);}
-  if(d.activeTodos){activeTodos=d.activeTodos;sdRaw('active_todos',activeTodos);}
-  if(d.historyLog){historyLog=d.historyLog;sdRaw('history_log',historyLog);}
+function mergeByTime(local,remote,timeKey){
+  // Zusammenführen: alle einzigartigen Einträge nach Zeitstempel
+  timeKey=timeKey||'time';
+  const map={};
+  (local||[]).forEach(function(e){if(e[timeKey])map[e[timeKey]]=e;});
+  (remote||[]).forEach(function(e){if(e[timeKey])map[e[timeKey]]=e;});
+  return Object.values(map).sort(function(a,b){return new Date(a[timeKey])-new Date(b[timeKey]);});
+}
+
+function mergeMaintenance(local,remote){
+  // Pro Aufgabe: neuestes lastDone gewinnt
+  const result=JSON.parse(JSON.stringify(local||[]));
+  (remote||[]).forEach(function(rt){
+    const lt=result.find(function(t){return t.id===rt.id;});
+    if(!lt){result.push(rt);return;}
+    // lastDone: neueres gewinnt
+    if(rt.lastDone&&(!lt.lastDone||new Date(rt.lastDone)>new Date(lt.lastDone))){
+      lt.lastDone=rt.lastDone;
+    }
+    // interval: remote gewinnt wenn lokal Standard
+    if(rt.interval&&rt.interval!==lt.interval)lt.interval=rt.interval;
+  });
+  return result;
+}
+
+function applyImportedData(d,mergeMode){
+  // mergeMode=true: Daten zusammenführen statt überschreiben
+  mergeMode=mergeMode!==false; // Standard: immer mergen
+
+  // Arrays: merge nach Zeitstempel
+  if(d.measurements){
+    measurements=mergeMode?mergeByTime(measurements,d.measurements,'time'):d.measurements;
+    // Max 500 Messungen behalten
+    if(measurements.length>500)measurements=measurements.slice(-500);
+    sdRaw('measurements',measurements);
+  }
+  if(d.historyLog){
+    historyLog=mergeMode?mergeByTime(historyLog,d.historyLog,'time'):d.historyLog;
+    if(historyLog.length>1000)historyLog=historyLog.slice(-1000);
+    sdRaw('history_log',historyLog);
+  }
+  if(d.coverHistory){
+    var ch=ld('cover_history',[]);
+    var merged=mergeMode?mergeByTime(ch,d.coverHistory,'time'):d.coverHistory;
+    sd('cover_history',merged);
+  }
+
+  // Wartungsaufgaben: smart merge
+  if(d.maintenanceTasks){
+    maintenanceTasks=mergeMode?mergeMaintenance(maintenanceTasks,d.maintenanceTasks):d.maintenanceTasks;
+    sdRaw('maintenance',maintenanceTasks);
+  }
+
+  // Badeverbot: längeres/späteres gewinnt
+  if(d.ban!==undefined){
+    if(mergeMode&&ban&&ban.until&&d.ban&&d.ban.until){
+      ban=new Date(d.ban.until)>new Date(ban.until)?d.ban:ban;
+    } else {
+      ban=d.ban;
+    }
+    sdRaw('ban',ban);
+  }
+
+  // Todos: merge nach id
+  if(d.activeTodos){
+    if(mergeMode){
+      var localIds=(activeTodos||[]).map(function(t){return t.id;});
+      (d.activeTodos||[]).forEach(function(rt){
+        if(!localIds.includes(rt.id))activeTodos.push(rt);
+        else{var lt=activeTodos.find(function(t){return t.id===rt.id;});if(lt&&rt.updatedAt&&(!lt.updatedAt||new Date(rt.updatedAt)>new Date(lt.updatedAt)))Object.assign(lt,rt);}
+      });
+    } else {activeTodos=d.activeTodos;}
+    sdRaw('active_todos',activeTodos);
+  }
+
+  if(d.timerTodos){
+    if(mergeMode){
+      var ltIds=(timerTodos||[]).map(function(t){return t.id;});
+      (d.timerTodos||[]).forEach(function(rt){if(!ltIds.includes(rt.id))timerTodos.push(rt);});
+    } else {timerTodos=d.timerTodos;}
+    sdRaw('timer_todos',timerTodos);
+  }
+
+  // Wünsche: merge nach id
+  if(d.wuensche&&typeof wuensche!=='undefined'){
+    if(mergeMode){
+      var wIds=(wuensche||[]).map(function(w){return w.id;});
+      (d.wuensche||[]).forEach(function(rw){if(!wIds.includes(rw.id))wuensche.push(rw);});
+    } else {wuensche=d.wuensche;}
+    sdRaw('wuensche',wuensche);
+  }
+
+  // Einzelwerte: Remote gewinnt (neueste Daten aus Drive)
   if(d.season){season=d.season;sdRaw('season',season);}
   if(d.settings){settings=d.settings;sdRaw('settings',settings);}
-  if(d.timerTodos){timerTodos=d.timerTodos;sdRaw('timer_todos',timerTodos);}
   if(d.chemStock){chemStock=d.chemStock;sdRaw('chem_stock_v2',chemStock);}
-  if(d.coverState&&typeof coverState!=='undefined'){coverState=d.coverState;sdRaw('cover_state',coverState);}
-  if(d.wuensche&&typeof wuensche!=='undefined'){wuensche=d.wuensche;sdRaw('wuensche',wuensche);}
+  if(d.coverState&&typeof coverState!=='undefined'){
+    coverState=d.coverState;sdRaw('cover_state',coverState);
+    // UI sofort aktualisieren
+    if(typeof applyCovertIntervals==='function')applyCovertIntervals();
+    if(typeof renderCoverStatusCard==='function')renderCoverStatusCard();
+    if(typeof renderChlorDecayCard==='function')renderChlorDecayCard();
+  }
+  if(d.kinderBan){
+    sd('kinder_ban',d.kinderBan);
+    if(typeof renderKinderBan==='function')renderKinderBan();
+    if(typeof renderKinderBanDashboard==='function')renderKinderBanDashboard();
+    if(typeof renderKinderBanMary==='function')renderKinderBanMary();
+  }
+  if(d.poolParties){sd('pool_parties',d.poolParties);}
 }
 
 async function updateSyncUI(){
