@@ -795,6 +795,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   </div>
   <div id="ban-banner-main"></div>
   <div id="nachmess-timer-banner"></div>
+  <div id="filter-timer-banner"></div>
   <div id="kinder-ban-dashboard"></div>
   <div class="card" id="timer-card-dashboard" style="display:none">
     <div class="card-title" style="justify-content:space-between">
@@ -1183,14 +1184,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 <div class="board" id="board-wartung">
   <div id="rueckspuel-hint"></div>
   <div class="page-header" id="wartung-header"><h1>🔧 Wartungsplan</h1><p>Bestway Steel Pro MAX 3,66m + Sandfilter</p><div id="wartung-summary"></div></div>
-  <div class="card" style="margin-bottom:14px">
-    <div class="card-title">🌱 Pool öffnen – Checkliste</div>
-    <div id="saison-checkliste-oeffnen"></div>
-  </div>
-  <div class="card" style="margin-bottom:14px">
-    <div class="card-title">❄️ Pool winterfest machen</div>
-    <div id="saison-checkliste-winter"></div>
-  </div>
+
   <div class="card" style="margin-bottom:14px">
     <div class="card-title" style="justify-content:space-between"><span>🎉 Poolparty</span><button class="btn btn-primary btn-sm" onclick="openPartyModal()">+ Planen</button></div>
     <div id="party-list"></div>
@@ -1492,6 +1486,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
     <button class="btn btn-primary btn-sm" onclick="importProduktJSONClick()">📤 JSON importieren</button>
+    <button class="btn btn-outline btn-sm" onclick="exportProduktJSON()">📥 JSON exportieren</button>
     <input type="file" id="produkt-import-input" accept=".json" style="display:none" onchange="handleProduktImport(this)">
     <span style="font-size:0.78rem;color:var(--text-muted)" id="produkt-import-info"></span>
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
@@ -1508,6 +1503,13 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   </div>
 </div>
 
+
+<!-- PRODUKT DETAIL MODAL -->
+<div class="modal-overlay" id="modal-produkt-detail">
+  <div class="modal"></div>
+</div>
+
+<!-- NACHBESTELLUNG MODAL -->
 <!-- MODALS -->
 <div class="modal-overlay" id="modal-edit">
   <div class="modal">
@@ -2302,7 +2304,7 @@ function renderEmpfehlungen(id){
     }
   }
   if(last.algizid!==undefined&&last.algizid<s.algizid.min)tips.push({type:'warn',msg:`Algizid zu niedrig (${last.algizid} ppm) → Algenschutz dosieren`,helpIdx:2,btnLabel:'➡ Hilfe starten'});
-  maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>2)tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${d}d überfällig)`})});
+  maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>2)tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hoursOverdue(t)}h überfällig)`})});
   el.innerHTML=tips.map(t=>`
     <div class="empfehlung ${t.type}" style="cursor:${t.helpIdx!==undefined?'pointer':'default'};justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" ${t.helpIdx!==undefined?`onclick="showBoard('hilfe');setTimeout(()=>startTodo(${t.helpIdx}),100)"`:''}>
       <span>💡 ${t.msg}</span>
@@ -2357,7 +2359,7 @@ function renderTasksDashboard(){
   sorted.forEach(t=>{
     const over=daysOverdue(t),next=nextDue(t),du=Math.ceil((next-today)/86400000);
     let cls='',lbl='';
-    if(over>0){cls='overdue';lbl=`⚠️ ${over}d überfällig`}
+    if(over>0){cls='overdue';lbl=`⚠️ ${hoursOverdue(t)}h überfällig`}
     else if(du===0){cls='due-today';lbl='📅 Heute fällig'}
     else if(du<=3){cls='upcoming';lbl=`📅 in ${du}d`}
     else return;
@@ -2443,8 +2445,8 @@ function confirmTask(){
   }
   // Badeverbot setzen wenn nötig
   const TASK_BAN_MAP={
-    algischutz:{hours:2,name:'Algenschutz'},
-    poolklar:  {hours:2,name:'Poolklar'},
+    algischutz:{hours:2,name:'Algenschutz',messen:true},
+    poolklar:  {hours:2,name:'Poolklar',messen:false}, // Poolklar: Badeverbot ja, aber kein Nachmessen nötig (wirkt nur mechanisch/optisch)
   };
   const banInfo=TASK_BAN_MAP[id];
   if(banInfo){
@@ -2452,7 +2454,7 @@ function confirmTask(){
     const newBan={until,reason:banInfo.name+' angewendet',setAt:new Date().toISOString()};
     if(setOrKeepLongerBan(newBan)){
       logHistory({type:'ban',time:new Date().toISOString(),note:'Badeverbot nach '+banInfo.name+' bis '+new Date(until).toLocaleString('de-DE')});
-      addTimerTodo('Nach '+banInfo.name+': Wasser messen',banInfo.hours);
+      if(banInfo.messen)addTimerTodo('Nach '+banInfo.name+': Wasser messen',banInfo.hours);
       if(typeof toast==='function')toast('🚫 Badeverbot '+banInfo.hours+'h nach '+banInfo.name+' gesetzt','warn',4000);
     }
   }
@@ -3115,7 +3117,7 @@ async function renderWetter(){
   const tbody=document.getElementById('week-tbody');let tb='';
   // Fetch sunrise from API for each day
   const todayMidnight=new Date();todayMidnight.setHours(0,0,0,0);
-  for(let i=0;i<Math.min(7,w.daily.time.length);i++){
+  for(let i=0;i<Math.min(8,w.daily.time.length);i++){
     const date=new Date(w.daily.time[i]),wd=wmo(w.daily.weathercode[i]);
     if(date<todayMidnight)continue; // vergangene Tage überspringen
     const max=Math.round(w.daily.temperature_2m_max[i]),min2=Math.round(w.daily.temperature_2m_min[i]);
@@ -3362,6 +3364,7 @@ function saveSeason(){
 }
 
 function daysOverdue(t){if(!t.lastDone)return t.interval+1;const d=Math.floor((Date.now()-new Date(t.lastDone))/86400000);return Math.max(0,d-t.interval)}
+function hoursOverdue(t){if(!t.lastDone)return (t.interval+1)*24;const ms=Date.now()-new Date(t.lastDone).getTime()-t.interval*86400000;return Math.max(0,Math.round(ms/3600000))}
 function nextDue(t){if(!t.lastDone)return new Date(0);return new Date(new Date(t.lastDone).getTime()+t.interval*86400000)}
 
 let maintFilter='all';
@@ -3374,7 +3377,7 @@ function filterMaintenance(f){
 function renderWartung(){
   document.getElementById('season-start').value=season.start||'';
   document.getElementById('season-end').value=season.end||'';
-  renderMaintenanceList();renderIntervalSettings();renderParties();checkFilterdruck();renderSaisonCheckliste('oeffnen');renderSaisonCheckliste('winter');
+  renderMaintenanceList();renderIntervalSettings();renderParties();checkFilterdruck();
   // Cover-Modus Hinweis
   const coverHintEl=document.getElementById('cover-mode-hint');
   if(!coverHintEl){
@@ -3403,7 +3406,7 @@ function renderMaintenanceList(){
   tasks.forEach(task=>{
     const over=daysOverdue(task),next=nextDue(task),du=Math.ceil((next-today)/86400000);
     let cls='',badge='';
-    if(over>0){cls='overdue-maint';badge=`<span class="badge badge-danger">⚠️ ${over}d</span>`}
+    if(over>0){cls='overdue-maint';badge=`<span class="badge badge-danger">⚠️ ${hoursOverdue(task)}h</span>`}
     else if(du===0){cls='due-maint';badge=`<span class="badge badge-warn">Heute</span>`}
     else if(du<=3)badge=`<span class="badge badge-info">in ${du}d</span>`;
     else badge=`<span class="badge" style="background:#f1f5f9;color:#64748b">in ${du}d</span>`;
@@ -4774,6 +4777,7 @@ renderDashboard=async function(){
   renderStockDashboard();
   renderStockWarning();
   updateOverdueBadge();
+  renderFilterTimer();
   const w=await fetchWeather();
   renderBadeplaner(w);
   renderSwimAdvice('dash-swim-advice',w);
@@ -7244,12 +7248,14 @@ function renderJahresstatistik(){
 // ============================================================
 // Wartezeiten pro Produkt (in Stunden)
 const MITTEL_WARTEZEIT={
-  chlortabs:4, chlorplus:8, algischutz:2, poolklar:2,
-  ph_minus:4, ph_plus:4, flockmittel:2
+  // Nur Mittel die tatsächlich Wasserchemie beeinflussen → nachmessen nötig
+  // Poolklar + Flockmittel: rein mechanisch/optisch, keine Auswirkung auf pH/Chlor → kein Nachmessen
+  chlortabs:4, chlorplus:8, algischutz:2,
+  ph_minus:4, ph_plus:4
 };
 const MITTEL_LABEL={
   chlortabs:'Chlortabs', chlorplus:'Chlor Plus', algischutz:'Algenschutz',
-  poolklar:'Poolklar', ph_minus:'pH-Minus', ph_plus:'pH-Plus', flockmittel:'Flockmittel'
+  ph_minus:'pH-Minus', ph_plus:'pH-Plus'
 };
 
 function checkNachmessTimer(){
@@ -7950,18 +7956,25 @@ function renderProduktBoard(){
     const amazonBtn = p.amazon
       ? `<button class="btn btn-sm" style="background:#ff9900;color:white;font-size:0.78rem" onclick="window.open('${p.amazon}','_blank')">🛒 Bei Amazon bestellen</button>`
       : '';
+    const bestelltBadge = p.bestellt
+      ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:4px 8px;font-size:0.72rem;font-weight:700;color:#92400e">📦 Bestellt: ${p.bestelltMenge||'?'}</div>`
+      : '';
+    const nachbestellBtn = !p.bestellt
+      ? `<button class="btn btn-sm" style="background:#0ea5e9;color:white;font-size:0.75rem" onclick="openNachbestellModal('${p.poolId}')">📦 Nachbestellt</button>`
+      : `<button class="btn btn-sm" style="background:#10b981;color:white;font-size:0.75rem" onclick="lieferungBestaetigen('${p.poolId}')">✅ Lieferung erhalten</button>`;
     const activeLabel = p.active ? '✅ Aktiv' : '❌ Inaktiv';
     const activeCls = p.active ? '' : 'inactive';
     return `<div class="produkt-karte ${activeCls}">
       <label class="produkt-toggle-wrap" title="${p.active?'Aktiv – klicken zum Deaktivieren':'Inaktiv – klicken zum Aktivieren'}">
         <input type="checkbox" class="produkt-toggle" ${p.active?'checked':''} onchange="toggleProduktActive('${p.poolId}',this.checked)">
       </label>
-      <div class="produkt-img-wrap">${imgHtml}</div>
+      <div class="produkt-img-wrap" onclick="openProduktDetail(\'${p.poolId}\')" style="cursor:pointer">${imgHtml}</div>
       <div class="produkt-body">
         <div class="produkt-name">${p.name}</div>
         <div class="produkt-brand">${p.brand||''}</div>
         <div class="produkt-meta">${priceHtml}${sizeHtml}</div>
-        <div class="produkt-actions">${amazonBtn}</div>
+        <div class="produkt-actions">${amazonBtn}${nachbestellBtn}</div>
+        ${bestelltBadge}
       </div>
     </div>`;
   }).join('');
@@ -8053,6 +8066,237 @@ function handleProduktImport(input){
     applyProduktFilterDosierung();
     renderStockDashboard();
   }
+})();
+
+
+// ============================================================
+// FILTER-AUSSCHALTEN-TIMER
+// ============================================================
+const FILTER_LAUFZEIT = {
+  chlorplus: 8*60,   // 480 Minuten
+  poolklar: 2*60,    // 120 Minuten
+  flockmittel: 15    // 15 Minuten
+};
+// Key mapping dosierung → filter timer key
+const DOSI_TO_FILTER = {
+  chlorplus:'chlorplus', poolklar:'poolklar', flockmittel:'flockmittel'
+};
+
+function startFilterTimer(productKey){
+  const min = FILTER_LAUFZEIT[productKey];
+  if(!min) return;
+  const until = new Date(Date.now() + min*60000).toISOString();
+  const saved = ld('filter_timer', null);
+  // Keep the longest running timer
+  if(!saved || new Date(until) > new Date(saved.until)){
+    sd('filter_timer', {until, product: productKey, startedAt: new Date().toISOString()});
+  }
+  renderFilterTimer();
+}
+
+function renderFilterTimer(){
+  const el = document.getElementById('filter-timer-banner');
+  if(!el) return;
+  const saved = ld('filter_timer', null);
+  if(!saved){ el.innerHTML=''; return; }
+  const restMs = new Date(saved.until).getTime() - Date.now();
+  if(restMs <= 0){
+    sd('filter_timer', null);
+    el.innerHTML='';
+    return;
+  }
+  const restH = Math.floor(restMs/3600000);
+  const restMin = Math.round((restMs%3600000)/60000);
+  const restStr = restH>0 ? restH+'h '+restMin+'min' : restMin+'min';
+  const until = new Date(saved.until).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  const names = {chlorplus:'Chlor Plus', poolklar:'Poolklar', flockmittel:'Flockmittel'};
+  const name = names[saved.product]||saved.product;
+  el.innerHTML =
+    '<div style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:2px solid #f97316;border-radius:12px;padding:12px 14px;margin-bottom:10px">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="font-size:1.3rem">🔄</div>'+
+        '<div style="flex:1">'+
+          '<div style="font-weight:800;font-size:0.88rem;color:#c2410c">Filter läuft – nach '+name+'</div>'+
+          '<div style="font-size:0.78rem;color:#ea580c">Filter ausschalten ab: <strong>'+until+' Uhr</strong></div>'+
+        '</div>'+
+        '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.1rem;color:#c2410c;white-space:nowrap">'+restStr+'</div>'+
+        '<button onclick="sd('filter_timer',null);renderFilterTimer()" style="background:none;border:none;color:#9a3412;cursor:pointer;font-size:1.1rem;padding:4px" title="Timer löschen">×</button>'+
+      '</div>'+
+    '</div>';
+}
+
+// Hook into logDosierung to start filter timer
+const _origLogDosierung = logDosierung;
+logDosierung = function(productKey, amount){
+  _origLogDosierung(productKey, amount);
+  if(DOSI_TO_FILTER[productKey]) startFilterTimer(productKey);
+};
+
+// Also hook into wartung completion (completeMaintenance)
+const WARTUNG_TO_FILTER = {poolklar:'poolklar', flockmittel:'flockmittel'};
+const _origCompleteMaintenance = typeof completeMaintenance === 'function' ? completeMaintenance : null;
+if(_origCompleteMaintenance){
+  completeMaintenance = function(id, el){
+    _origCompleteMaintenance(id, el);
+    if(WARTUNG_TO_FILTER[id]) startFilterTimer(WARTUNG_TO_FILTER[id]);
+  };
+}
+
+
+// ============================================================
+// PRODUKTE – Export, Detail, Nachbestellung
+// ============================================================
+
+function exportProduktJSON(){
+  const data = {
+    exportedAt: new Date().toISOString(),
+    source: 'pool-manager',
+    count: poolProdukte.length,
+    products: poolProdukte.map(p => ({
+      id: Date.now(),
+      poolId: p.poolId,
+      name: p.name,
+      brand: p.brand,
+      category: p.category,
+      size: p.size,
+      price: p.price,
+      amazon: p.amazon,
+      img: p.img,
+      notes: p.notes||'',
+      datenblatt: p.datenblatt||'',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pool-produkte-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  if(typeof toast === 'function') toast('📥 Export erfolgreich!', 'success', 2500);
+}
+
+function openProduktDetail(poolId){
+  const p = poolProdukte.find(x => x.poolId === poolId);
+  if(!p) return;
+  const catEmoji = {ph:'⚗️',chlor:'🔵',algen:'🟢',floc:'🫧',test:'🧪'}[p.category]||'📦';
+  const el = document.getElementById('modal-produkt-detail');
+  if(!el) return;
+  el.querySelector('.modal').innerHTML =
+    `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      ${p.img ? `<img src="${p.img}" style="width:80px;height:80px;object-fit:contain;border-radius:10px;background:var(--pool-surface);padding:4px">` : `<div style="width:80px;height:80px;border-radius:10px;background:var(--pool-surface);display:flex;align-items:center;justify-content:center;font-size:2.5rem">${catEmoji}</div>`}
+      <div>
+        <div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.1rem">${p.name}</div>
+        <div style="color:var(--text-muted);font-size:0.82rem">${p.brand||''} ${p.size ? '· '+p.size : ''}</div>
+        ${p.price ? `<div style="font-weight:800;color:var(--ok-green)">€${p.price}</div>` : ''}
+      </div>
+    </div>` +
+    (p.notes ? `<div class="card" style="margin-bottom:10px"><div class="card-title" style="font-size:0.8rem">📋 Notizen / Dosierhinweise</div><div style="font-size:0.85rem;line-height:1.6;white-space:pre-wrap">${p.notes}</div></div>` : '') +
+    (p.datenblatt ? `<div style="margin-bottom:10px"><button class="btn btn-outline" onclick="window.open('${p.datenblatt}','_blank')">📄 Datenblatt öffnen</button></div>` : '') +
+    (p.amazon ? `<div style="margin-bottom:10px"><button class="btn btn-sm" style="background:#ff9900;color:white" onclick="window.open('${p.amazon}','_blank')">🛒 Bei Amazon bestellen</button></div>` : '') +
+    `<div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal('modal-produkt-detail')">Schließen</button>
+    </div>`;
+  el.classList.add('open');
+}
+
+function openNachbestellModal(poolId){
+  const p = poolProdukte.find(x => x.poolId === poolId);
+  if(!p) return;
+  const menge = prompt(`Bestellmenge für "${p.name}" (z.B. "1 kg", "2 Liter"):`);
+  if(!menge) return;
+  p.bestellt = true;
+  p.bestelltMenge = menge;
+  p.bestelltAm = new Date().toISOString();
+  saveProdukte();
+  renderProduktBoard();
+  renderStockDashboard();
+  if(typeof toast === 'function') toast(`📦 "${p.name}" als nachbestellt markiert (${menge})`, 'success', 3000);
+}
+
+function lieferungBestaetigen(poolId){
+  const p = poolProdukte.find(x => x.poolId === poolId);
+  if(!p || !p.bestellt) return;
+  // Map poolId → stock name
+  const pid2stock = {
+    ph_minus:'pH-Minus', ph_plus:'pH-Plus', chlortabs:'Schnell-Chlortabs',
+    chlorplus:'Chlor Plus', algischutz:'Algenschutz', flockmittel:'Flockmittel',
+    poolklar:'Poolklar', teststreifen:'Teststreifen'
+  };
+  const stockName = pid2stock[poolId];
+  // Parse quantity from bestelltMenge
+  if(stockName && chemStock[stockName]){
+    const numMatch = (p.bestelltMenge||'').match(/[\d.,]+/);
+    const num = numMatch ? parseFloat(numMatch[0].replace(',','.')) : null;
+    if(num !== null){
+      const p2 = STOCK_PRODUCTS[stockName];
+      // Convert to correct unit: if L → ml, if kg → g
+      let addAmt = num;
+      const menge = p.bestelltMenge||'';
+      if(/L|Liter/i.test(menge)) addAmt = num * 1000;
+      if(/kg|Kilo/i.test(menge)) addAmt = num * 1000;
+      chemStock[stockName].qty = (chemStock[stockName].qty||0) + addAmt;
+      sd('chem_stock_v2', chemStock);
+      renderStockDashboard();
+    }
+  }
+  // Clear bestellt flag
+  p.bestellt = false;
+  p.bestelltMenge = '';
+  p.bestelltAm = null;
+  saveProdukte();
+  renderProduktBoard();
+  logHistory({type:'wartung', time:new Date().toISOString(), note:`📦 Lieferung erhalten: ${p.name}${p.bestelltMenge?' ('+p.bestelltMenge+')':''}`});
+  if(typeof toast === 'function') toast(`✅ Lieferung "${p.name}" bestätigt – Bestand aktualisiert!`, 'success', 3500);
+}
+
+// ============================================================
+// EINMALIGE KOSTEN-INITIALISIERUNG
+// ============================================================
+(function initKostenStatistik(){
+  if(ld('kosten_init_v2', false)) return; // already done
+
+  // 1. Preise aus poolProdukte in chemStock schreiben
+  const pid2stock = {
+    ph_minus:'pH-Minus', ph_plus:'pH-Plus', chlortabs:'Schnell-Chlortabs',
+    chlorplus:'Chlor Plus', algischutz:'Algenschutz', flockmittel:'Flockmittel',
+    poolklar:'Poolklar', teststreifen:'Teststreifen'
+  };
+  poolProdukte.forEach(function(p){
+    const sn = pid2stock[p.poolId];
+    if(!sn || !chemStock[sn] || !p.price) return;
+    const priceNum = parseFloat(String(p.price).replace(',','.'));
+    if(!isNaN(priceNum)) chemStock[sn].pricePerPkg = priceNum;
+  });
+  sd('chem_stock_v2', chemStock);
+
+  // 2. Bisherige Dosierungen für Statistik nachtragen (bereits in historyLog → renderJahresstatistik liest das)
+  // historyLog already contains dosierung entries; renderJahresstatistik uses them.
+  // We just need to make sure the product field is set correctly.
+  // Fix entries that have note but no product field
+  const noteMap = {
+    'pH-Minus':'pH-Minus','pH-Plus':'pH-Plus',
+    'Schnell-Chlortabs':'Schnell-Chlortabs','Chlor Plus':'Chlor Plus',
+    'Algenschutz':'Algenschutz','Flockmittel':'Flockmittel',
+    'Poolklar':'Poolklar','Teststreifen':'Teststreifen'
+  };
+  let changed = false;
+  historyLog.forEach(function(e){
+    if(e.type !== 'dosierung' || e.product) return;
+    for(const [key, val] of Object.entries(noteMap)){
+      if(e.note && e.note.includes(key)){
+        e.product = val;
+        changed = true;
+        break;
+      }
+    }
+  });
+  if(changed) sd('history_log', historyLog);
+
+  sd('kosten_init_v2', true);
+  if(typeof renderJahresstatistik === 'function') renderJahresstatistik();
 })();
 
 </script>
