@@ -607,6 +607,13 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   .task-name,.task-hint{max-width:calc(100vw - 100px)}
 }
 
+/* ===== SAISON CHECKLISTEN ===== */
+.saison-check-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.saison-check-item:last-child{border-bottom:none}
+.saison-check-item input[type=checkbox]{width:18px;height:18px;accent-color:var(--pool-blue);flex-shrink:0;margin-top:2px;cursor:pointer}
+.saison-check-item label{font-size:0.85rem;cursor:pointer;flex:1;line-height:1.4}
+.saison-check-item.done label{text-decoration:line-through;color:var(--text-muted)}
+
 </style>
 </head>
 <body>
@@ -757,6 +764,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div id="dash-season-progress" style="margin-top:10px"></div>
   </div>
   <div id="ban-banner-main"></div>
+  <div id="nachmess-timer-banner"></div>
   <div id="kinder-ban-dashboard"></div>
   <div class="card" id="timer-card-dashboard" style="display:none">
     <div class="card-title" style="justify-content:space-between">
@@ -852,6 +860,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="card-title" style="justify-content:space-between">
         <span>📦 Vorrat</span>
         <button class="btn btn-outline btn-sm" onclick="openStockModal()">✏️ Bearbeiten</button>
+        <button class="btn btn-outline btn-sm" onclick="exportChemikalienReminders()">🛒 Nachkaufen-Liste</button>
       </div>
       <div id="dash-stock"></div>
     </div>
@@ -1141,7 +1150,16 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 
 <!-- ===== WARTUNG ===== -->
 <div class="board" id="board-wartung">
+  <div id="rueckspuel-hint"></div>
   <div class="page-header" id="wartung-header"><h1>🔧 Wartungsplan</h1><p>Bestway Steel Pro MAX 3,66m + Sandfilter</p><div id="wartung-summary"></div></div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">🌱 Pool öffnen – Checkliste</div>
+    <div id="saison-checkliste-oeffnen"></div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">❄️ Pool winterfest machen</div>
+    <div id="saison-checkliste-winter"></div>
+  </div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-title" style="justify-content:space-between"><span>🎉 Poolparty</span><button class="btn btn-primary btn-sm" onclick="openPartyModal()">+ Planen</button></div>
     <div id="party-list"></div>
@@ -1193,6 +1211,10 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 
 <!-- ===== CHARTS ===== -->
 <div class="board" id="board-charts">
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">📊 Jahresstatistik 2026</div>
+    <div id="jahresstatistik"></div>
+  </div>
   <div class="page-header"><h1>📊 Auswertung</h1><p id="charts-season-label"></p></div>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="setChartRange(7)" id="chart-tab-7">7 Tage</button>
@@ -1212,6 +1234,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <div class="page-header"><h1>📋 Historie</h1><p>Alle Ereignisse – bearbeitbar</p></div>
   <div class="card">
     <div class="card-title">💾 Datenverwaltung</div>
+    <a href="https://drive.google.com/drive/folders/1gbzQPAIEfmZ0xDhBanGiZ2_tFJtcrWjU?usp=sharing" target="_blank" class="btn btn-outline btn-sm" style="margin-bottom:10px;text-decoration:none">📁 Pool-Dokumente öffnen</a>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-primary btn-sm" onclick="exportData()">📤 Exportieren</button>
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-file').click()">📥 Importieren</button>
@@ -1325,6 +1348,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="card-title">📱 Geräte &amp; Integration</div>
     <button class="btn btn-outline" style="margin-right:8px;margin-bottom:8px" onclick="showNFCGuide()">🏷️ NFC-Tag einrichten</button>
     <button class="btn btn-outline" style="margin-bottom:8px" onclick="requestPushPermission()">🔔 Push-Benachrichtigungen aktivieren</button>
+    <a href="https://drive.google.com/drive/folders/1gbzQPAIEfmZ0xDhBanGiZ2_tFJtcrWjU?usp=sharing" target="_blank" class="btn btn-outline" style="margin-bottom:8px;text-decoration:none">📁 Pool-Dokumente (Google Drive)</a>
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
       <div style="font-weight:800;font-size:0.85rem;margin-bottom:6px">📸 KI-Teststreifen – Anthropic API-Key</div>
       <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">Key wird nur lokal gespeichert und direkt an die Anthropic API gesendet. Niemals teilen!</div>
@@ -2074,6 +2098,7 @@ function updateMessungHints(){
 async function renderDashboard(){
   renderKinderBanDashboard();
   renderPartyDashboard();
+  checkNachmessTimer();
   const now=new Date();
   document.getElementById('dash-datetime').textContent=now.toLocaleString('de-DE',{weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   renderBanBanner('ban-banner-main');
@@ -2377,6 +2402,7 @@ function confirmTask(){
   closeModal('modal-task-confirm');
   renderDashboard();
   renderMaintenanceList&&renderMaintenanceList();
+  checkNachmessTimer&&checkNachmessTimer();
 }
 
 // ============================================================
@@ -3291,7 +3317,7 @@ function filterMaintenance(f){
 function renderWartung(){
   document.getElementById('season-start').value=season.start||'';
   document.getElementById('season-end').value=season.end||'';
-  renderMaintenanceList();renderIntervalSettings();renderParties();
+  renderMaintenanceList();renderIntervalSettings();renderParties();checkFilterdruck();renderSaisonCheckliste('oeffnen');renderSaisonCheckliste('winter');
   // Cover-Modus Hinweis
   const coverHintEl=document.getElementById('cover-mode-hint');
   if(!coverHintEl){
@@ -3482,6 +3508,7 @@ function setChartRange(r){
 }
 
 function renderCharts(){
+  renderJahresstatistik();
   let filtered;
   const lbl=document.getElementById('charts-season-label');
   if(chartRange==='season'){
@@ -5826,12 +5853,15 @@ function chlorDecayQuickDone(taskId,taskName){
     sd('chem_stock_v2',chemStock);
     renderStockDashboard&&renderStockDashboard();
   }
-  // Banner sofort ausblenden
+  // Nachmess-Timer starten
+  checkNachmessTimer&&checkNachmessTimer();
+  // Chlor-Banner aktualisieren
   renderChlorDecayCard();
   renderTasksDashboard&&renderTasksDashboard();
   renderMaintenanceList&&renderMaintenanceList();
   queueAutoSync&&queueAutoSync();
-  if(typeof toast==='function')toast('✅ '+taskName+' erledigt – Warnung verschwindet nach nächster Messung','success',3500);
+  const warteH=MITTEL_WARTEZEIT&&MITTEL_WARTEZEIT[taskId]?MITTEL_WARTEZEIT[taskId]:4;
+  if(typeof toast==='function')toast('✅ '+taskName+' erledigt – Nachmessen in '+warteH+'h!','success',4000);
 }
 
 // ============================================================
@@ -6274,7 +6304,12 @@ function addCoverHistEntry(){
   if(history.length>120)history.splice(0,history.length-120);
   sd('cover_history',history);
   logHistory({type:'cover',time:new Date(timeVal).toISOString(),note:(coveredVal?'Plane drauf':'Plane ab')+' (nachgetragen)',covered:coveredVal});
-  queueAutoSync();
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){
+    clearTimeout(autoSyncTimer);
+    gdriveSyncBoth();
+  } else {
+    queueAutoSync();
+  }
   renderCoverHistList();
   renderCoverStatusCard();
   if(typeof toast==='function')toast('Eintrag nachgetragen – Statistik aktualisiert','success',2500);
@@ -6363,39 +6398,76 @@ function sendPushNotification(title,body){
   catch(e){console.warn('Push failed:',e);}
 }
 
+function daysOverdue(task){
+  if(!task||!task.lastDone)return task?task.interval||0:0;
+  const daysSince=(Date.now()-new Date(task.lastDone))/86400000;
+  return Math.max(0,daysSince-(task.interval||1));
+}
+
 function checkPushNotifications(){
   if(!pushEnabled||Notification.permission!=='granted')return;
   const now=new Date();
-  // 1. Wassertest überfällig
-  const testTask=maintenanceTasks.find(t=>t.id==='test');
+  const todayKey=now.toISOString().slice(0,10);
+
+  // 1. Wassertest überfällig (ab 1 Tag)
+  const testTask=maintenanceTasks.find(function(t){return t.id==='test';});
   if(testTask&&daysOverdue(testTask)>=1){
-    const key='push_test_'+new Date().toISOString().slice(0,10);
+    const key='push_test_'+todayKey;
     if(!ld(key,false)){
-      sendPushNotification('⚠️ Wassertest überfällig','Bitte Pool-Wasser testen!');
+      sendPushNotification('⚠️ Wassertest überfällig','Bitte Pool-Wasser testen – '+Math.round(daysOverdue(testTask))+' Tag(e) überfällig');
       sd(key,true);
     }
   }
-  // 2. Badeverbot läuft ab (15 Min vorher)
+
+  // 2. Badeverbot läuft ab (30 Min vorher)
   if(ban&&ban.until){
     const remaining=new Date(ban.until)-now;
-    if(remaining>0&&remaining<15*60000){
-      const key='push_ban_'+ban.until;
+    if(remaining>0&&remaining<30*60000){
+      const key='push_ban_'+ban.until.slice(0,16);
       if(!ld(key,false)){
-        sendPushNotification('🏊 Badeverbot läuft ab','In ca. 15 Minuten ist Baden wieder erlaubt!');
+        sendPushNotification('🏊 Badeverbot läuft bald ab','In ca. '+Math.round(remaining/60000)+' Minuten ist Baden wieder erlaubt!');
         sd(key,true);
       }
     }
   }
-  // 3. Timer abgelaufen
-  timerTodos&&timerTodos.forEach(function(t){
+
+  // 3. Chlor kritisch (unter Minimum)
+  const lastM=getLastMeasurement();
+  if(lastM&&lastM.chlor!==undefined&&settings&&settings.chlor){
+    if(lastM.chlor<settings.chlor.min){
+      const key='push_chlor_'+todayKey;
+      if(!ld(key,false)){
+        sendPushNotification('🔴 Chlor kritisch','Chlor '+lastM.chlor+' mg/l – unter Minimum ('+settings.chlor.min+' mg/l)! Bitte behandeln.');
+        sd(key,true);
+      }
+    }
+  }
+
+  // 4. Timer abgelaufen
+  if(timerTodos)timerTodos.forEach(function(t){
     if(t.dueAt&&!t.done){
       const remaining=new Date(t.dueAt)-now;
-      if(remaining<0&&remaining>-5*60000){
+      if(remaining<0&&remaining>-10*60000){
         const key='push_timer_'+t.id;
         if(!ld(key,false)){
-          sendPushNotification('⏰ Timer abgelaufen',t.text||'Ein Timer ist abgelaufen');
+          sendPushNotification('⏰ '+( t.text||'Timer abgelaufen'),t.text||'Ein Timer ist abgelaufen – bitte prüfen');
           sd(key,true);
         }
+      }
+    }
+  });
+
+  // 5. Kinder-Badeverbot läuft ab (15 Min vorher)
+  const kban=ld('kinder_ban',{});
+  ['Lukas','Simon','Jakob'].forEach(function(name){
+    const b=kban[name];
+    if(!b||!b.until)return;
+    const remaining=new Date(b.until)-now;
+    if(remaining>0&&remaining<15*60000){
+      const key='push_kban_'+name+'_'+b.until.slice(0,16);
+      if(!ld(key,false)){
+        sendPushNotification('🏊 Badeverbot '+name+' läuft ab','In ca. '+Math.round(remaining/60000)+' Min. darf '+name+' wieder baden!');
+        sd(key,true);
       }
     }
   });
@@ -6902,7 +6974,309 @@ setInterval(function(){
   renderKinderBanDashboard();
   renderKinderBanMary();
   renderKinderBan();
+  checkNachmessTimer&&checkNachmessTimer();
 },60000);
+
+
+
+// ============================================================
+// SAISON CHECKLISTEN
+// ============================================================
+const CHECKLISTE_OEFFNEN=[
+  {id:'s1', text:'Plane abnehmen und reinigen'},
+  {id:'s2', text:'Pool auf Beschädigungen prüfen'},
+  {id:'s3', text:'Filter und Pumpe einschalten und prüfen'},
+  {id:'s4', text:'Filterdruck Ausgangswert notieren'},
+  {id:'s5', text:'Wasser auf pH, Chlor, Algizid testen'},
+  {id:'s6', text:'pH-Wert auf 7,0–7,6 einstellen'},
+  {id:'s7', text:'Schockchlorung durchführen (Chlor Plus)'},
+  {id:'s8', text:'Algenschutz zugeben'},
+  {id:'s9', text:'Nach 24h erneut messen'},
+  {id:'s10', text:'Vorräte auffüllen (Chlortabs, pH-Minus usw.)'},
+  {id:'s11', text:'Thermometer einsetzen'},
+  {id:'s12', text:'Poolboden absaugen'},
+];
+const CHECKLISTE_WINTER=[
+  {id:'w1', text:'Letzter Wassertest und Werte dokumentieren'},
+  {id:'w2', text:'Überwinterungsmittel zugeben'},
+  {id:'w3', text:'Chlorgehalt erhöhen (Schockchlorung)'},
+  {id:'w4', text:'Filterpumpe reinigen und ausbauen (Frostschutz)'},
+  {id:'w5', text:'Skimmer und Düsen abdecken oder ausbauen'},
+  {id:'w6', text:'Wasserstand leicht absenken (unter Skimmer)'},
+  {id:'w7', text:'Plane sorgfältig befestigen'},
+  {id:'w8', text:'Alle Chemikalien frostsicher lagern'},
+  {id:'w9', text:'Pool-Saison in App beenden (Saisonende setzen)'},
+];
+
+let checklisteOeffnenState=ld('checklist_oeffnen',{});
+let checklisteWinterState=ld('checklist_winter',{});
+
+function renderSaisonCheckliste(type){
+  const el=document.getElementById('saison-checkliste-'+type);
+  if(!el)return;
+  const items=type==='oeffnen'?CHECKLISTE_OEFFNEN:CHECKLISTE_WINTER;
+  const state=type==='oeffnen'?checklisteOeffnenState:checklisteWinterState;
+  const done=items.filter(function(i){return state[i.id];}).length;
+  
+  el.innerHTML=
+    '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">'+done+' / '+items.length+' Schritte erledigt</div>'+
+    '<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin-bottom:12px">'+
+      '<div style="height:100%;width:'+Math.round(done/items.length*100)+'%;background:linear-gradient(90deg,var(--pool-blue),#22c55e);border-radius:3px;transition:width 0.4s"></div>'+
+    '</div>'+
+    items.map(function(item){
+      const isDone=!!state[item.id];
+      return'<div class="saison-check-item'+(isDone?' done':'')+'">'+
+        '<input type="checkbox" id="sc-'+item.id+'" '+(isDone?'checked':'')+
+        ' onchange="toggleChecklisteItem(&quot;'+type+'&quot;,&quot;'+item.id+'&quot;,this.checked)">'+
+        '<label for="sc-'+item.id+'">'+item.text+'</label>'+
+      '</div>';
+    }).join('')+
+    '<button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="resetChecklist(&quot;'+type+'&quot;)">↩ Zurücksetzen</button>';
+}
+
+function toggleChecklisteItem(type,id,checked){
+  if(type==='oeffnen'){checklisteOeffnenState[id]=checked;sd('checklist_oeffnen',checklisteOeffnenState);}
+  else{checklisteWinterState[id]=checked;sd('checklist_winter',checklisteWinterState);}
+  renderSaisonCheckliste(type);
+}
+
+function resetChecklist(type){
+  if(!confirm('Checkliste zurücksetzen?'))return;
+  if(type==='oeffnen'){checklisteOeffnenState={};sd('checklist_oeffnen',{});}
+  else{checklisteWinterState={};sd('checklist_winter',{});}
+  renderSaisonCheckliste(type);
+}
+
+
+// ============================================================
+// CHEMIKALIEN → iPhone REMINDERS
+// ============================================================
+function exportChemikalienReminders(){
+  const lowStock=Object.entries(chemStock).filter(function(e){
+    const s=e[1];const p=STOCK_PRODUCTS[e[0]];
+    if(!p||!s)return false;
+    const pct=s.pkgSize>0?s.qty/s.pkgSize:0;
+    return pct<0.2; // unter 20%
+  });
+  
+  if(!lowStock.length){
+    if(typeof toast==='function')toast('✅ Alle Vorräte ausreichend – nichts zu bestellen','success',3000);
+    return;
+  }
+  
+  // iOS Reminders via URL-Schema (x-apple-reminderkit://)
+  // Fallback: Kalender-Export oder Clipboard
+  const lines=lowStock.map(function(e){
+    const name=e[0],s=e[1],p=STOCK_PRODUCTS[name];
+    return'• '+p.label+' nachkaufen (Vorrat: '+s.qty+' '+p.unit+')';
+  });
+  
+  // Versuche Reminders App
+  if(navigator.userAgent.includes('iPhone')||navigator.userAgent.includes('iPad')){
+    // Öffne Reminders über URL-Schema
+    const text=encodeURIComponent('Pool: '+lines.join(', '));
+    const url='x-apple-reminderkit://reminders/new?title=Pool+Chemikalien+nachkaufen&notes='+text;
+    window.location.href=url;
+    setTimeout(function(){
+      // Fallback: Clipboard
+      navigator.clipboard&&navigator.clipboard.writeText('Pool Chemikalien:\n'+lines.join('\n'))
+        .then(function(){toast('📋 In Zwischenablage – Reminders App öffnen','info',3000);});
+    },500);
+  } else {
+    // Desktop: Clipboard
+    const text='Pool Chemikalien nachkaufen:\n'+lines.join('\n')+'\n\nErstellt: '+new Date().toLocaleDateString('de-DE');
+    navigator.clipboard.writeText(text).then(function(){
+      toast('📋 '+lowStock.length+' Produkte in Zwischenablage kopiert','success',3000);
+    });
+  }
+}
+
+
+// ============================================================
+// JAHRESSTATISTIK
+// ============================================================
+function renderJahresstatistik(){
+  const el=document.getElementById('jahresstatistik');if(!el)return;
+  const year=new Date().getFullYear();
+  
+  // Badetage (aus cover_history)
+  const history=ld('cover_history',[]);
+  const dayMap={};
+  const nowMs=Date.now();
+  const yearStart=new Date(year,0,1).getTime();
+  const timeline=[...history].sort(function(a,b){return new Date(a.time)-new Date(b.time);});
+  for(let i=0;i<timeline.length;i++){
+    const e=timeline[i];
+    const segEnd=i+1<timeline.length?new Date(timeline[i+1].time).getTime():nowMs;
+    if(!e.covered){
+      const segStart=Math.max(new Date(e.time).getTime(),yearStart);
+      for(let d=segStart;d<segEnd;d+=86400000){
+        if(d>=yearStart)dayMap[new Date(d).toISOString().slice(0,10)]='swim';
+      }
+    }
+  }
+  if(!coverState.covered){
+    const segStart=Math.max(new Date(coverState.since).getTime(),yearStart);
+    for(let d=segStart;d<=nowMs;d+=86400000){
+      if(d>=yearStart)dayMap[new Date(d).toISOString().slice(0,10)]='swim';
+    }
+  }
+  const badetage=Object.keys(dayMap).length;
+
+  // Chemikalienverbrauch aus History
+  const verbrauch={};
+  historyLog.filter(function(e){
+    return e.type==='dosierung'&&e.time&&new Date(e.time).getFullYear()===year;
+  }).forEach(function(e){
+    if(e.product){verbrauch[e.product]=(verbrauch[e.product]||0)+1;}
+  });
+
+  // Kosten schätzen (aus chemStock Preisen)
+  let gesamtkosten=0;
+  Object.entries(verbrauch).forEach(function(kv){
+    const p=STOCK_PRODUCTS[kv[0]];
+    if(p&&chemStock[kv[0]]&&chemStock[kv[0]].pricePerPkg){
+      gesamtkosten+=kv[1]*(chemStock[kv[0]].pricePerPkg||0)/((chemStock[kv[0]].pkgSize||1)/p.perUse);
+    }
+  });
+
+  // Messungen
+  const messungen=measurements.filter(function(m){
+    return m.time&&new Date(m.time).getFullYear()===year;
+  }).length;
+
+  el.innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">'+
+      statBox('🏊','Badetage',badetage,'Tage in '+year)+
+      statBox('🧪','Messungen',messungen,'Wassertests')+
+      statBox('⚗️','Dosierungen',Object.values(verbrauch).reduce(function(a,b){return a+b;},0),'Mittelgaben')+
+      statBox('💰','Kosten ca.',gesamtkosten>0?gesamtkosten.toFixed(2)+' €':'–','Chemikalien')+
+    '</div>'+
+    (Object.keys(verbrauch).length?
+      '<div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px">Verbrauch nach Produkt</div>'+
+      Object.entries(verbrauch).map(function(kv){
+        const p=STOCK_PRODUCTS[kv[0]];
+        return'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'+
+          '<div style="flex:1;font-size:0.83rem">'+(p?p.label:kv[0])+'</div>'+
+          '<div style="font-weight:700;font-size:0.83rem;color:var(--pool-dark)">'+kv[1]+'×</div>'+
+        '</div>';
+      }).join('')
+    :'<p style="font-size:0.82rem;color:var(--text-muted)">Noch keine Dosierungen dokumentiert.</p>');
+
+  function statBox(icon,label,val,sub){
+    return'<div style="background:var(--pool-surface,#f8fafc);border-radius:10px;padding:12px;text-align:center">'+
+      '<div style="font-size:1.4rem">'+icon+'</div>'+
+      '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.4rem;color:var(--pool-dark)">'+val+'</div>'+
+      '<div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase">'+label+'</div>'+
+      '<div style="font-size:0.68rem;color:var(--text-muted)">'+sub+'</div>'+
+    '</div>';
+  }
+}
+
+
+// ============================================================
+// NACHMESS-TIMER NACH MITTELGABE
+// ============================================================
+// Wartezeiten pro Produkt (in Stunden)
+const MITTEL_WARTEZEIT={
+  chlortabs:4, chlorplus:8, algischutz:2, poolklar:2,
+  ph_minus:4, ph_plus:4, flockmittel:2
+};
+const MITTEL_LABEL={
+  chlortabs:'Chlortabs', chlorplus:'Chlor Plus', algischutz:'Algenschutz',
+  poolklar:'Poolklar', ph_minus:'pH-Minus', ph_plus:'pH-Plus', flockmittel:'Flockmittel'
+};
+
+function checkNachmessTimer(){
+  // Alle Mittel die nach letzter Messung gegeben wurden
+  const last=getLastMeasurement();
+  const lastMeasTime=last?new Date(last.time):new Date(0);
+  const now=Date.now();
+  
+  const aktiveMittel=[];
+  maintenanceTasks.forEach(function(t){
+    if(!t.lastDone)return;
+    const doneMsAgo=now-new Date(t.lastDone).getTime();
+    const warteH=MITTEL_WARTEZEIT[t.id];
+    if(!warteH)return;
+    // Mittel nach letzter Messung gegeben und Wartezeit noch nicht abgelaufen
+    if(new Date(t.lastDone)>lastMeasTime && doneMsAgo<warteH*3600000){
+      const restMs=warteH*3600000-doneMsAgo;
+      aktiveMittel.push({
+        id:t.id,
+        label:MITTEL_LABEL[t.id]||t.name,
+        warteH,
+        restMs,
+        restStr: restMs>3600000?
+          Math.ceil(restMs/3600000)+'h':
+          Math.round(restMs/60000)+'min'
+      });
+    }
+  });
+  
+  const el=document.getElementById('nachmess-timer-banner');
+  if(!el)return;
+  
+  if(!aktiveMittel.length){el.innerHTML='';return;}
+  
+  // Längste Wartezeit bestimmen
+  const laengste=aktiveMittel.reduce(function(a,b){return a.restMs>b.restMs?a:b;});
+  const mittelNamen=aktiveMittel.map(function(m){return m.label;}).join(' + ');
+  const bereitZumMessen=aktiveMittel.every(function(m){return m.restMs<300000;}); // < 5 Min
+  
+  el.innerHTML=
+    '<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;border-radius:12px;padding:12px 14px;margin-bottom:10px">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'+
+        '<div style="font-size:1.3rem">⏱️</div>'+
+        '<div style="flex:1">'+
+          '<div style="font-weight:800;font-size:0.88rem;color:#15803d">Nach Mittelgabe: '+mittelNamen+'</div>'+
+          '<div style="font-size:0.78rem;color:#16a34a">'+
+            (bereitZumMessen
+              ? '✅ Wartezeit abgelaufen – jetzt messen!'
+              : 'Bitte noch <strong>'+laengste.restStr+'</strong> warten, dann nachmessen')+
+          '</div>'+
+        '</div>'+
+        '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.1rem;color:#15803d;white-space:nowrap">'+
+          (bereitZumMessen?'✅':laengste.restStr)+
+        '</div>'+
+      '</div>'+
+      // Einzelne Mittel anzeigen wenn mehrere
+      (aktiveMittel.length>1?
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+
+        aktiveMittel.map(function(m){
+          return'<div style="background:white;border-radius:8px;padding:4px 9px;font-size:0.75rem;font-weight:700;color:#15803d">'+
+            m.label+': noch '+m.restStr+'</div>';
+        }).join('')+'</div>':'')+
+      '<button class="btn btn-ok btn-sm" onclick="showBoard(&quot;messung&quot;);renderMessung()" '+
+        (bereitZumMessen?'':'disabled style="opacity:0.6"')+'>'+
+        '🧪 Jetzt messen'+
+      '</button>'+
+    '</div>';
+}
+
+// ============================================================
+// RÜCKSPÜL-ERINNERUNG
+// ============================================================
+function checkFilterdruck(){
+  // Letzten Filterdruck-Wert prüfen
+  const lastDruck=measurements.filter(function(m){return m.druck!==undefined;}).slice(-1)[0];
+  if(!lastDruck)return;
+  const grenzwert=settings&&settings.druck&&settings.druck.max?settings.druck.max:0.5;
+  const el=document.getElementById('rueckspuel-hint');
+  if(!el)return;
+  if(lastDruck.druck>grenzwert){
+    el.innerHTML='<div style="background:linear-gradient(135deg,#fff7ed,#fed7aa);border:2px solid #f97316;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">'+
+      '<div style="font-size:1.4rem">🔴</div>'+
+      '<div style="flex:1">'+
+        '<div style="font-weight:800;font-size:0.88rem;color:#9a3412">Filterdruck zu hoch – Rückspülen empfohlen!</div>'+
+        '<div style="font-size:0.78rem;color:#b45309">Aktuell: '+lastDruck.druck+' Bar (Grenzwert: '+grenzwert+' Bar)</div>'+
+      '</div>'+
+      '<button class="btn btn-sm" style="background:#f97316;color:white;flex-shrink:0" onclick="showBoard(&quot;erklaerung&quot;)">📖 Anleitung</button>'+
+    '</div>';
+  } else {
+    el.innerHTML='';
+  }
+}
 
 // ============================================================
 // POOL-ABDECKUNG (Plane)
@@ -6955,8 +7329,14 @@ function toggleCover(){
   sd('cover_history',history);
   const action=coverState.covered?'Plane drauf':'Plane ab';
   logHistory({type:'cover',time:now,note:action,covered:coverState.covered});
-  queueAutoSync(); // Cover-Status sofort synchronisieren
+  // Sofortiger Push für Cover-Status (nicht nur Queue)
   applyCovertIntervals();
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){
+    clearTimeout(autoSyncTimer);
+    gdriveSyncBoth();
+  } else {
+    queueAutoSync();
+  }
   renderCoverStatusCard();
   renderChlorDecayCard();
   if(typeof toast==='function')toast(action+' dokumentiert','success',2000);
