@@ -5502,14 +5502,40 @@ function applyImportedData(d,mergeMode){
   if(d.settings){settings=d.settings;sdRaw('settings',settings);}
   if(d.chemStock){chemStock=d.chemStock;sdRaw('chem_stock_v2',chemStock);}
   if(d.coverState&&typeof coverState!=='undefined'){
-    coverState=d.coverState;sdRaw('cover_state',coverState);
-    // UI sofort aktualisieren
+    if(mergeMode&&coverState&&coverState.since&&d.coverState&&d.coverState.since){
+      // Neuerer Status gewinnt (höheres since-Datum)
+      if(new Date(d.coverState.since)>new Date(coverState.since)){
+        coverState=d.coverState;
+      }
+      // Sonst: lokaler Status bleibt
+    } else {
+      coverState=d.coverState;
+    }
+    sdRaw('cover_state',coverState);
     if(typeof applyCovertIntervals==='function')applyCovertIntervals();
     if(typeof renderCoverStatusCard==='function')renderCoverStatusCard();
     if(typeof renderChlorDecayCard==='function')renderChlorDecayCard();
   }
   if(d.kinderBan){
-    sd('kinder_ban',d.kinderBan);
+    if(mergeMode){
+      // Pro Kind: neueres setAt gewinnt
+      var localKB=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
+      var remoteKB=d.kinderBan;
+      var mergedKB={};
+      ['Lukas','Simon','Jakob'].forEach(function(name){
+        var local=localKB[name],remote=remoteKB[name];
+        if(!local&&!remote){mergedKB[name]=null;}
+        else if(!local){mergedKB[name]=remote;}
+        else if(!remote){mergedKB[name]=local;}
+        else{
+          // Beide aktiv: neueres setAt gewinnt
+          mergedKB[name]=new Date(remote.setAt||0)>new Date(local.setAt||0)?remote:local;
+        }
+      });
+      sd('kinder_ban',mergedKB);
+    } else {
+      sd('kinder_ban',d.kinderBan);
+    }
     if(typeof renderKinderBan==='function')renderKinderBan();
     if(typeof renderKinderBanDashboard==='function')renderKinderBanDashboard();
     if(typeof renderKinderBanMary==='function')renderKinderBanMary();
@@ -5705,14 +5731,107 @@ function renderChlorDecayCard(){
   if(!el)return;
   el.innerHTML='';
   const p=predictChlorDecay();
-  if(!p)return;
-  if(p.days>14)return; // too far out, not useful
+  if(!p||p.days>14)return;
+
+  // Verschwinden wenn Chlor-Aufgabe nach letzter Messung erledigt wurde
+  const last=getLastMeasurement();
+  const chlorTask=maintenanceTasks.find(function(t){return t.id==='chlor_tabs';});
+  const chlorPlusTask=maintenanceTasks.find(function(t){return t.id==='chlor_plus'||t.id==='schock';});
+  const lastMeasTime=last?new Date(last.time):null;
+  const chlorTabsDone=chlorTask&&chlorTask.lastDone&&lastMeasTime&&new Date(chlorTask.lastDone)>lastMeasTime;
+  const chlorPlusDone=chlorPlusTask&&chlorPlusTask.lastDone&&lastMeasTime&&new Date(chlorPlusTask.lastDone)>lastMeasTime;
+  if(chlorTabsDone||chlorPlusDone)return; // Banner ausblenden
+
+  // Aktueller Chlor-Wert
+  const currentChlor=last?last.chlor:null;
+  const minChlor=settings.chlor.min||0.5;
+  const targetChlor=settings.chlor.target||2;
+
+  // Dynamische Empfehlung
+  let empfehlung='';
+  let empIcon='💊';
+  let empColor='#d97706';
+  let quickTaskId='chlor_tabs';
+  let quickTaskName='Chlortabs nachlegen';
+
+  if(p.days<1){
+    // Chlor fällt heute – dringend
+    if(currentChlor!==null&&currentChlor<minChlor*0.5){
+      // Sehr niedrig → Granulat/Schockchlorung
+      empfehlung='⚡ Chlor sehr niedrig → Schockchlorung mit Chlor Plus empfohlen';
+      empIcon='⚡';empColor='#dc2626';
+      quickTaskId='chlor_plus';quickTaskName='Chlor Plus dosieren';
+    } else {
+      empfehlung='🚨 Dringend: heute noch Chlortabs nachlegen';
+      empIcon='🚨';empColor='#dc2626';
+    }
+  } else if(p.days<3){
+    if(currentChlor!==null&&currentChlor<minChlor){
+      empfehlung='⚡ Chlor unter Minimum → Chlor Plus oder Schockchlorung empfohlen';
+      empIcon='⚡';empColor='#dc2626';
+      quickTaskId='chlor_plus';quickTaskName='Chlor Plus dosieren';
+    } else {
+      empfehlung='💊 Bald Chlortabs nachlegen (in '+Math.round(p.days)+' Tagen nötig)';
+    }
+  } else {
+    empfehlung='💡 Chlortabs in ca. '+Math.round(p.days)+' Tagen nachlegen';
+    empColor='#b45309';
+  }
+
   const when=p.days<1?'heute':p.days<2?'morgen':'in ca. '+Math.round(p.days)+' Tagen';
   const dateStr=p.date.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'});
-  el.innerHTML='<div class="chlor-decay-card">'
-    +'<div style="font-size:1.4rem">📉</div>'
-    +'<div style="flex:1">Chlor fällt voraussichtlich '+when+' ('+dateStr+') unter Minimum ('+settings.chlor.min+' mg/l) – Verbrauch: ~'+Math.abs(p.ratePerDay).toFixed(2)+' mg/l pro Tag</div>'
-    +'</div>';
+  const coverNote=coverState&&coverState.covered?' (Plane drauf)':'';
+
+  el.innerHTML=
+    '<div class="chlor-decay-card" style="flex-direction:column;gap:8px;align-items:stretch">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="font-size:1.3rem">📉</div>'+
+        '<div style="flex:1;font-size:0.85rem">'+
+          'Chlor fällt voraussichtlich <strong>'+when+'</strong> ('+dateStr+') unter Minimum ('+minChlor+' mg/l)'+
+          ' – ~'+Math.abs(p.ratePerDay).toFixed(2)+' mg/l/Tag'+coverNote+
+        '</div>'+
+      '</div>'+
+      '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:8px 10px;font-size:0.82rem;color:'+empColor+';font-weight:700">'+
+        empfehlung+
+      '</div>'+
+      '<button class="btn btn-primary btn-sm" style="align-self:flex-start" id="chlor-decay-quick-btn">'+
+        '✅ '+quickTaskName+' – als erledigt markieren'+
+      '</button>'+
+    '</div>';
+  // Button-Event sicher setzen (ohne inline onclick)
+  var qBtn=document.getElementById('chlor-decay-quick-btn');
+  if(qBtn){
+    (function(tid,tname){
+      qBtn.addEventListener('click',function(){chlorDecayQuickDone(tid,tname);});
+    })(quickTaskId,quickTaskName);
+  }
+}
+
+function chlorDecayQuickDone(taskId,taskName){
+  const task=maintenanceTasks.find(function(t){return t.id===taskId;});
+  if(!task){
+    // Fallback: chlor_tabs erledigen
+    const ct=maintenanceTasks.find(function(t){return t.id==='chlor_tabs';});
+    if(ct){ct.lastDone=new Date().toISOString();sd('maintenance',maintenanceTasks);}
+  } else {
+    task.lastDone=new Date().toISOString();
+    sd('maintenance',maintenanceTasks);
+  }
+  logHistory({type:'wartung',time:new Date().toISOString(),note:'✅ '+taskName+' (aus Chlor-Warnung)'});
+  // Vorrat abziehen
+  const stockName=taskId==='chlor_tabs'?'chlortabs':'chlorplus';
+  if(chemStock&&chemStock[stockName]){
+    const p=STOCK_PRODUCTS[stockName];
+    if(p)chemStock[stockName].qty=Math.max(0,chemStock[stockName].qty-p.perUse);
+    sd('chem_stock_v2',chemStock);
+    renderStockDashboard&&renderStockDashboard();
+  }
+  // Banner sofort ausblenden
+  renderChlorDecayCard();
+  renderTasksDashboard&&renderTasksDashboard();
+  renderMaintenanceList&&renderMaintenanceList();
+  queueAutoSync&&queueAutoSync();
+  if(typeof toast==='function')toast('✅ '+taskName+' erledigt – Warnung verschwindet nach nächster Messung','success',3500);
 }
 
 // ============================================================
