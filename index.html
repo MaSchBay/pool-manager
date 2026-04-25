@@ -8094,6 +8094,7 @@ function startFilterTimer(productKey){
   renderFilterTimer();
 }
 
+function clearFilterTimer(){ sd('filter_timer',null); renderFilterTimer(); }
 function renderFilterTimer(){
   const el = document.getElementById('filter-timer-banner');
   if(!el) return;
@@ -8120,7 +8121,7 @@ function renderFilterTimer(){
           '<div style="font-size:0.78rem;color:#ea580c">Filter ausschalten ab: <strong>'+until+' Uhr</strong></div>'+
         '</div>'+
         '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.1rem;color:#c2410c;white-space:nowrap">'+restStr+'</div>'+
-        '<button onclick="sd('filter_timer',null);renderFilterTimer()" style="background:none;border:none;color:#9a3412;cursor:pointer;font-size:1.1rem;padding:4px" title="Timer löschen">×</button>'+
+        '<button onclick="clearFilterTimer()" style="background:none;border:none;color:#9a3412;cursor:pointer;font-size:1.1rem;padding:4px" title="Timer löschen">×</button>'+
       '</div>'+
     '</div>';
 }
