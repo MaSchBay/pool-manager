@@ -1778,6 +1778,8 @@ if(!maintenanceTasks.find(t=>t.id==='filter_reinigen')){
   maintenanceTasks.push({id:'filter_reinigen',name:'Sandfilter reinigen & spülen',interval:30,lastDone:null,cat:'filter',hidden:true});
   sd('maintenance',maintenanceTasks);
 }
+// Migration: remove retired tasks (Skimmerkorb, Poolwände bürsten)
+{const retired=['skimmer','wand_brush'];const before=maintenanceTasks.length;maintenanceTasks=maintenanceTasks.filter(t=>!retired.includes(t.id));if(maintenanceTasks.length!==before)sd('maintenance',maintenanceTasks);}
 let weatherData   = null;
 let weatherCache  = ld('weather_cache',null);
 let weatherCacheT = ld('weather_cache_time',0);
@@ -7242,16 +7244,7 @@ function renderJahresstatistik(){
       statBox('⚗️','Dosierungen',Object.values(verbrauch).reduce(function(a,b){return a+b;},0),'Mittelgaben')+
       statBox('💰','Kosten ca.',gesamtkosten>0?gesamtkosten.toFixed(2)+' €':'–','Chemikalien')+
     '</div>'+
-    (Object.keys(verbrauch).length?
-      '<div style="font-family:Nunito,sans-serif;font-weight:800;font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px">Verbrauch nach Produkt</div>'+
-      Object.entries(verbrauch).map(function(kv){
-        const p=STOCK_PRODUCTS[kv[0]];
-        return'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'+
-          '<div style="flex:1;font-size:0.83rem">'+(p?p.label:kv[0])+'</div>'+
-          '<div style="font-weight:700;font-size:0.83rem;color:var(--pool-dark)">'+kv[1]+'×</div>'+
-        '</div>';
-      }).join('')
-    :'<p style="font-size:0.82rem;color:var(--text-muted)">Noch keine Dosierungen dokumentiert.</p>');
+    (Object.keys(verbrauch).length===0?'<p style="font-size:0.82rem;color:var(--text-muted)">Noch keine Dosierungen dokumentiert.</p>':'');
 
   function statBox(icon,label,val,sub){
     return'<div style="background:var(--pool-surface,#f8fafc);border-radius:10px;padding:12px;text-align:center">'+
