@@ -3303,7 +3303,8 @@ function calcDosage(){
 
 function logDosierung(productKey,amount){
   const p=PRODUCTS[productKey];const banH=BAN_H[productKey];
-  logHistory({type:'dosierung',time:new Date().toISOString(),note:`${p.name}: ${amount}`});
+  const _stockKey_={'schnellchlor':'Schnell-Chlortabs','chlorplus':'Chlor Plus','flockmittel':'Flockmittel','poolklar':'Poolklar','algenschutz':'Algenschutz','phminus':'pH-Minus','phplus':'pH-Plus'}[productKey]||p.name;
+  logHistory({type:'dosierung',time:new Date().toISOString(),product:_stockKey_,note:`${p.name}: ${amount}`});
   // Bestand abziehen
   stockDeductDosierung(productKey, amount);
   renderStockDashboard();
@@ -8218,12 +8219,30 @@ function openProduktDetail(poolId){
       </div>
     </div>` +
     (p.notes ? `<div class="card" style="margin-bottom:10px"><div class="card-title" style="font-size:0.8rem">📋 Notizen / Dosierhinweise</div><div style="font-size:0.85rem;line-height:1.6;white-space:pre-wrap">${p.notes}</div></div>` : '') +
-    (p.datenblatt ? `<div style="margin-bottom:10px"><button class="btn btn-outline" onclick="window.open('${p.datenblatt}','_blank')">📄 Datenblatt öffnen</button></div>` : '') +
+    `<div class="card" style="margin-bottom:10px">
+      <div class="card-title" style="font-size:0.8rem">📄 Datenblatt-Link</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input id="datenblatt-input-${p.poolId}" type="url" placeholder="https://... (URL eingeben)" value="${p.datenblatt||''}" style="flex:1;min-width:160px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem">
+        <button class="btn btn-ok btn-sm" onclick="saveDatenblatt('${p.poolId}')">💾 Speichern</button>
+        ${p.datenblatt ? `<button class="btn btn-outline btn-sm" onclick="window.open('${p.datenblatt}','_blank')">🔗 Öffnen</button>` : ''}
+      </div>
+    </div>` +
     (p.amazon ? `<div style="margin-bottom:10px"><button class="btn btn-sm" style="background:#ff9900;color:white" onclick="window.open('${p.amazon}','_blank')">🛒 Bei Amazon bestellen</button></div>` : '') +
     `<div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn btn-outline" onclick="closeModal('modal-produkt-detail')">Schließen</button>
     </div>`;
   el.classList.add('open');
+}
+
+function saveDatenblatt(poolId){
+  const p = poolProdukte.find(x => x.poolId === poolId);
+  if(!p) return;
+  const input = document.getElementById('datenblatt-input-'+poolId);
+  if(!input) return;
+  p.datenblatt = input.value.trim();
+  saveProdukte();
+  openProduktDetail(poolId); // re-render to show open button
+  if(typeof toast === 'function') toast('💾 Datenblatt-Link gespeichert','success',2000);
 }
 
 function openNachbestellModal(poolId){
@@ -8277,11 +8296,9 @@ function lieferungBestaetigen(poolId){
 }
 
 // ============================================================
-// EINMALIGE KOSTEN-INITIALISIERUNG
+// EINMALIGE KOSTEN-INITIALISIERUNG (v3)
 // ============================================================
-(function initKostenStatistik(){
-  if(ld('kosten_init_v2', false)) return; // already done
-
+function runKostenInitV3(){
   // 1. Preise aus poolProdukte in chemStock schreiben
   const pid2stock = {
     ph_minus:'pH-Minus', ph_plus:'pH-Plus', chlortabs:'Schnell-Chlortabs',
@@ -8296,32 +8313,38 @@ function lieferungBestaetigen(poolId){
   });
   sd('chem_stock_v2', chemStock);
 
-  // 2. Bisherige Dosierungen für Statistik nachtragen (bereits in historyLog → renderJahresstatistik liest das)
-  // historyLog already contains dosierung entries; renderJahresstatistik uses them.
-  // We just need to make sure the product field is set correctly.
-  // Fix entries that have note but no product field
-  const noteMap = {
-    'pH-Minus':'pH-Minus','pH-Plus':'pH-Plus',
+  // 2. historyLog: product-Feld nachtragen aus note-Text
+  const noteToStock = {
+    'pH-Minus Granulat':'pH-Minus','pH-Plus Granulat':'pH-Plus',
     'Schnell-Chlortabs':'Schnell-Chlortabs','Chlor Plus':'Chlor Plus',
     'Algenschutz':'Algenschutz','Flockmittel':'Flockmittel',
     'Poolklar':'Poolklar','Teststreifen':'Teststreifen'
   };
   let changed = false;
   historyLog.forEach(function(e){
-    if(e.type !== 'dosierung' || e.product) return;
-    for(const [key, val] of Object.entries(noteMap)){
-      if(e.note && e.note.includes(key)){
-        e.product = val;
-        changed = true;
-        break;
+    if(e.type !== 'dosierung') return;
+    if(!e.product){
+      for(const key of Object.keys(noteToStock)){
+        if(e.note && e.note.includes(key)){
+          e.product = noteToStock[key]; changed = true; break;
+        }
       }
     }
   });
   if(changed) sd('history_log', historyLog);
 
-  sd('kosten_init_v2', true);
-  if(typeof renderJahresstatistik === 'function') renderJahresstatistik();
-})();
+  sd('kosten_init_v3', true);
+  if(typeof toast === 'function') toast('✅ Kostenstatistik initialisiert','success',3000);
+  setTimeout(function(){ if(typeof renderJahresstatistik === 'function') renderJahresstatistik(); }, 500);
+}
+// Einmalig beim ersten Start nach diesem Update
+if(!ld('kosten_init_v3', false)){
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', runKostenInitV3);
+  } else {
+    setTimeout(runKostenInitV3, 800); // nach DOM-Init
+  }
+}
 
 </script>
 </body>
