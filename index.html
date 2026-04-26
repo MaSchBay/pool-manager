@@ -3473,7 +3473,19 @@ function saveMaintEdit(){
 }
 function renderIntervalSettings(){
   const el=document.getElementById('interval-settings');if(!el)return;
-  el.innerHTML=maintenanceTasks.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:0.88rem;font-weight:600">${t.name}${t._dynamic?` <span style="font-size:0.7rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:4px">📊 dynamisch</span>`:''}</div><div style="display:flex;align-items:center;gap:6px"><button class="spin-btn" onclick="changeInterval('${t.id}',-1)">−</button><span class="spin-val">alle ${t.interval}d</span><button class="spin-btn" onclick="changeInterval('${t.id}',1)">+</button></div></div>`).join('');
+  el.innerHTML=maintenanceTasks.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:0.88rem;font-weight:600">${t.name}${t._dynamic?` <span style="font-size:0.7rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:4px">📊 dynamisch</span>`:''}</div><div style="display:flex;align-items:center;gap:6px"><button class="spin-btn" onclick="changeInterval('${t.id}',-1)">−</button><span class="spin-val">alle ${t.interval}d</span><button class="spin-btn" onclick="changeInterval('${t.id}',1)">+</button><button class="spin-btn" style="color:#dc2626;margin-left:4px" title="Aufgabe löschen" onclick="deleteMaintenanceTask('${t.id}')">🗑</button></div></div>`).join('');
+}
+
+function deleteMaintenanceTask(id){
+  const t=maintenanceTasks.find(x=>x.id===id);
+  if(!t)return;
+  if(!confirm(`Aufgabe "${t.name}" wirklich löschen?`))return;
+  maintenanceTasks=maintenanceTasks.filter(x=>x.id!==id);
+  sd('maintenance',maintenanceTasks);
+  renderIntervalSettings();
+  renderMaintenanceList&&renderMaintenanceList();
+  renderTasksDashboard&&renderTasksDashboard();
+  if(typeof toast==='function')toast(`🗑 "${t.name}" gelöscht`,'info',2500);
 }
 
 function switchWartungTab(tab){
