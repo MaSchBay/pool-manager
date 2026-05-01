@@ -8252,6 +8252,65 @@ function saveProdukte(){ sd('pool_produkte_v1', poolProdukte); }
   }
 })();
 
+// ============================================================
+// MIGRATION: Dosierungen & Badeverbote einmalig importieren
+// Wird nur ausgefuehrt wenn noch kein Eintrag dosierungen hat
+// ============================================================
+(function migrateDosierungen(){
+  const DOSI_KEY = 'dosi_migration_v1_done';
+  if(ld(DOSI_KEY, false)) return;
+
+  const POOL_L = 10.52;
+  const dosiMap = {
+    langzeit_chlortabs: [
+      {name:'Wöchentlich (Skimmer/Dosierschwimmer)', amount:4, unit:'Stk', banHours:0, note:'4 Tabs (20g)/10.000L pro Woche im Skimmer. Primäre Grundchlorierung.'}
+    ],
+    chlortabs: [
+      {name:'Normalbetrieb', amount:3, unit:'Stk', banHours:0, note:'3 Schnell-Chlortabs (20g) bei normalem Bedarf.'},
+      {name:'Erhöhte Chlorung', amount:4, unit:'Stk', banHours:0, note:'4 Tabs bei höherem Bedarf, z.B. nach starker Nutzung.'}
+    ],
+    chlorplus: [
+      {name:'Schockchlorung', amount:184, unit:'g', banHours:8, note:'Ca. 175g/10m³. Filterpumpe laufen lassen. Nach 8h neu messen.'},
+      {name:'Stoßdosierung (moderat)', amount:132, unit:'g', banHours:8, note:'Ca. 125g/10m³ bei mäßig erhöhtem Bedarf.'}
+    ],
+    flockmittel: [
+      {name:'Kontinuierlich (wöchentlich)', amount:13, unit:'ml', banHours:0, note:'Ca. 12ml/10m³ wöchentlich bei laufender Filteranlage.'},
+      {name:'Stoßdosierung (einmalig)', amount:53, unit:'ml', banHours:0, note:'Ca. 50ml/10m³ bei starker Trübung. Filter mind. 24h.'}
+    ],
+    poolklar: [
+      {name:'Wöchentlich', amount:53, unit:'ml', banHours:2, note:'Ca. 50ml/10m³ wöchentlich. Filterpumpe mind. 2h.'},
+      {name:'Stoßdosierung', amount:105, unit:'ml', banHours:2, note:'Ca. 100ml/10m³ bei starker Trübung. Badepause 2h.'}
+    ],
+    algischutz: [
+      {name:'Grunddosierung', amount:105, unit:'ml', banHours:2, note:'Ca. 100ml/10m³ wöchentlich als Vorbeugung.'},
+      {name:'Stoßdosis (Algenbefall)', amount:263, unit:'ml', banHours:2, note:'Ca. 250ml/10m³ bei sichtbaren Algen. Badepause 2h.'}
+    ],
+    ph_minus: [
+      {name:'pH senken (pro 0,2 Einheiten)', amount:158, unit:'g', banHours:4, note:'Ca. 150g/10m³ senken pH um ~0,2. Vorlösen, verteilen. Badepause 4h, nachmessen.'}
+    ],
+    ph_plus: [
+      {name:'pH heben (pro 0,2 Einheiten)', amount:105, unit:'g', banHours:4, note:'Ca. 100g/10m³ heben pH um ~0,2. Vorlösen, verteilen. Badepause 4h, nachmessen.'}
+    ]
+  };
+
+  var changed = false;
+  poolProdukte.forEach(function(p){
+    if(!Array.isArray(p.dosierungen) || p.dosierungen.length === 0){
+      var dosen = dosiMap[p.poolId];
+      if(dosen){
+        p.dosierungen = JSON.parse(JSON.stringify(dosen));
+        changed = true;
+      } else {
+        if(!Array.isArray(p.dosierungen)) p.dosierungen = [];
+      }
+    }
+  });
+
+  if(changed){ saveProdukte(); }
+  sd(DOSI_KEY, true);
+  console.log('[Pool Manager] Dosierungs-Migration v1 abgeschlossen.');
+})();
+
 // ---- Render ----
 function renderProduktBoard(){
   const grid = document.getElementById('produkt-grid');
