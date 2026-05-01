@@ -1070,7 +1070,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 
 <!-- ===== MESSUNG ===== -->
 <div class="board" id="board-messung">
-  <div class="page-header"><h1>🧪 Messung</h1><p>Bestway 3,66m | ~10,5 m³ | 🔬 GIDIGI 7-in-1: pH · mV (ORP) · FAC (freies Chlor) · TDS · EC · Temp · Salzgehalt</p><p style="opacity:0.75;font-size:0.8rem;margin-top:2px">Fallback: Teststäbchen (pH · Chlor) – ohne ORP und TDS</p></div>
+  <div class="page-header"><h1>🧪 Messung</h1><p>Bestway 3,66m | ~10,5 m³ | 🔬 GIDIGI 7-in-1: pH · ORP (mV) · FAC / Chlor (ppm) · TDS (ppm) · Temp °C</p><p style="opacity:0.75;font-size:0.8rem;margin-top:2px">Fallback: Teststäbchen (pH · Chlor) – ohne ORP/TDS/FAC</p></div>
   <div class="card">
     <div class="card-title">Neue Messung</div>
     <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px">Letzte Werte angezeigt – mit +/− anpassen oder direkt eingeben. Nur ausgefüllte Felder werden gespeichert.</p>
@@ -1104,7 +1104,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <div id="ph-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
       <div class="form-group">
-        <label class="form-label" id="chlor-label">🟡 Chlor / FAC mg/l</label>
+        <label class="form-label" id="chlor-label">🟡 Chlor / FAC ppm</label>
         <div style="display:flex;align-items:center;gap:6px">
           <button class="spin-btn" onclick="adjustInput('input-chlor',-0.1,1)">−</button>
           <input type="number" id="input-chlor" step="0.1" min="0" max="10" style="text-align:center">
@@ -1131,7 +1131,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <div id="orp-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
       <div class="form-group">
-        <label class="form-label" id="tds-label">💧 Wasserbelastung (TDS) mg/l <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
+        <label class="form-label" id="tds-label">💧 Wasserbelastung (TDS) ppm <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
           <button class="spin-btn" onclick="adjustInput('input-tds',-50,0)">−</button>
           <input type="number" id="input-tds" step="50" min="0" max="5000" style="text-align:center" placeholder="z.B. 800">
@@ -1273,9 +1273,9 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <button class="tab-btn" onclick="setChartRange('season')" id="chart-tab-all">Saison</button>
   </div>
   <div class="card"><div class="card-title">🔵 pH-Wert</div><div class="chart-container"><canvas id="chart-ph"></canvas></div></div>
-  <div class="card"><div class="card-title">🟡 Chlor / FAC mg/l</div><div class="chart-container"><canvas id="chart-chlor"></canvas></div></div>
+  <div class="card"><div class="card-title">🟡 Chlor / FAC ppm</div><div class="chart-container"><canvas id="chart-chlor"></canvas></div></div>
   <div class="card"><div class="card-title">⚡ Desinfektionskraft (ORP) mV</div><div class="chart-container"><canvas id="chart-orp"></canvas></div></div>
-  <div class="card"><div class="card-title">💧 Wasserbelastung (TDS) mg/l</div><div class="chart-container"><canvas id="chart-tds"></canvas></div></div>
+  <div class="card"><div class="card-title">💧 Wasserbelastung (TDS) ppm</div><div class="chart-container"><canvas id="chart-tds"></canvas></div></div>
   <div class="card"><div class="card-title">🌡️ Temperatur °C</div><div class="chart-container"><canvas id="chart-temp"></canvas></div></div>
   <div class="card"><div class="card-title" style="color:#92400e">🟤 Filterdruck Bar</div><div class="chart-container"><canvas id="chart-druck"></canvas></div></div>
 </div>
@@ -1563,7 +1563,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="form-group"><label class="form-label">Datum & Uhrzeit</label><input type="datetime-local" id="edit-time"></div>
     <div class="grid-2">
       <div class="form-group"><label class="form-label">pH</label><input type="number" id="edit-ph" step="0.1"></div>
-      <div class="form-group"><label class="form-label">Chlor mg/l</label><input type="number" id="edit-chlor" step="0.1"></div>
+      <div class="form-group"><label class="form-label">Chlor / FAC ppm</label><input type="number" id="edit-chlor" step="0.1"></div>
       <div class="form-group"><label class="form-label">Temp °C</label><input type="number" id="edit-temp" step="0.5"></div>
     </div>
     <div class="form-group"><label class="form-label">Notiz</label><input type="text" id="edit-note"></div>
@@ -1631,7 +1631,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:14px">Die Wartezeit ist abgelaufen. Jetzt messen und Werte eintragen:</p>
     <div class="grid-2">
       <div class="form-group"><label class="form-label">pH</label><input type="number" id="timer-input-ph" step="0.1"></div>
-      <div class="form-group"><label class="form-label">Chlor mg/l</label><input type="number" id="timer-input-chlor" step="0.1"></div>
+      <div class="form-group"><label class="form-label">Chlor / FAC ppm</label><input type="number" id="timer-input-chlor" step="0.1"></div>
       <div class="form-group"><label class="form-label">Temp °C</label><input type="number" id="timer-input-temp" step="0.5"></div>
     </div>
     <input type="hidden" id="timer-measure-id">
@@ -1777,16 +1777,18 @@ function sd(k,v){try{localStorage.setItem(STORAGE_PREFIX+k,JSON.stringify(v))}ca
 // Default settings
 const DEFAULT_SETTINGS = {
   ph:   {target:7.3, min:7.0,  max:7.6,  unit:''},
-  chlor:{target:2.0, min:1.0,  max:3.0,  unit:' mg/l'},
+  chlor:{target:2.0, min:1.0,  max:3.0,  unit:' ppm'},
   temp: {target:24,  min:18,   max:32,   unit:' °C'},
   orp:  {target:700, min:650,  max:750,  unit:' mV'},
-  tds:  {target:800, min:400,  max:1200, unit:' mg/l'},
+  tds:  {target:800, min:400,  max:1200, unit:' ppm'},
 };
 
 let measurements  = ld('measurements',[]);
 let ban           = ld('ban',null);
 let maintenanceTasks = ld('maintenance',defaultMaintenance());
 // Migration: ensure druck_check exists
+// Migration: Rename Teststäbchen task to GIDIGI
+(function(){var t=maintenanceTasks.find(function(x){return x.id==='test';});if(t&&t.name.indexOf('Teststäbchen')!==-1){t.name='Wasser testen (GIDIGI-Messgerät)';sd('maintenance',maintenanceTasks);}})();
 if(!maintenanceTasks.find(t=>t.id==='druck_check')){
   maintenanceTasks.push({id:'druck_check',name:'Sandfilter-Druck ablesen',interval:7,lastDone:null,cat:'filter'});
   sd('maintenance',maintenanceTasks);
@@ -1819,7 +1821,7 @@ let selProduct    = null;
 
 function defaultMaintenance(){
   return [
-    {id:'test',name:'Wassertest (Teststäbchen)',interval:2,lastDone:null,cat:'chemie'},
+    {id:'test',name:'Wasser testen (GIDIGI-Messgerät)',interval:2,lastDone:null,cat:'chemie'},
     {id:'chlor_tabs',name:'Chlortabs nachfüllen',interval:3,lastDone:null,cat:'chemie'},
     {id:'algischutz',name:'Algenschutz dosieren',interval:14,lastDone:null,cat:'chemie'},
     {id:'poolklar',name:'Poolklar zugeben',interval:7,lastDone:null,cat:'chemie'},
@@ -1886,13 +1888,14 @@ function renderEinstellungen(){
   const el=document.getElementById('settings-targets');if(!el)return;
   const params=[
     {key:'ph',     label:'🔵 pH-Wert',   unit:'',    desc:'medi pool: 7,0 – 7,6 | Ziel 7,3'},
-    {key:'chlor',  label:'🟡 Chlor/FAC', unit:'mg/l',desc:'medi pool: 1,0 – 3,0 mg/l | Ziel 2,0'},
+    {key:'chlor',  label:'🟡 Chlor/FAC', unit:'ppm', desc:'medi pool: 1,0 – 3,0 ppm | Ziel 2,0'},
     {key:'temp',   label:'🌡 Temperatur',unit:'°C',  desc:'Wassertemperatur-Komfortbereich'},
     {key:'orp',    label:'⚡ ORP (Desinfektionskraft)',unit:'mV', desc:'Idealbereich: 650–750 mV | Ziel 700 mV'},
-    {key:'tds',    label:'💧 TDS (Wasserbelastung)',  unit:'mg/l',desc:'Ziel ~800 mg/l | max 1200 mg/l'},
+    {key:'tds',    label:'💧 TDS (Wasserbelastung)',  unit:'ppm', desc:'Ziel ~800 ppm | max 1200 ppm'},
   ];
   const rows=params.map(function(p){
     const s=settings[p.key];
+    if(!s||s.target===undefined)return '';
     const u=p.unit?(' ('+p.unit+')'):'';
     const wrap='background:var(--pool-surface);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px;border:1px solid var(--border)';
     const hdr='<div style="font-weight:800;font-size:1rem;color:var(--text-primary)">'+p.label+u+'</div>'
@@ -1919,7 +1922,7 @@ function renderEinstellungen(){
   el.innerHTML=rows.join('');
   const last=getLastMeasurement();
   var measStr=last
-    ?('pH: '+(last.ph!==undefined?last.ph:'–')+' | Chlor: '+(last.chlor!==undefined?last.chlor:'–')+' mg/l | ORP: '+(last.orp!==undefined?last.orp:'–')+' mV | TDS: '+(last.tds!==undefined?last.tds:'–')+' mg/l')
+    ?('pH: '+(last.ph!==undefined?last.ph:'–')+' | FAC: '+(last.chlor!==undefined?last.chlor:'–')+' ppm | ORP: '+(last.orp!==undefined?last.orp:'–')+' mV | TDS: '+(last.tds!==undefined?last.tds:'–')+' ppm')
     :'Noch keine Messung';
   document.getElementById('settings-current-vals').innerHTML=
     '<p style="font-weight:700;margin-bottom:4px">Letzte Messung</p>'
@@ -2036,7 +2039,9 @@ function openBanEdit(){
   document.getElementById('ban-confirm-until').value=u.toISOString().slice(0,16);
   document.getElementById('ban-confirm-reason').value=ban.reason||'';
   document.getElementById('ban-confirm-taskid').value='__edit__';
-  document.getElementById('ban-confirm-text').innerHTML='<div style="background:#fffbeb;border-radius:8px;padding:10px;border-left:4px solid #f59e0b"><strong>Badeverbot bearbeiten</strong> – Zeitpunkt und Grund können angepasst werden.</div>';
+  document.getElementById('ban-confirm-text').innerHTML='<div style="background:#fffbeb;border-radius:8px;padding:10px;border-left:4px solid #f59e0b"><strong>✏️ Badeverbot bearbeiten</strong> – Zeitpunkt und Grund können angepasst werden.</div>';
+  // Bearbeitungs-Modus: Felder einblenden
+  document.getElementById('ban-confirm-fields').style.display='';
   document.getElementById('modal-ban-confirm').classList.add('open');
 }
 
@@ -2480,7 +2485,7 @@ function getTaskDoseHint(taskId){
     'druck_check':'→ Manometer ablesen: &lt; 0,56 Bar normal | ≥ 0,56 Bar = Rückspülen!',
     'boden_saug':'→ Bodensauger am Skimmer anschließen',
     'abdeckung':'→ Plane abwaschen & auf Risse prüfen',
-    'test':'→ Teststäbchen 2 Sek. ins Wasser, 10 Sek. warten',
+    'test':'→ GIDIGI-Messgerät: pH, ORP, FAC, TDS ablesen und eintragen',
   };
   return hints[taskId]||'';
 }
@@ -2598,10 +2603,13 @@ function confirmTask(){
     document.getElementById('ban-confirm-reason').value=banInfo.name+' angewendet';
     document.getElementById('ban-confirm-taskid').value='__done__';
     document.getElementById('ban-confirm-text').innerHTML=
-      `<div style="background:#fff1f2;border-radius:8px;padding:10px;border-left:4px solid #ef4444">
-        <strong>⚠️ Nach ${banInfo.name} wird ein Badeverbot von ${banInfo.hours}h empfohlen.</strong><br>
-        Bitte bestätige das Verbot oder passe Dauer und Grund an.
+      `<div style="background:#fff1f2;border-radius:8px;padding:12px;border-left:4px solid #ef4444">
+        <strong style="font-size:1rem">🚫 Badeverbot empfohlen</strong><br>
+        <div style="margin-top:6px;font-size:0.88rem">Nach <strong>${banInfo.name}</strong> wird ein Badeverbot von <strong>${banInfo.hours} Stunden</strong> gesetzt.</div>
+        <div style="margin-top:4px;font-size:0.82rem;color:#92400e">Freigabe: ${until.toLocaleString('de-DE')}</div>
       </div>`;
+    // Dosierungs-Modus: Felder ausblenden (kein Bearbeiten erlaubt)
+    document.getElementById('ban-confirm-fields').style.display='none';
     document.getElementById('modal-ban-confirm').classList.add('open');
   }
   renderDashboard();
@@ -2614,14 +2622,19 @@ let _banConfirmCallback=null;
 function confirmBanAndProceed(){
   const until=document.getElementById('ban-confirm-until').value;
   const reason=document.getElementById('ban-confirm-reason').value||'Badeverbot';
+  const isEdit=document.getElementById('ban-confirm-taskid').value==='__edit__';
   if(!until){if(typeof toast==='function')toast('Bitte Freigabe-Zeitpunkt angeben','warn',2500);return;}
   const newBan={until,reason,setAt:new Date().toISOString()};
-  if(setOrKeepLongerBan(newBan)){
+  if(isEdit){
+    // Edit mode: always force-set ban regardless of duration
+    ban=newBan; sd('ban',ban);
+    logHistory({type:'ban',time:new Date().toISOString(),note:'✏️ Badeverbot geändert: '+reason+' bis '+new Date(until).toLocaleString('de-DE')});
+    if(typeof toast==='function')toast('✏️ Badeverbot geändert bis '+new Date(until).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),'info',4000);
+  } else if(setOrKeepLongerBan(newBan)){
     logHistory({type:'ban',time:new Date().toISOString(),note:'🚫 Badeverbot: '+reason+' bis '+new Date(until).toLocaleString('de-DE')});
     if(typeof toast==='function')toast('🚫 Badeverbot gesetzt bis '+new Date(until).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),'warn',4000);
-    renderBanBanner('ban-banner-main');
-    renderBanBanner('ban-banner-frau');
   }
+  renderBanBanner('ban-banner-main');renderBanBanner('ban-banner-frau');renderBanBanner('ipad-ban-banner');
   closeModal('modal-ban-confirm');
   renderDashboard();
   if(typeof _banConfirmCallback==='function'){_banConfirmCallback();_banConfirmCallback=null;}
@@ -2724,12 +2737,16 @@ async function renderIphone(){
     const ago=timeAgo(last.time);
     const params=[{key:'ph',label:'pH',unit:''},{key:'chlor',label:'Chlor / FAC',unit:' mg/l'},{key:'orp',label:'ORP',unit:' mV'},{key:'tds',label:'TDS',unit:' mg/l'},{key:'temp',label:'Temp',unit:' °C'}];
     vEl.innerHTML=`<div style="font-size:0.73rem;color:var(--text-muted);margin-bottom:7px">Gemessen ${ago}</div>`+
-    params.filter(p=>last[p.key]!==undefined).map(p=>{
+    params.map(p=>{
       const s=settings[p.key];const v=last[p.key];
+      if(v===undefined||v===null){
+        return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9;opacity:0.45"><span style="font-weight:700;font-size:0.88rem">${p.label}</span><span style="font-size:0.82rem;color:var(--text-muted)">–</span></div>`;
+      }
       let col,icon;
       if(p.key==='temp'){col=tempColor(v,s);icon='';}
       else{const vi=getValueIcon(v,s);col=vi.col;icon=vi.icon;}
-      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f1f5f9"><span style="font-weight:700;font-size:0.95rem">${p.label}</span><span style="font-weight:900;color:${col};font-size:0.95rem">${v.toFixed(1)}${p.unit} ${icon}</span></div>`;
+      const valStr=p.key==='orp'||p.key==='tds'?Math.round(v).toString():v.toFixed(1);
+      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9"><span style="font-weight:700;font-size:0.88rem">${p.label}</span><span style="font-weight:900;color:${col};font-size:0.88rem">${valStr}${p.unit} ${icon}</span></div>`;
     }).join('');
   }
   // Timer Todos
@@ -2917,26 +2934,36 @@ async function renderIpad(){
     const ago=timeAgo(last.time);
     const params=[
       {key:'ph',label:'pH',unit:'',isTemp:false},
-      {key:'chlor',label:'Chlor',unit:' mg/l',isTemp:false},
+      {key:'chlor',label:'Chlor / FAC',unit:' mg/l',isTemp:false},
+      {key:'orp',label:'ORP',unit:' mV',isTemp:false},
+      {key:'tds',label:'TDS',unit:' mg/l',isTemp:false},
       {key:'temp',label:'Temp',unit:' °C',isTemp:true},
     ];
     const recent=measurements.slice(-10);
     let rows='<div style="font-size:0.73rem;color:var(--text-muted);margin-bottom:8px">Gemessen '+ago+'</div>';
-    params.filter(p=>last[p.key]!==undefined).forEach(function(p){
+    params.forEach(function(p){
       const s=settings[p.key];const v=last[p.key];
+      if(v===undefined||v===null){
+        rows+='<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9;opacity:0.4">'
+          +'<span style="font-weight:700;font-size:0.88rem;min-width:80px">'+p.label+'</span>'
+          +'<span style="flex:1;text-align:right;font-size:0.82rem;color:var(--text-muted)">–</span>'
+          +'</div>';
+        return;
+      }
       let col,icon;
       if(p.isTemp){col=tempColor(v,s);icon='';}
       else{const vi=getValueIcon(v,s);col=vi.col;icon=vi.icon;}
       const sparkId='ipad-spark-'+p.key;
+      const valStr=p.key==='orp'||p.key==='tds'?Math.round(v).toString():v.toFixed(1);
       const prevVal=measurements.slice(0,-1).filter(function(m){return m[p.key]!==undefined;}).slice(-1)[0]?.[p.key];
       let trend='';
       if(prevVal!==undefined){const d=v-prevVal;if(Math.abs(d)>=0.05)trend='<span style="font-size:0.72rem;font-weight:800;color:'+(Math.abs(d)<0.2?'#94a3b8':d>0?'#ef4444':'#3b82f6')+'">'+(d>0?'↑':'↓')+Math.abs(d).toFixed(1)+'</span>';}
-      rows+='<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid #f1f5f9">'
-        +'<span style="font-weight:700;font-size:0.95rem;min-width:62px">'+p.label+'</span>'
+      rows+='<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9">'
+        +'<span style="font-weight:700;font-size:0.88rem;min-width:62px">'+p.label+'</span>'
         +'<canvas id="'+sparkId+'" width="64" height="22" style="opacity:0.85;flex-shrink:0"></canvas>'
         +'<div style="display:flex;align-items:center;gap:5px;min-width:100px;justify-content:flex-end">'
         +trend
-        +'<span style="font-weight:900;font-size:1rem;color:'+col+'">'+v.toFixed(1)+p.unit+'</span>'
+        +'<span style="font-weight:900;font-size:0.92rem;color:'+col+'">'+valStr+p.unit+'</span>'
         +'<span style="font-size:0.78rem">'+icon+'</span>'
         +'</div></div>';
     });
@@ -3434,8 +3461,8 @@ const PRODUCTS={
     instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Im Eimer verdünnen</li><li>Entlang Beckenrand eingießen</li><li>Alle 14 Tage: 100ml/10m³</li></ol>`},
   langzeittabs:{name:'Langzeit-Chlortabs 20g (primär)',
     fields:[
-      {id:'current_chlor',label:'Aktueller Chlorwert (mg/l) – vom Messgerät FAC',type:'number',step:0.1},
-      {id:'days_since',label:'Tage seit letzter Befüllung',type:'number',step:1}
+      {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC) – GIDIGI Messgerät',type:'number',step:0.1},
+      {id:'days_since',label:'Tage seit letzter Chlor-Befüllung',type:'number',step:1,autoFill:'chlor_days'}
     ],
     calc(v){
       const cur=parseFloat(v.current_chlor);
@@ -3454,7 +3481,7 @@ const PRODUCTS={
     instr:`<div style="background:#f0fdf4;padding:10px;border-radius:8px;border-left:4px solid #16a34a;margin-bottom:10px"><strong style="color:#166534">✅ Primäre Chlorierungsmethode</strong><br><span style="font-size:0.82rem">Über Skimmer oder Dosierschwimmer – langsam löslich über mehrere Tage</span></div><ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Tabs in <strong>Skimmer</strong> oder Dosierschwimmer legen</li><li>Wöchentlich prüfen und ggf. nachfüllen</li><li>Bei Bedarf mit Schnelltabs ergänzen</li><li>Niemals mit anderen Chlormitteln mischen!</li><li>Tabs sind 20g – langsam löslich</li></ol>`},
   schnellchlor:{name:'Schnell-Chlortabs 20g (Ergänzung)',
     fields:[
-      {id:'current_chlor',label:'Aktueller Chlorwert (mg/l) – FAC Messgerät',type:'number',step:0.1},
+      {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC) – GIDIGI Messgerät',type:'number',step:0.1},
     ],
     calc(v){
       const cur=parseFloat(v.current_chlor);
@@ -3470,7 +3497,7 @@ const PRODUCTS={
   mischdosi:{name:'🔀 Mischdosierung: Langzeit + Schnell',
     fields:[
       {id:'current_chlor',label:'Aktueller Chlorwert (mg/l) – FAC',type:'number',step:0.1},
-      {id:'days_since',label:'Tage seit letzter Dosierung',type:'number',step:1},
+      {id:'days_since',label:'Tage seit letzter Chlor-Dosierung',type:'number',step:1,autoFill:'chlor_days'},
     ],
     calc(v){
       const cur=parseFloat(v.current_chlor);
@@ -3519,9 +3546,15 @@ function selectProduct(key,card){
   const banH=BAN_H[key];
   let fHtml=banH>0?`<div style="background:#fff1f2;padding:9px;border-radius:8px;margin-bottom:10px;font-size:0.83rem;font-weight:700;color:#b91c1c">⚠️ Badeverbot ${banH}h nach Anwendung</div>`:'';
   p.fields.forEach(f=>{
-    fHtml+=`<div class="form-group"><label class="form-label">${f.label}</label>`;
-    if(f.type==='select')fHtml+=`<select id="dosi-${f.id}">${f.opts.map(o=>`<option>${o}</option>`).join('')}</select>`;
-    else fHtml+=`<input type="number" id="dosi-${f.id}" step="${f.step||1}">`;
+    fHtml+=`<div class="form-group"><label class="form-label">${f.label}`;
+    if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)fHtml+=` <span style="font-size:0.72rem;color:#16a34a;font-weight:700">(aus Verlauf: ${ad}d)</span>`;}
+    fHtml+=`</label>`;
+    if(f.type==='select'){fHtml+=`<select id="dosi-${f.id}">${f.opts.map(o=>`<option>${o}</option>`).join('')}</select>`;}
+    else{
+      let initVal='';
+      if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)initVal=ad;}
+      fHtml+=`<input type="number" id="dosi-${f.id}" step="${f.step||1}" value="${initVal}">`;
+    }
     fHtml+=`</div>`;
   });
   document.getElementById('dosi-content').innerHTML=`${fHtml}<button class="btn btn-primary btn-sm" onclick="calcDosage()">🧮 Berechnen</button><div id="dosi-result" style="margin-top:12px"></div>`;
@@ -3838,13 +3871,14 @@ function renderCharts(){
   drawChart('chart-orp',filtered,'orp','#8b5cf6',[s.orp.min,s.orp.max],s.orp.target,400,900);
   drawChart('chart-tds',filtered,'tds','#0ea5e9',null,s.tds.target,200,2000);
   drawChart('chart-temp',filtered,'temp','#10b981',null,s.temp.target,s.temp.min-2,s.temp.max+2);
-  drawChart('chart-druck',filtered,'druck','#92400e',[0,0.56],null,0,1.6);
+  // Filterdruck: alle Messungen (nicht Zeitraum-gefiltert – wird selten gemessen)
+  drawChart('chart-druck',measurements,'druck','#92400e',[0,0.56],null,0,1.6);
 }
 
 function drawChart(canvasId,data,key,color,range,target,yMin,yMax){
   const canvas=document.getElementById(canvasId);if(!canvas)return;
   const ctx=canvas.getContext('2d');
-  const W=canvas.parentElement.offsetWidth||900;const H=220;
+  const W=canvas.parentElement.offsetWidth||900;const H=160;
   canvas.width=W;canvas.height=H;ctx.clearRect(0,0,W,H);
   const pts=data.filter(m=>m[key]!==undefined);
   ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
@@ -4431,7 +4465,7 @@ function renderErklaerung(){
     </div>
   </div>
   <div class="erkl-section"><h2>⚙️ Zielwerte (einstellbar)</h2>
-    <p>Alle Zielwerte und Bereiche sind unter <strong>⚙️ Einstellungen</strong> individuell anpassbar. Die Teststäbchen-Bereiche laut medi pool:</p>
+    <p>Alle Zielwerte und Bereiche sind unter <strong>⚙️ Einstellungen</strong> individuell anpassbar. Empfohlene Bereiche für deinen Pool (gemessen mit GIDIGI 7-in-1):</p>
     <div class="example-data">
       <div class="example-row"><span>pH</span><span style="font-weight:700;color:#16a34a">7,0 – 7,6 | Ziel: 7,3</span></div>
       <div class="example-row"><span>Chlor</span><span style="font-weight:700;color:#16a34a">1,0 – 3,0 mg/l | Ziel: 2,0</span></div>
@@ -4844,6 +4878,41 @@ function estimateStockFromHistory(){
   alert('✅ Vorrat wurde aus der Dosierungshistorie geschätzt!');
 }
 
+
+// Estimate weekly usage of a stock item from history (last 4 weeks)
+function estimateWeeklyUsage(stockName){
+  try{
+    const hist=ld('history_v2',[]);
+    const now=new Date();
+    const cutoff=new Date(now-28*864e5);
+    const p=STOCK_PRODUCTS[stockName];if(!p)return 0;
+    const keyMap={
+      'Chlor Plus':['chlor plus','schockchlorung','chlorgranulat'],
+      'Schnell-Chlortabs':['schnell-chlortab','schnellchlor','chlortab'],
+      'pH-Minus':['ph-minus','ph minus','ph senken'],
+      'pH-Plus':['ph-plus','ph plus','ph heben'],
+      'Flockmittel':['flockmittel','floc'],
+      'Poolklar':['poolklar','pool klar'],
+      'Algenschutz':['algenschutz','algen'],
+      'Teststreifen':['teststreifen']
+    };
+    const keys=keyMap[stockName]||[stockName.toLowerCase()];
+    let total=0;
+    hist.forEach(function(e){
+      if(!e||!e.time)return;
+      const t=new Date(e.time);if(isNaN(t)||t<cutoff)return;
+      const note=(e.note||'').toLowerCase();
+      if(!keys.some(function(k){return note.includes(k);}))return;
+      const m=note.match(/(\d+(?:\.\d+)?)\s*(g|ml|stk|l|kg)/i);
+      if(m){
+        let amt=parseFloat(m[1]);const u=m[2].toLowerCase();
+        if(u==='kg')amt*=1000;if(u==='l'&&p.unit==='ml')amt*=1000;
+        total+=amt;
+      } else { total+=p.perUse||0; }
+    });
+    return total/4;
+  }catch(e){return 0;}
+}
 function renderStockDashboard(){
   const el=document.getElementById('dash-stock');if(!el)return;
   // Build a map of stockName → poolProdukt for image & amazon lookup
@@ -4858,11 +4927,17 @@ function renderStockDashboard(){
     const prod=pid&&typeof poolProdukte!=='undefined'?poolProdukte.find(x=>x.poolId===pid):null;
     const imgHtml=prod&&prod.img?`<img class="stock-item-img" src="${prod.img}" alt="${name}">`:`<div class="stock-item-img-placeholder">🧪</div>`;
     const buyBtn=prod&&prod.amazon&&pct<50?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
+    const wkUsage=estimateWeeklyUsage(name);
+    let reichHtml='';
+    if(wkUsage>0&&s.qty>0){const days=Math.round((s.qty/wkUsage)*7);const rc=days<7?'#dc2626':days<21?'#d97706':'#16a34a';reichHtml=`<div style="font-size:0.65rem;color:${rc};font-weight:800;white-space:nowrap">~${days}d</div>`;}
     return`<div class="stock-item" style="overflow:hidden">
       ${imgHtml}
       <div style="font-size:0.8rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">${name}${warn}</div>
       <div class="stock-bar-wrap" style="flex:2;min-width:40px"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>
-      <div style="font-weight:800;font-size:0.78rem;width:52px;flex-shrink:0;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;width:56px">
+        <div style="font-weight:800;font-size:0.78rem;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
+        ${reichHtml}
+      </div>
       ${buyBtn}
     </div>`;
   }).join('');
@@ -4935,7 +5010,7 @@ function closeFab(){
 // ----- SCHNELL-MESSUNG -----
 const QMESS_PARAMS=[
   {key:'ph',    label:'🔵 pH',          step:0.5, dec:1, min:0,  max:14},
-  {key:'chlor', label:'🟡 Chlor mg/l',  step:0.5, dec:1, min:0,  max:20},
+  {key:'chlor', label:'🟡 FAC / Chlor ppm', step:0.5, dec:1, min:0, max:20},
   {key:'temp',  label:'🌡️ Temp °C',     step:0.5, dec:1, min:0,  max:50},
   {key:'druck', label:'🟤 Filterdruck Bar',step:0.01,dec:2,min:0,max:3},
 ];
@@ -5146,7 +5221,7 @@ function renderMesswerteCardEnhanced(targetId, metaId){
 
   // 4 gauges: pH, Chlor/FAC, ORP, TDS
   function gaugeHtml(key, label, unit, val, sett){
-    if(val===undefined||val===null)return`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;opacity:0.5"><span style="font-weight:700;font-size:0.85rem">${label}</span><span style="font-size:0.82rem;color:var(--text-muted)">– noch nicht gemessen –</span></div>`;
+    if(val===undefined||val===null)return`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f1f5f9;opacity:0.4"><span style="font-weight:600;font-size:0.82rem">${label}</span><span style="font-size:0.78rem;color:var(--text-muted)">noch nicht gemessen</span></div>`;
     const s=sett;
     const range=s.max-s.min;
     // Position within extended range (show target centered)
@@ -8937,13 +9012,15 @@ function loadProduktImage(poolId, input){
   <div class="modal" style="max-width:400px">
     <div class="modal-title" style="color:#dc2626">🚫 Badeverbot bestätigen</div>
     <div id="ban-confirm-text" style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:16px;line-height:1.6"></div>
-    <div class="form-group">
-      <label class="form-label">Badeverbot bis (anpassbar)</label>
-      <input type="datetime-local" id="ban-confirm-until">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Grund</label>
-      <input type="text" id="ban-confirm-reason" placeholder="Grund des Badeverbots">
+    <div id="ban-confirm-fields">
+      <div class="form-group">
+        <label class="form-label">Badeverbot bis (anpassbar)</label>
+        <input type="datetime-local" id="ban-confirm-until">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Grund</label>
+        <input type="text" id="ban-confirm-reason" placeholder="Grund des Badeverbots">
+      </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="btn btn-danger" style="flex:1" onclick="confirmBanAndProceed()">🚫 Badeverbot setzen & bestätigen</button>
