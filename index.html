@@ -8762,7 +8762,7 @@ function exportProduktJSON(){
 // Reverse map: poolId → stock key
 function getStockKeyForPool(poolId){
   const map={'ph_minus':'pH-Minus','ph_plus':'pH-Plus','chlortabs':'Schnell-Chlortabs',
-    'langzeit_chlortabs':'Schnell-Chlortabs','chlorplus':'Chlor Plus','algischutz':'Algenschutz',
+    'langzeit_chlortabs':'Langzeit-Chlortabs','chlorplus':'Chlor Plus','algischutz':'Algenschutz',
     'flockmittel':'Flockmittel','poolklar':'Poolklar','teststreifen':'Teststreifen'};
   return map[poolId]||null;
 }
@@ -8869,6 +8869,9 @@ function saveProduktStock(poolId,stockKey){
   if(!chemStock[stockKey])chemStock[stockKey]={qty:0,pkgSize:1000};
   chemStock[stockKey].qty=Math.max(0,qty);
   sd('chem_stock_v2',chemStock);
+  // Explicitly confirm saved value back into input
+  const _inp=document.getElementById('pd-stock-qty-'+poolId);
+  if(_inp)_inp.value=chemStock[stockKey].qty;
   renderStockDashboard();
   if(typeof toast==='function')toast('📦 Vorrat aktualisiert','success',2000);
 }
@@ -9105,8 +9108,19 @@ function saveProduktDetail(poolId){
   p.datenblatt = document.getElementById('datenblatt-input-'+poolId)?.value.trim() || '';
   p.amazon = document.getElementById('pd-amazon-'+poolId)?.value.trim() || '';
   // Dosierungen werden nicht mehr über DOM gespeichert (read-only)
+  // Vorrat aus Eingabefeld speichern (falls geändert)
+  const _stockKey=getStockKeyForPool(poolId);
+  if(_stockKey){
+    const _qty=parseFloat(document.getElementById('pd-stock-qty-'+poolId)?.value);
+    if(!isNaN(_qty)){
+      if(!chemStock[_stockKey])chemStock[_stockKey]={qty:0,pkgSize:1000};
+      chemStock[_stockKey].qty=Math.max(0,_qty);
+      sd('chem_stock_v2',chemStock);
+    }
+  }
   saveProdukte();
   renderProduktBoard();
+  renderStockDashboard&&renderStockDashboard();
   closeModal('modal-produkt-detail');
   if(typeof toast==='function') toast('💾 Produkt gespeichert','success',2500);
 }
