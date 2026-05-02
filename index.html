@@ -33,7 +33,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{overflow-x:hidden;max-width:100%}
 body{font-family:Nunito Sans,sans-serif;background:linear-gradient(135deg,#e0f2fe 0%,#f0f9ff 60%,#ecfdf5 100%);min-height:100vh;color:var(--text-primary)}
-.app-nav{background:var(--nav-bg);position:fixed;top:0;left:0;right:0;z-index:100;height:56px;box-shadow:0 2px 12px rgba(0,0,0,0.25);display:flex;align-items:center;padding:0 12px;gap:4px}
+.app-nav{background:var(--nav-bg);position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;box-shadow:0 2px 12px rgba(0,0,0,0.25);display:flex;align-items:center;padding:0 12px;gap:4px}
 .nav-logo{font-family:Nunito,sans-serif;font-weight:900;font-size:1.1rem;color:white;white-space:nowrap;margin-right:8px;padding-right:12px;border-right:1px solid rgba(255,255,255,0.2);flex-shrink:0}
 .nav-desktop{display:flex;align-items:center;gap:2px;overflow-x:auto;flex:1;scrollbar-width:none}
 .nav-desktop::-webkit-scrollbar{display:none}
@@ -127,6 +127,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .maint-item.due-maint{background:#fffbeb}
 /* Charts */
 .chart-container{position:relative;margin-top:10px;width:100%}
+#wetter-board{isolation:isolate}
+#radar-map{position:relative!important}
+.leaflet-pane{z-index:1!important}
+.leaflet-top,.leaflet-bottom{z-index:2!important}
 .chart-container canvas{width:100%!important}
 /* History */
 .history-row{display:grid;grid-template-columns:24px 120px 48px 60px 58px 50px 1fr auto;gap:4px;align-items:center;padding:7px 8px;border-radius:8px;font-size:0.78rem;min-width:0}
@@ -902,7 +906,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="card">
       <div class="card-title" style="justify-content:space-between">
         <span>📦 Vorrat</span>
-        <button class="btn btn-outline btn-sm" onclick="openStockModal()">✏️ Bearbeiten</button>
+        
         <button class="btn btn-outline btn-sm" onclick="exportChemikalienReminders()">🛒 Nachkaufen-Liste</button>
         <button class="btn btn-outline btn-sm" onclick="showBoard('produkte')" style="color:var(--pool-blue)">📦 Alle Produkte</button>
       </div>
@@ -2291,6 +2295,7 @@ async function renderDashboard(){
 }
 
 function getValueIcon(v, s){
+  if(!s||s.min===undefined||s.max===undefined)return{col:'#94a3b8',icon:''};
   const range=s.max-s.min;
   const nearBand=range*0.15;
   if(v<s.min)return{col:'#dc2626',icon:'⚠️ ↓'};
@@ -2301,6 +2306,7 @@ function getValueIcon(v, s){
 }
 
 function tempColor(v,s){
+  if(!s||s.min===undefined||s.max===undefined)return'#64748b';
   // Blue below min, red above max, gradient in between
   if(v<=s.min)return'#3b82f6';
   if(v>=s.max)return'#dc2626';
@@ -2717,7 +2723,7 @@ async function renderIphone(){
     const params=[{key:'ph',label:'pH',unit:''},{key:'chlor',label:'Chlor / FAC',unit:' ppm'},{key:'orp',label:'ORP',unit:' mV'},{key:'tds',label:'TDS',unit:' ppm'},{key:'temp',label:'Temp',unit:' °C'}];
     vEl.innerHTML=`<div style="font-size:0.73rem;color:var(--text-muted);margin-bottom:7px">Gemessen ${ago}</div>`+
     params.map(p=>{
-      const s=settings[p.key];const v=last[p.key];
+      const s=settings[p.key]||DEFAULT_SETTINGS[p.key]||{min:0,max:100,target:50};const v=last[p.key];
       if(v===undefined||v===null){
         return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9;opacity:0.45"><span style="font-weight:700;font-size:0.88rem">${p.label}</span><span style="font-size:0.82rem;color:var(--text-muted)">–</span></div>`;
       }
@@ -2921,7 +2927,7 @@ async function renderIpad(){
     const recent=measurements.slice(-10);
     let rows='<div style="font-size:0.73rem;color:var(--text-muted);margin-bottom:8px">Gemessen '+ago+'</div>';
     params.forEach(function(p){
-      const s=settings[p.key];const v=last[p.key];
+      const s=settings[p.key]||DEFAULT_SETTINGS[p.key]||{min:0,max:100,target:50};const v=last[p.key];
       if(v===undefined||v===null){
         rows+='<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9;opacity:0.4">'
           +'<span style="font-weight:700;font-size:0.88rem;min-width:80px">'+p.label+'</span>'
@@ -3424,7 +3430,7 @@ const PRODUCTS={
     calc(v){const s=v.mode==='Stoßbehandlung';const t=Math.round((s?5:3)*POOL_VOLUME/10);return{amount:`${t} Tabs à 20g = ${t*20}g`,note:'In Skimmer oder Überlauf'}},
     instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 einstellen</li><li>Tabs in <strong>Skimmer</strong></li><li>Filter laufen lassen</li><li>Nie mit anderen Chemikalien mischen!</li></ol>`},
   chlorplus:{name:'Chlor Plus – Schockchlorung',
-    fields:[{id:'current_chlor',label:'Aktueller Chlorwert (mg/l)',type:'number',step:0.1}],
+    fields:[{id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC)',type:'number',step:0.1}],
     calc(){return{amount:`${Math.round(175*POOL_VOLUME/10)}g Chlor Plus`,note:'⚠️ Badeverbot 8h! Danach messen.'}},
     instr:`<div style="background:#fff1f2;padding:10px;border-radius:8px;border-left:4px solid #ef4444;margin-bottom:10px"><strong style="color:#b91c1c">⚠️ Badeverbot 8 Stunden!</strong></div><ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH auf 7,0–7,6</li><li>Granulat im <strong>Eimer mit Wasser auflösen</strong></li><li>Filter einschalten</li><li>Lösung entlang Beckenrand eingießen</li><li>NIE mit anderen Chlorprodukten mischen → Explosion!</li><li>Abends dosieren (UV baut Chlor ab)</li><li>Filter mind. 8h laufen</li></ol>`},
   flockmittel:{name:'Flockmittel Flüssig',
@@ -3475,7 +3481,7 @@ const PRODUCTS={
     instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Nur zur <strong>Ergänzung</strong> wenn Langzeit-Tabs nicht reichen</li><li>In Skimmer legen</li><li>Filter mind. 2h laufen lassen</li><li>Nach 2-4h erneut messen</li></ol>`},
   mischdosi:{name:'🔀 Mischdosierung: Langzeit + Schnell',
     fields:[
-      {id:'current_chlor',label:'Aktueller Chlorwert (mg/l) – FAC',type:'number',step:0.1},
+      {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC) – FAC',type:'number',step:0.1},
       {id:'days_since',label:'Tage seit letzter Chlor-Dosierung',type:'number',step:1,autoFill:'chlor_days'},
     ],
     calc(v){
@@ -3859,8 +3865,13 @@ function drawChart(canvasId,data,key,color,range,target,yMin,yMax){
   const ctx=canvas.getContext('2d');
   const W=canvas.parentElement.offsetWidth||900;const H=160;
   canvas.width=W;canvas.height=H;ctx.clearRect(0,0,W,H);
-  const pts=data.filter(m=>m[key]!==undefined);
+  const pts=data.filter(m=>m[key]!==undefined&&m[key]!==null);
   ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
+  if(!pts.length){
+    ctx.fillStyle='#94a3b8';ctx.font='13px sans-serif';ctx.textAlign='center';
+    ctx.fillText('Noch keine Messdaten für diesen Wert',W/2,H/2);
+    return;
+  }
   const P={t:16,r:20,b:36,l:46};const cW=W-P.l-P.r,cH=H-P.t-P.b;
   // Grid
   for(let i=0;i<=4;i++){
@@ -5210,6 +5221,7 @@ function renderMesswerteCardEnhanced(targetId, metaId){
   function gaugeHtml(key, label, unit, val, sett){
     if(val===undefined||val===null)return`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f1f5f9;opacity:0.4"><span style="font-weight:600;font-size:0.82rem">${label}</span><span style="font-size:0.78rem;color:var(--text-muted)">noch nicht gemessen</span></div>`;
     const s=sett;
+    if(!s||s.min===undefined||s.max===undefined)return`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9;opacity:0.4"><span style="font-weight:600;font-size:0.82rem">${label}</span><span style="font-size:0.78rem;color:var(--text-muted)">–</span></div>`;
     const range=s.max-s.min;
     // Position within extended range (show target centered)
     const extMin=s.min-(range*0.3);
@@ -6107,7 +6119,7 @@ function runMigrations(){
 // ============================================================
 // PLAUSIBILITY CHECK
 // ============================================================
-const PLAUSIBLE={ph:{min:5,max:9,label:'pH'},chlor:{min:0,max:12,label:'Chlor (mg/l)'},temp:{min:0,max:45,label:'Temp (°C)'},druck:{min:0,max:3,label:'Druck (Bar)'}};
+const PLAUSIBLE={ph:{min:5,max:9,label:'pH'},chlor:{min:0,max:12,label:'Chlor (ppm)'},temp:{min:0,max:45,label:'Temp (°C)'},druck:{min:0,max:3,label:'Druck (Bar)'}};
 function checkPlausibility(entry){
   const bad=[];
   Object.keys(entry).forEach(function(k){
