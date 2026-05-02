@@ -701,7 +701,6 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div id="qmess-rows"></div>
     <div class="form-group" style="margin-top:6px"><label class="form-label">Notiz (optional)</label><input type="text" id="qmess-note" placeholder="z.B. nach Rückspülen"></div>
     <div style="margin-bottom:10px">
-      <button type="button" class="btn btn-outline btn-sm" onclick="openPhotoCaptureQMess()">📸 Foto hinzufügen</button>
       <div id="qmess-photo-preview" style="margin-top:8px"></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:4px">
@@ -1070,30 +1069,28 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 
 <!-- ===== MESSUNG ===== -->
 <div class="board" id="board-messung">
-  <div class="page-header"><h1>🧪 Messung</h1><p>Bestway 3,66m | ~10,5 m³ | 🔬 GIDIGI 7-in-1: pH · ORP (mV) · FAC / Chlor (ppm) · TDS (ppm) · Temp °C</p><p style="opacity:0.75;font-size:0.8rem;margin-top:2px">Fallback: Teststäbchen (pH · Chlor) – ohne ORP/TDS/FAC</p></div>
+  <div class="page-header"><h1>🧪 Messung</h1><p>Bestway 3,66m | ~10,5 m³ | 🔬 GIDIGI 7-in-1: pH · ORP (mV) · FAC / Chlor (ppm) · TDS (ppm) · Temp °C</p></div>
   <div class="card">
     <div class="card-title">Neue Messung</div>
     <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px">Letzte Werte angezeigt – mit +/− anpassen oder direkt eingeben. Nur ausgefüllte Felder werden gespeichert.</p>
-    <!-- Foto-Aufnahme für Teststreifen (gesamtes Set) -->
-    <div class="card" style="background:var(--pool-surface);margin-bottom:14px;padding:12px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span style="font-weight:800;font-size:0.88rem">📸 Belegfotos (optional)</span>
-        <button type="button" class="btn btn-outline btn-sm" onclick="openPhotoCapture('teststreifen')">🧪 Teststreifen</button>
-        <button type="button" class="btn btn-outline btn-sm" onclick="openPhotoCapture('thermometer')">🌡️ Thermometer</button>
-        <button type="button" class="btn btn-outline btn-sm" onclick="openPhotoCapture('druck')">🟤 Druckmesser</button>
-      </div>
-      <div id="photo-previews-container" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"></div>
-    </div>
+
     <!-- KI-Teststreifen Scan -->
     <div style="margin:10px 0">
       <button class="ki-scan-btn" onclick="scanTeststreifen()" style="display:none">
         📸 Teststreifen per KI auswerten
       </button>
-      <p style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">💡 Streifen neben Farbskala auf der Dose halten, gutes Licht</p>
       <div id="ki-loading" style="display:none" class="ki-loading"><div class="ki-spinner"></div>KI analysiert Teststreifen…</div>
       <div id="ki-result"></div>
     </div>
     <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">🌡️ Temperatur °C</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="spin-btn" onclick="adjustInput('input-temp',-0.5,1)">−</button>
+          <input type="number" id="input-temp" step="0.5" min="10" max="40" style="text-align:center">
+          <button class="spin-btn" onclick="adjustInput('input-temp',0.5,1)">+</button>
+        </div>
+      </div>
       <div class="form-group">
         <label class="form-label" id="ph-label">🔵 pH-Wert</label>
         <div style="display:flex;align-items:center;gap:6px">
@@ -1104,22 +1101,13 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <div id="ph-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
       <div class="form-group">
-        <label class="form-label" id="chlor-label">🟡 Chlor / FAC ppm</label>
+        <label class="form-label" id="tds-label">💧 Wasserbelastung (TDS) ppm <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
-          <button class="spin-btn" onclick="adjustInput('input-chlor',-0.1,1)">−</button>
-          <input type="number" id="input-chlor" step="0.1" min="0" max="10" style="text-align:center">
-          <button class="spin-btn" onclick="adjustInput('input-chlor',0.1,1)">+</button>
+          <button class="spin-btn" onclick="adjustInput('input-tds',-50,0)">−</button>
+          <input type="number" id="input-tds" step="50" min="0" max="5000" style="text-align:center" placeholder="z.B. 800">
+          <button class="spin-btn" onclick="adjustInput('input-tds',50,0)">+</button>
         </div>
-        <div id="chlor-hint" style="font-size:0.76rem;margin-top:3px"></div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">🌡️ Temperatur °C</label>
-        <div style="display:flex;align-items:center;gap:6px">
-          <button class="spin-btn" onclick="adjustInput('input-temp',-0.5,1)">−</button>
-          <input type="number" id="input-temp" step="0.5" min="10" max="40" style="text-align:center">
-          <button class="spin-btn" onclick="adjustInput('input-temp',0.5,1)">+</button>
-        </div>
+        <div id="tds-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
       <div class="form-group">
         <label class="form-label" id="orp-label">⚡ Desinfektionskraft (ORP) mV <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
@@ -1131,13 +1119,13 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <div id="orp-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
       <div class="form-group">
-        <label class="form-label" id="tds-label">💧 Wasserbelastung (TDS) ppm <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
+        <label class="form-label" id="chlor-label">🟡 FAC / Chlor ppm</label>
         <div style="display:flex;align-items:center;gap:6px">
-          <button class="spin-btn" onclick="adjustInput('input-tds',-50,0)">−</button>
-          <input type="number" id="input-tds" step="50" min="0" max="5000" style="text-align:center" placeholder="z.B. 800">
-          <button class="spin-btn" onclick="adjustInput('input-tds',50,0)">+</button>
+          <button class="spin-btn" onclick="adjustInput('input-chlor',-0.1,1)">−</button>
+          <input type="number" id="input-chlor" step="0.1" min="0" max="10" style="text-align:center">
+          <button class="spin-btn" onclick="adjustInput('input-chlor',0.1,1)">+</button>
         </div>
-        <div id="tds-hint" style="font-size:0.76rem;margin-top:3px"></div>
+        <div id="chlor-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
       <div class="form-group">
         <label class="form-label">🟤 Filterdruck Bar <span style="font-size:0.73rem;color:var(--text-muted)">(optional)</span></label>
@@ -1163,16 +1151,8 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     </div>
     <div id="mess-feedback" style="margin-top:10px"></div>
   </div>
-  <div class="card">
+  <div class="card" style="display:none">
     <div class="card-title">📖 Teststäbchen-Anleitung</div>
-    <ol style="font-size:0.88rem;line-height:1.9;color:var(--text-secondary);padding-left:18px">
-      <li>Stäbchen <strong>2 Sek.</strong> waagerecht ins Wasser</li>
-      <li>Herausnehmen – <strong>NICHT abschütteln!</strong></li>
-      <li>Waagerecht halten, nach <strong>10 Sek.</strong> ablesen</li>
-      <li>Farbe mit Skala am Behälter vergleichen</li>
-      <li>Alle 3 Werte eintragen</li>
-    </ol>
-    <p style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">⚠️ Erst 2–3h nach Chemikalienzugabe messen!</p>
   </div>
 </div>
 
@@ -1567,7 +1547,6 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="form-group"><label class="form-label">Temp °C</label><input type="number" id="edit-temp" step="0.5"></div>
     </div>
     <div class="form-group"><label class="form-label">Notiz</label><input type="text" id="edit-note"></div>
-    <div class="form-group" id="edit-photos-wrap" style="display:none"><label class="form-label">📸 Belegfotos</label><div id="edit-photos-container" style="display:flex;gap:8px;flex-wrap:wrap"></div></div>
     <div style="display:flex;gap:8px"><button class="btn btn-primary" onclick="saveEdit()">💾 Speichern</button><button class="btn btn-outline" onclick="closeModal('modal-edit')">Abbrechen</button></div>
     <input type="hidden" id="edit-index">
   </div>
@@ -1616,7 +1595,6 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <input type="datetime-local" id="druck-time">
     </div>
     <div style="margin-bottom:10px">
-      <button type="button" class="btn btn-outline btn-sm" onclick="openPhotoCaptureDruck()">📸 Foto hinzufügen</button>
       <div id="druck-photo-preview" style="margin-top:8px"></div>
     </div>
     <div style="display:flex;gap:8px">
@@ -1780,7 +1758,7 @@ const DEFAULT_SETTINGS = {
   chlor:{target:2.0, min:1.0,  max:3.0,  unit:' ppm'},
   temp: {target:24,  min:18,   max:32,   unit:' °C'},
   orp:  {target:700, min:650,  max:750,  unit:' mV'},
-  tds:  {target:800, min:400,  max:1200, unit:' ppm'},
+  tds:  {target:800, min:250,  max:1500, unit:' ppm'},
 };
 
 let measurements  = ld('measurements',[]);
@@ -1814,6 +1792,7 @@ let settings      = ld('settings', JSON.parse(JSON.stringify(DEFAULT_SETTINGS)))
 // Migration: add orp and tds settings if missing
 if(!settings.orp)settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));
 if(!settings.tds)settings.tds=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.tds));
+if(!settings.orp)settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));
 let timerTodos    = ld('timer_todos',[]); // [{id,title,dueAt,todoId,stepIdx}]
 let editIndex     = -1;
 let editMaintId   = null;
@@ -1891,7 +1870,7 @@ function renderEinstellungen(){
     {key:'chlor',  label:'🟡 Chlor/FAC', unit:'ppm', desc:'medi pool: 1,0 – 3,0 ppm | Ziel 2,0'},
     {key:'temp',   label:'🌡 Temperatur',unit:'°C',  desc:'Wassertemperatur-Komfortbereich'},
     {key:'orp',    label:'⚡ ORP (Desinfektionskraft)',unit:'mV', desc:'Idealbereich: 650–750 mV | Ziel 700 mV'},
-    {key:'tds',    label:'💧 TDS (Wasserbelastung)',  unit:'ppm', desc:'Ziel ~800 ppm | max 1200 ppm'},
+    {key:'tds',    label:'💧 TDS (Wasserbelastung)',  unit:'ppm', desc:'Ziel ~800 ppm | Idealbereich 250–1500 ppm'},
   ];
   const rows=params.map(function(p){
     const s=settings[p.key];
@@ -2059,7 +2038,7 @@ function renderBanBanner(id){
     return;
   }
   const rem=u-now,hh=Math.floor(rem/3600000),mm=Math.floor((rem%3600000)/60000);
-  el.innerHTML=`<div class="badeverbot-banner active-ban">${swimStop}<div style="flex:1;text-align:center"><h2 style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.25rem;color:#b91c1c">Badeverbot aktiv!</h2><p style="font-size:0.88rem;margin-top:4px;color:var(--text-secondary)"><strong>Grund:</strong> ${ban.reason}</p><p style="font-size:0.88rem;margin-top:2px;color:var(--text-secondary)"><strong>Freigabe:</strong> ${u.toLocaleString('de-DE')}</p><div class="ban-countdown" style="margin-top:6px">⏱ ${hh}h ${mm}min</div><button class="btn btn-sm btn-outline" style="margin-top:8px;font-size:0.75rem" onclick="openBanEdit()">✏️ Verbot bearbeiten</button></div></div>`;
+  el.innerHTML=`<div class="badeverbot-banner active-ban">${swimStop}<div style="flex:1;text-align:center"><h2 style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.25rem;color:#b91c1c">Badeverbot aktiv!</h2><p style="font-size:0.88rem;margin-top:4px;color:var(--text-secondary)"><strong>Grund:</strong> ${ban.reason}</p><p style="font-size:0.88rem;margin-top:2px;color:var(--text-secondary)"><strong>Freigabe:</strong> ${u.toLocaleString('de-DE')}</p><div class="ban-countdown" style="margin-top:6px">⏱ ${hh}h ${mm}min</div>${Date.now()-new Date(ban.setAt||0).getTime()>60000?'<button class="btn btn-sm btn-outline" style="margin-top:8px;font-size:0.75rem" onclick="openBanEdit()">✏️ Verbot bearbeiten</button>':''}</div></div>`;
   setTimeout(()=>renderBanBanner(id),30000);
 }
 
@@ -2225,10 +2204,10 @@ function saveMeasurement(){
 function checkAutoBan(e){
   if(e.chlor&&e.chlor>settings.chlor.max){
     const u=new Date(Date.now()+4*3600000).toISOString().slice(0,16);
-    const newBan={until:u,reason:`Chlor zu hoch (${e.chlor} mg/l)`,setAt:new Date().toISOString()};
+    const newBan={until:u,reason:`Chlor zu hoch (${e.chlor} ppm)`,setAt:new Date().toISOString()};
     if(setOrKeepLongerBan(newBan)){
-      if(typeof toast==='function')toast('⚠️ Chlor '+e.chlor+' mg/l – Badeverbot 4h automatisch gesetzt!','warn',5000);
-      else alert(`⚠️ Chlor ${e.chlor} mg/l – Badeverbot 4h automatisch gesetzt!`);
+      if(typeof toast==='function')toast('⚠️ Chlor '+e.chlor+' ppm – Badeverbot 4h automatisch gesetzt!','warn',5000);
+      else alert(`⚠️ Chlor ${e.chlor} ppm – Badeverbot 4h automatisch gesetzt!`);
       if(navigator.vibrate)navigator.vibrate([100,50,100]);
     }
   }
@@ -2251,9 +2230,9 @@ function renderMessung(){
   document.getElementById('input-mess-time').value=now.toISOString().slice(0,16);
   // Update labels with current settings
   document.getElementById('ph-label').textContent=`🔵 pH-Wert (Ziel: ${settings.ph.target} | ${settings.ph.min}–${settings.ph.max})`;
-  document.getElementById('chlor-label').textContent=`🟡 Chlor / FAC mg/l (Ziel: ${settings.chlor.target} | ${settings.chlor.min}–${settings.chlor.max})`;
+  document.getElementById('chlor-label').textContent=`🟡 FAC / Chlor ppm (Ziel: ${settings.chlor.target} | ${settings.chlor.min}–${settings.chlor.max})`;
   if(document.getElementById('orp-label'))document.getElementById('orp-label').innerHTML=`⚡ Desinfektionskraft (ORP) mV – Ziel: ${settings.orp.target} | ${settings.orp.min}–${settings.orp.max} <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span>`;
-  if(document.getElementById('tds-label'))document.getElementById('tds-label').innerHTML=`💧 Wasserbelastung (TDS) mg/l – Ziel: ${settings.tds.target} | ${settings.tds.min}–${settings.tds.max} <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span>`;
+  if(document.getElementById('tds-label'))document.getElementById('tds-label').innerHTML=`💧 Wasserbelastung (TDS) ppm – Ziel: ${settings.tds.target} | ${settings.tds.min}–${settings.tds.max} <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span>`;
   updateMessungHints();
 }
 
@@ -2337,9 +2316,9 @@ function renderMesswerteCard(targetId,metaId){
   if(!last){el.innerHTML='<p style="color:var(--text-muted)">Noch keine Messungen.</p>';return}
   const params=[
     {key:'ph',label:'pH',unit:''},
-    {key:'chlor',label:'Chlor / FAC',unit:' mg/l'},
+    {key:'chlor',label:'Chlor / FAC',unit:' ppm'},
     {key:'orp',label:'ORP',unit:' mV'},
-    {key:'tds',label:'TDS',unit:' mg/l'},
+    {key:'tds',label:'TDS',unit:' ppm'},
     {key:'temp',label:'Temp',unit:' °C'},
   ];
   const rows=params.filter(p=>last[p.key]!==undefined).map(p=>{
@@ -2432,12 +2411,12 @@ function renderEmpfehlungen(id){
     else if(last.ph<(s.ph.min+0.1)||last.ph>(s.ph.max-0.1))tips.push({type:'warn',msg:`pH nahe Grenzwert (${last.ph}), Optimum ${s.ph.target}`,helpIdx:last.ph<s.ph.target?4:3,btnLabel:'➡ Hilfe starten'});
   }
   if(last.chlor!==undefined){
-    if(last.chlor<s.chlor.min)tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} mg/l) → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
-    else if(last.chlor>s.chlor.max)tips.push({type:'warn',msg:`Chlor zu hoch (${last.chlor} mg/l) – Badeverbot bis <${s.chlor.max}`,helpIdx:6,btnLabel:'➡ Hilfe starten'});
+    if(last.chlor<s.chlor.min)tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} ppm) → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
+    else if(last.chlor>s.chlor.max)tips.push({type:'warn',msg:`Chlor zu hoch (${last.chlor} ppm) – Badeverbot bis <${s.chlor.max}`,helpIdx:6,btnLabel:'➡ Hilfe starten'});
     else if(last.chlor>s.chlor.target+0.5){
       const chlorTask=maintenanceTasks.find(t=>t.id==='chlor_tabs');
       const chlorNachMessung=chlorTask?.lastDone&&new Date(chlorTask.lastDone)>new Date(last.time);
-      if(!chlorNachMessung)tips.push({type:'tip',msg:`Chlor leicht erhöht (${last.chlor} mg/l) → beim nächsten Chloren nur 2 Tabs statt 3`});
+      if(!chlorNachMessung)tips.push({type:'tip',msg:`Chlor leicht erhöht (${last.chlor} ppm) → beim nächsten Chloren nur 2 Tabs statt 3`});
     }
   }
   if(last.orp!==undefined){
@@ -2446,7 +2425,7 @@ function renderEmpfehlungen(id){
   }
   if(last.tds!==undefined&&last.tds>s.tds.max){
     const drain=Math.round(10520*(last.tds-800)/last.tds);
-    tips.push({type:'warn',msg:`Wasserbelastung (TDS) zu hoch (${last.tds} mg/l) → ${drain} Liter ablassen und mit Frischwasser auffüllen`});
+    tips.push({type:'warn',msg:`Wasserbelastung (TDS) zu hoch (${last.tds} ppm) → ${drain} Liter ablassen und mit Frischwasser auffüllen`});
   }
   maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>2)tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hoursOverdue(t)}h überfällig)`})});
   el.innerHTML=tips.map(t=>`
@@ -2735,7 +2714,7 @@ async function renderIphone(){
   if(!last){vEl.innerHTML='<p style="color:var(--text-muted);font-size:0.88rem">Keine Messdaten</p>';}
   else{
     const ago=timeAgo(last.time);
-    const params=[{key:'ph',label:'pH',unit:''},{key:'chlor',label:'Chlor / FAC',unit:' mg/l'},{key:'orp',label:'ORP',unit:' mV'},{key:'tds',label:'TDS',unit:' mg/l'},{key:'temp',label:'Temp',unit:' °C'}];
+    const params=[{key:'ph',label:'pH',unit:''},{key:'chlor',label:'Chlor / FAC',unit:' ppm'},{key:'orp',label:'ORP',unit:' mV'},{key:'tds',label:'TDS',unit:' ppm'},{key:'temp',label:'Temp',unit:' °C'}];
     vEl.innerHTML=`<div style="font-size:0.73rem;color:var(--text-muted);margin-bottom:7px">Gemessen ${ago}</div>`+
     params.map(p=>{
       const s=settings[p.key];const v=last[p.key];
@@ -2934,9 +2913,9 @@ async function renderIpad(){
     const ago=timeAgo(last.time);
     const params=[
       {key:'ph',label:'pH',unit:'',isTemp:false},
-      {key:'chlor',label:'Chlor / FAC',unit:' mg/l',isTemp:false},
+      {key:'chlor',label:'FAC / Chlor',unit:' ppm',isTemp:false},
       {key:'orp',label:'ORP',unit:' mV',isTemp:false},
-      {key:'tds',label:'TDS',unit:' mg/l',isTemp:false},
+      {key:'tds',label:'TDS',unit:' ppm',isTemp:false},
       {key:'temp',label:'Temp',unit:' °C',isTemp:true},
     ];
     const recent=measurements.slice(-10);
@@ -3474,9 +3453,9 @@ const PRODUCTS={
         return{amount:`${perWeekTabs} Langzeit-Tabs/Woche (${perWeekTabs*20}g) in Skimmer`,note:`Grundchlorierung für ${Math.round(POOL_VOLUME*1000)}L. Wöchentlich prüfen.`};
       }
       const deficit=tgt-cur;
-      // Each 20g Langzeit-Tab raises ~0.2 mg/l per 10m³ (slow over days)
+      // Each 20g Langzeit-Tab raises ~0.2 ppm per 10m³ (slow over days)
       const extraTabs=Math.ceil(deficit/0.2*(POOL_VOLUME/10));
-      return{amount:`${perWeekTabs} Langzeit-Tabs wöchentlich + ${extraTabs} extra zur Aufstockung`,note:`Chlor ${cur}→${tgt} mg/l. Extra-Tabs sofort + Regeltabs in Skimmer.`};
+      return{amount:`${perWeekTabs} Langzeit-Tabs wöchentlich + ${extraTabs} extra zur Aufstockung`,note:`Chlor ${cur}→${tgt} ppm. Extra-Tabs sofort + Regeltabs in Skimmer.`};
     },
     instr:`<div style="background:#f0fdf4;padding:10px;border-radius:8px;border-left:4px solid #16a34a;margin-bottom:10px"><strong style="color:#166534">✅ Primäre Chlorierungsmethode</strong><br><span style="font-size:0.82rem">Über Skimmer oder Dosierschwimmer – langsam löslich über mehrere Tage</span></div><ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Tabs in <strong>Skimmer</strong> oder Dosierschwimmer legen</li><li>Wöchentlich prüfen und ggf. nachfüllen</li><li>Bei Bedarf mit Schnelltabs ergänzen</li><li>Niemals mit anderen Chlormitteln mischen!</li><li>Tabs sind 20g – langsam löslich</li></ol>`},
   schnellchlor:{name:'Schnell-Chlortabs 20g (Ergänzung)',
@@ -3487,11 +3466,11 @@ const PRODUCTS={
       const cur=parseFloat(v.current_chlor);
       const tgt=settings.chlor.target||2;
       if(isNaN(cur)){const t=Math.round(3*POOL_VOLUME/10);return{amount:`${t} Schnell-Tabs (${t*20}g)`,note:'In Skimmer – bei unbekanntem Chlorwert'};}
-      if(cur>=tgt){return{amount:'Keine Schnelltabs nötig',note:`Chlor ${cur} mg/l liegt im Zielbereich. Langzeit-Tabs reichen.`};}
+      if(cur>=tgt){return{amount:'Keine Schnelltabs nötig',note:`Chlor ${cur} ppm liegt im Zielbereich. Langzeit-Tabs reichen.`};}
       const deficit=tgt-cur;
-      // 1 Schnelltab (20g) raises ~0.35 mg/l per 10m³ quickly
+      // 1 Schnelltab (20g) raises ~0.35 ppm per 10m³ quickly
       const tabs=Math.max(1,Math.ceil(deficit/0.35*(POOL_VOLUME/10)));
-      return{amount:`${tabs} Schnell-Chlortabs (${tabs*20}g)`,note:`Ergänzung: Chlor ${cur}→${tgt} mg/l. Tabs in Skimmer, Filter läuft min. 2h.`};
+      return{amount:`${tabs} Schnell-Chlortabs (${tabs*20}g)`,note:`Ergänzung: Chlor ${cur}→${tgt} ppm. Tabs in Skimmer, Filter läuft min. 2h.`};
     },
     instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Nur zur <strong>Ergänzung</strong> wenn Langzeit-Tabs nicht reichen</li><li>In Skimmer legen</li><li>Filter mind. 2h laufen lassen</li><li>Nach 2-4h erneut messen</li></ol>`},
   mischdosi:{name:'🔀 Mischdosierung: Langzeit + Schnell',
@@ -3513,7 +3492,7 @@ const PRODUCTS={
       const perWeekLZ=Math.round(4*POOL_VOLUME/10+0.5);
       const maintLZ=Math.round(perWeekLZ*(days/7));
       if(cur>=tgt){
-        return{amount:`${perWeekLZ} Langzeit-Tabs (${perWeekLZ*20}g) – wöchentlich`,note:`✅ Chlor ${cur} mg/l ist gut. Nur Grunddosierung nötig.`};
+        return{amount:`${perWeekLZ} Langzeit-Tabs (${perWeekLZ*20}g) – wöchentlich`,note:`✅ Chlor ${cur} ppm ist gut. Nur Grunddosierung nötig.`};
       } else if(cur>=min && deficit<=0.5){
         // Slight deficit: LZ-Tabs + 1-2 Schnelltabs
         const schnellT=Math.ceil(deficit/0.35*(POOL_VOLUME/10));
@@ -3522,11 +3501,11 @@ const PRODUCTS={
         // Bigger deficit: recommend granulate over tabs
         const g=Math.round((deficit/2)*175*POOL_VOLUME/10);
         const schnellT=Math.ceil(deficit/0.35*(POOL_VOLUME/10));
-        return{amount:`⚠️ ${schnellT} Schnell-Tabs ODER ${g}g Chlor Plus Granulat + ${maintLZ} Langzeit-Tabs`,note:`Chlor ${cur} mg/l – deutliches Defizit. Granulat wirkt schneller. Danach Langzeit-Tabs als Basis.`};
+        return{amount:`⚠️ ${schnellT} Schnell-Tabs ODER ${g}g Chlor Plus Granulat + ${maintLZ} Langzeit-Tabs`,note:`Chlor ${cur} ppm – deutliches Defizit. Granulat wirkt schneller. Danach Langzeit-Tabs als Basis.`};
       } else {
         // Large deficit: Schockchlorung
         const g=Math.round(175*POOL_VOLUME/10);
-        return{amount:`🚨 Schockchlorung: ${g}g Chlor Plus + danach ${perWeekLZ} Langzeit-Tabs/Woche`,note:`Chlor ${cur} mg/l – kritisch! Schockchlorung nötig. Badeverbot 8h.`};
+        return{amount:`🚨 Schockchlorung: ${g}g Chlor Plus + danach ${perWeekLZ} Langzeit-Tabs/Woche`,note:`Chlor ${cur} ppm – kritisch! Schockchlorung nötig. Badeverbot 8h.`};
       }
     },
     instr:`<div style="background:linear-gradient(135deg,#f0fdf4,#ede9fe);padding:10px;border-radius:8px;margin-bottom:10px"><strong>🧠 Intelligente Chlorstrategie:</strong><br><span style="font-size:0.81rem;line-height:1.6">• Basis: Langzeit-Tabs wöchentlich im Skimmer<br>• Kleines Defizit: + Schnelltabs<br>• Großes Defizit: Granulat + danach Langzeit-Tabs<br>• Kein Badeverbot bei reinen Chlortabs</span></div><ol style="line-height:1.8;font-size:0.88rem;padding-left:16px"><li>FAC-Wert eingeben (GIDIGI Messgerät)</li><li>Empfehlung berechnen</li><li>Dokumentieren und umsetzen</li><li>Nach 4-8h nachmessen</li></ol>`},
@@ -3575,7 +3554,7 @@ function calcDosage(){
 
 function logDosierung(productKey,amount){
   const p=PRODUCTS[productKey];const banH=BAN_H[productKey];
-  const _stockKey_={'langzeittabs':'Langzeit-Chlortabs','schnellchlor':'Schnell-Chlortabs','mischdosi':'Mischdosierung','chlorplus':'Chlor Plus','flockmittel':'Flockmittel','poolklar':'Poolklar','algenschutz':'Algenschutz','phminus':'pH-Minus','phplus':'pH-Plus'}[productKey]||p.name;
+  const _stockKey_={'langzeittabs':'Langzeit-Chlortabs','schnellchlor':'Schnell-Chlortabs','mischdosi':'Mischdosierung','mischdosi':'Mischdosierung','chlorplus':'Chlor Plus','flockmittel':'Flockmittel','poolklar':'Poolklar','algenschutz':'Algenschutz','phminus':'pH-Minus','phplus':'pH-Plus'}[productKey]||p.name;
   logHistory({type:'dosierung',time:new Date().toISOString(),product:_stockKey_,note:`${p.name}: ${amount}`});
   // Bestand abziehen
   stockDeductDosierung(productKey, amount);
@@ -3869,7 +3848,7 @@ function renderCharts(){
   drawChart('chart-ph',filtered,'ph','#0ea5e9',[s.ph.min,s.ph.max],s.ph.target,s.ph.min-0.5,s.ph.max+0.5);
   drawChart('chart-chlor',filtered,'chlor','#f59e0b',[s.chlor.min,s.chlor.max],s.chlor.target,0,s.chlor.max+1.5);
   drawChart('chart-orp',filtered,'orp','#8b5cf6',[s.orp.min,s.orp.max],s.orp.target,400,900);
-  drawChart('chart-tds',filtered,'tds','#0ea5e9',null,s.tds.target,200,2000);
+  drawChart('chart-tds',filtered,'tds','#0ea5e9',[s.tds.min,s.tds.max],s.tds.target,0,2500);
   drawChart('chart-temp',filtered,'temp','#10b981',null,s.temp.target,s.temp.min-2,s.temp.max+2);
   // Filterdruck: alle Messungen (nicht Zeitraum-gefiltert – wird selten gemessen)
   drawChart('chart-druck',measurements,'druck','#92400e',[0,0.56],null,0,1.6);
@@ -4287,7 +4266,7 @@ function adjustInput(id, delta, decimals){
 const HELP_ITEMS=[
   {q:'🌊 Wasser ist trüb',steps:[
     {text:'pH messen und einstellen (7,0–7,6)',task:'test',needsMeasure:true},
-    {text:'Chlor prüfen – wenn < 1 mg/l: Chlortabs zugeben',task:'chlor_tabs'},
+    {text:'Chlor prüfen – wenn < 1 ppm: Chlortabs zugeben',task:'chlor_tabs'},
     {text:'Flockmittel Flüssig zugeben (30–60 ml/10m³)',task:'flockmittel'},
     {text:'Poolklar zugeben (50 ml/10m³)',task:'poolklar'},
     {text:'Sandfilter rückspülen',task:'filter_clean'},
@@ -4468,7 +4447,7 @@ function renderErklaerung(){
     <p>Alle Zielwerte und Bereiche sind unter <strong>⚙️ Einstellungen</strong> individuell anpassbar. Empfohlene Bereiche für deinen Pool (gemessen mit GIDIGI 7-in-1):</p>
     <div class="example-data">
       <div class="example-row"><span>pH</span><span style="font-weight:700;color:#16a34a">7,0 – 7,6 | Ziel: 7,3</span></div>
-      <div class="example-row"><span>Chlor</span><span style="font-weight:700;color:#16a34a">1,0 – 3,0 mg/l | Ziel: 2,0</span></div>
+      <div class="example-row"><span>Chlor</span><span style="font-weight:700;color:#16a34a">1,0 – 3,0 ppm | Ziel: 2,0</span></div>
     </div>
   </div>
   <div class="erkl-section"><h2>🎯 Pool-Qualitäts-Score</h2>
@@ -4487,9 +4466,9 @@ function renderErklaerung(){
   <div class="erkl-section"><h2>💧 Wasserbelastung (TDS)</h2>
     <p><strong>TDS (Total Dissolved Solids)</strong> misst alle gelösten Stoffe im Wasser: Mineralien, Salze, Chemikalierückstände. Mit der Zeit steigt TDS – das Wasser wird „verbraucht". Zu hoher TDS reduziert die Chlorwirksamkeit und macht das Wasser trüb.</p>
     <div class="example-data">
-      <div class="example-row"><span>Zielwert</span><span style="font-weight:700;color:#16a34a">~800 mg/l</span></div>
-      <div class="example-row"><span>Idealbereich</span><span style="font-weight:700;color:#16a34a">400 – 1200 mg/l</span></div>
-      <div class="example-row"><span>Zu hoch (&gt; 1200 mg/l)</span><span style="font-weight:700;color:#dc2626">Wasser teilweise ablassen + Frischwasser</span></div>
+      <div class="example-row"><span>Zielwert</span><span style="font-weight:700;color:#16a34a">~800 ppm</span></div>
+      <div class="example-row"><span>Idealbereich</span><span style="font-weight:700;color:#16a34a">250 – 1500 ppm</span></div>
+      <div class="example-row"><span>Zu hoch (&gt; 1200 ppm)</span><span style="font-weight:700;color:#dc2626">Wasser teilweise ablassen + Frischwasser</span></div>
     </div>
     <div style="background:#eff6ff;border:1px solid #60a5fa;border-radius:10px;padding:12px;margin-top:10px">
       <div style="font-weight:800;font-size:0.88rem;color:#1d4ed8;margin-bottom:4px">📐 Ablassformel (Pool: 10.520 Liter)</div>
@@ -4700,7 +4679,7 @@ function renderStatKacheln(){
     </div>
     <div class="stat-kachel">
       <div class="stat-kachel-val">${last?.chlor!==undefined?last.chlor.toFixed(1)+'&nbsp;'+trend(last.chlor,prev?.chlor):'–'}</div>
-      <div class="stat-kachel-lbl">🟡 Chlor mg/l</div>
+      <div class="stat-kachel-lbl">🟡 FAC / Chlor ppm</div>
     </div>
     <div class="stat-kachel">
       <div class="stat-kachel-val">${last?.temp!==undefined?last.temp+'°':'–'}</div>
@@ -4813,7 +4792,8 @@ function renderSwimAdvice(id, weatherData){
 const STOCK_PRODUCTS = {
   'pH-Minus':       {unit:'g',  pkgDefault:1500, perUse:Math.round(((7.5-7.3)/0.2)*150*POOL_VOLUME/10), useName:'Dosierung (pH ~7,5→7,3)'},
   'pH-Plus':        {unit:'g',  pkgDefault:1000, perUse:Math.round(((7.3-7.1)/0.2)*100*POOL_VOLUME/10), useName:'Dosierung (pH ~7,1→7,3)'},
-  'Schnell-Chlortabs':{unit:'Stk',pkgDefault:50,  perUse:Math.round(3*POOL_VOLUME/10),                  useName:'Regeldosierung (3 Tabs/10m³)'},
+  'Langzeit-Chlortabs':{unit:'Stk',pkgDefault:100, perUse:Math.round(4*POOL_VOLUME/10),                 useName:'Wöchentlich (4 Tabs/10m³)'},
+  'Schnell-Chlortabs':{unit:'Stk',pkgDefault:50,   perUse:Math.round(3*POOL_VOLUME/10),                  useName:'Regeldosierung (3 Tabs/10m³)'},
   'Chlor Plus':     {unit:'g',  pkgDefault:1000, perUse:Math.round(175*POOL_VOLUME/10),                 useName:'Schockchlorung'},
   'Flockmittel':    {unit:'ml', pkgDefault:1000, perUse:Math.round(12*POOL_VOLUME/10),                  useName:'Kontinuierlich'},
   'Poolklar':       {unit:'ml', pkgDefault:1000, perUse:Math.round(50*POOL_VOLUME/10),                  useName:'Wöchentlich'},
@@ -4832,6 +4812,13 @@ if(!chemStock){
   sd('chem_stock_v2', chemStock);
 }
 
+// Migration: Add Langzeit-Chlortabs to stock if missing
+(function(){
+  if(!chemStock['Langzeit-Chlortabs']){
+    chemStock['Langzeit-Chlortabs']={qty:STOCK_PRODUCTS['Langzeit-Chlortabs'].pkgDefault,pkgSize:STOCK_PRODUCTS['Langzeit-Chlortabs'].pkgDefault};
+    sd('chem_stock_v2',chemStock);
+  }
+})();
 // Abzug wenn dosiert wird
 function stockDeductDosierung(productKey, amount){
   const stockMap={
@@ -4916,7 +4903,7 @@ function estimateWeeklyUsage(stockName){
 function renderStockDashboard(){
   const el=document.getElementById('dash-stock');if(!el)return;
   // Build a map of stockName → poolProdukt for image & amazon lookup
-  const stockToPoolId={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen'};
+  const stockToPoolId={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Langzeit-Chlortabs':'langzeit_chlortabs','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen'};
   el.innerHTML=Object.entries(chemStock).map(([name,s])=>{
     const p=STOCK_PRODUCTS[name];if(!p)return'';
     const pct=s.pkgSize>0?Math.round((s.qty/s.pkgSize)*100):0;
@@ -5260,18 +5247,18 @@ function renderMesswerteCardEnhanced(targetId, metaId){
 
   const params=[
     {key:'ph',    label:'🔵 pH-Wert',                  unit:'',      color:'#0ea5e9'},
-    {key:'chlor', label:'🟡 Chlor / FAC',              unit:' mg/l', color:'#f59e0b'},
+    {key:'chlor', label:'🟡 FAC / Chlor',              unit:' ppm',  color:'#f59e0b'},
     {key:'orp',   label:'⚡ Desinfektionskraft (ORP)', unit:' mV',   color:'#8b5cf6'},
-    {key:'tds',   label:'💧 Wasserbelastung (TDS)',    unit:' mg/l', color:'#0ea5e9'},
+    {key:'tds',   label:'💧 Wasserbelastung (TDS)',    unit:' ppm',  color:'#0ea5e9'},
     {key:'temp',  label:'🌡️ Temperatur',              unit:' °C',   color:'#10b981', isTemp:true},
   ];
 
   const recent=measurements.slice(-10);
   const gaugesHtml=[
     gaugeHtml('ph','🔵 pH-Wert','',last.ph,settings.ph),
-    gaugeHtml('chlor','🟡 Chlor / FAC',' mg/l',last.chlor,settings.chlor),
+    gaugeHtml('chlor','🟡 FAC / Chlor',' ppm',last.chlor,settings.chlor),
     gaugeHtml('orp','⚡ Desinfektionskraft (ORP)',' mV',last.orp,settings.orp),
-    gaugeHtml('tds','💧 Wasserbelastung (TDS)',' mg/l',last.tds,settings.tds),
+    gaugeHtml('tds','💧 Wasserbelastung (TDS)',' ppm',last.tds,settings.tds),
   ].filter(Boolean).join('');
 
   // TDS drain formula hint
@@ -6264,8 +6251,8 @@ function renderChlorDecayCard(){
       '<div style="display:flex;align-items:center;gap:10px">'+
         '<div style="font-size:1.3rem">📉</div>'+
         '<div style="flex:1;font-size:0.85rem">'+
-          'Chlor fällt voraussichtlich <strong>'+when+'</strong> ('+dateStr+') unter Minimum ('+minChlor+' mg/l)'+
-          ' – ~'+Math.abs(p.ratePerDay).toFixed(2)+' mg/l/Tag'+coverNote+
+          'Chlor fällt voraussichtlich <strong>'+when+'</strong> ('+dateStr+') unter Minimum ('+minChlor+' ppm)'+
+          ' – ~'+Math.abs(p.ratePerDay).toFixed(2)+' ppm/Tag'+coverNote+
         '</div>'+
       '</div>'+
       '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:8px 10px;font-size:0.82rem;color:'+empColor+';font-weight:700">'+
@@ -6349,8 +6336,8 @@ function renderPreSwimChecklist(){
   // 4. Chlor in Range
   if(last&&last.chlor!==undefined){
     const s=settings.chlor;
-    if(last.chlor>=s.min&&last.chlor<=s.max)items.push({icon:'🟡',label:'Chlor '+last.chlor.toFixed(1)+' mg/l',status:'ok',txt:'OK'});
-    else items.push({icon:'🟡',label:'Chlor '+last.chlor.toFixed(1)+' mg/l (Ziel '+s.min+'–'+s.max+')',status:'fail',txt:last.chlor<s.min?'zu niedrig':'zu hoch'});
+    if(last.chlor>=s.min&&last.chlor<=s.max)items.push({icon:'🟡',label:'Chlor '+last.chlor.toFixed(1)+'ppm',status:'ok',txt:'OK'});
+    else items.push({icon:'🟡',label:'Chlor '+last.chlor.toFixed(1)+' ppm (Ziel '+s.min+'–'+s.max+')',status:'fail',txt:last.chlor<s.min?'zu niedrig':'zu hoch'});
   }
   // 5. Temperatur (Info, nicht wertend – jeder entscheidet selbst)
   if(last&&last.temp!==undefined){
@@ -6388,9 +6375,9 @@ function shareStatusWhatsApp(){
     const ago=Math.round((now-new Date(last.time))/3600000);
     text+='\n(Gemessen vor '+ago+'h)\n';
     if(last.ph!==undefined){const s=settings.ph;const ok=last.ph>=s.min&&last.ph<=s.max;text+='pH: '+last.ph.toFixed(1)+(ok?' ✅':' ⚠️')+'\n';}
-    if(last.chlor!==undefined){const s=settings.chlor;const ok=last.chlor>=s.min&&last.chlor<=s.max;text+='Chlor / FAC: '+last.chlor.toFixed(1)+' mg/l'+(ok?' ✅':' ⚠️')+'\n';}
+    if(last.chlor!==undefined){const s=settings.chlor;const ok=last.chlor>=s.min&&last.chlor<=s.max;text+='Chlor / FAC: '+last.chlor.toFixed(1)+'ppm'+(ok?' ✅':' ⚠️')+'\n';}
     if(last.orp!==undefined){const s=settings.orp;const ok=last.orp>=s.min&&last.orp<=s.max;text+='ORP: '+Math.round(last.orp)+' mV'+(ok?' ✅':' ⚠️')+'\n';}
-    if(last.tds!==undefined){const s=settings.tds;const ok=last.tds<=s.max;text+='TDS: '+Math.round(last.tds)+' mg/l'+(ok?' ✅':' ⚠️')+'\n';}
+    if(last.tds!==undefined){const s=settings.tds;const ok=last.tds<=s.max;text+='TDS: '+Math.round(last.tds)+' ppm'+(ok?' ✅':' ⚠️')+'\n';}
     if(last.temp!==undefined){text+='🌡️ Wasser: '+last.temp.toFixed(1)+'°C\n';}
   } else {
     text+='\n(Keine aktuelle Messung)\n';
@@ -6450,7 +6437,7 @@ function openSeasonReport(){
   html+='<h3 style="margin-top:14px;font-size:1rem;font-family:\'Nunito\',sans-serif;color:var(--pool-dark)">🧪 Durchschnittswerte</h3>';
   html+='<div class="example-data">';
   html+='<div class="example-row"><span>pH</span><span style="font-weight:700">'+avgPh+'</span></div>';
-  html+='<div class="example-row"><span>Chlor</span><span style="font-weight:700">'+avgChlor+' mg/l</span></div>';
+  html+='<div class="example-row"><span>Chlor</span><span style="font-weight:700">'+avgChlor+' ppm</span></div>';
   html+='<div class="example-row"><span>Algizid</span><span style="font-weight:700">'+avgAlg+' ppm</span></div>';
   html+='<div class="example-row"><span>Temp Ø</span><span style="font-weight:700">'+avgTemp+'°C</span></div>';
   html+='<div class="example-row"><span>Temp min/max</span><span style="font-weight:700">'+tempMinMax+' °C</span></div>';
@@ -6467,7 +6454,7 @@ function openSeasonReport(){
     +'• Todo-Schritte: '+todos+'\n\n'
     +'🧪 Durchschnittswerte:\n'
     +'• pH: '+avgPh+'\n'
-    +'• Chlor: '+avgChlor+' mg/l\n'
+    +'• Chlor: '+avgChlor+' ppm\n'
     +'• Algizid: '+avgAlg+' ppm\n'
     +'• Temp Ø: '+avgTemp+'°C (min/max '+tempMinMax+')';
   document.getElementById('modal-season-report').classList.add('open');
@@ -6888,7 +6875,7 @@ function checkPushNotifications(){
     if(lastM.chlor<settings.chlor.min){
       const key='push_chlor_'+todayKey;
       if(!ld(key,false)){
-        sendPushNotification('🔴 Chlor kritisch','Chlor '+lastM.chlor+' mg/l – unter Minimum ('+settings.chlor.min+' mg/l)! Bitte behandeln.');
+        sendPushNotification('🔴 Chlor kritisch','Chlor '+lastM.chlor+' ppm – unter Minimum ('+settings.chlor.min+' ppm)! Bitte behandeln.');
         sd(key,true);
       }
     }
@@ -7032,11 +7019,11 @@ async function analyzeTeststreifen(file,key){
             {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
             {type:'text',text:`Du bist ein Pool-Wasserqualitäts-Experte. Analysiere dieses Foto eines Medipool 3-in-1 Teststreifens.
 
-Der Streifen hat 3 Felder (von oben nach unten): pH, Chlor (freies Chlor in mg/l), Algizid (ppm).
+Der Streifen hat 3 Felder (von oben nach unten): pH, Chlor (freies Chlor in ppm), Algizid (ppm).
 
 Vergleiche die Farben mit der Skala auf der Dose bzw. dem Beipackzettel:
 - pH: Skala 6,2 – 8,4 (Schritte: 6,2 / 6,8 / 7,2 / 7,6 / 8,0 / 8,4)
-- Chlor: 0 / 0,5 / 1,0 / 1,5 / 2,0 / 3,0 mg/l
+- Chlor: 0 / 0,5 / 1,0 / 1,5 / 2,0 / 3,0 ppm
 - Algizid: 0 / 5 / 10 / 20 / 40 ppm
 
 Antworte NUR mit einem JSON-Objekt, kein Text davor oder danach:
@@ -7085,7 +7072,7 @@ Antworte NUR mit einem JSON-Objekt, kein Text davor oder danach:
           '<div class="ki-result-title">📸 KI-Auswertung</div>'+
           '<div class="ki-result-grid">'+
             '<div class="ki-result-item"><div class="ki-result-val">'+result.ph+'</div><div class="ki-result-lbl">pH</div></div>'+
-            '<div class="ki-result-item"><div class="ki-result-val">'+result.chlor+'</div><div class="ki-result-lbl">Chlor / FAC mg/l</div></div>'+
+            '<div class="ki-result-item"><div class="ki-result-val">'+result.chlor+'</div><div class="ki-result-lbl">FAC / Chlor ppm</div></div>'+
           '</div>'+
           '<div class="ki-confidence">Konfidenz: '+result.confidence+(result.hinweis?' · '+result.hinweis:'')+'</div>'+
           '<p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">✏️ Werte wurden eingetragen – bitte prüfen und ggf. korrigieren bevor du speicherst.</p>'+
@@ -7947,7 +7934,7 @@ renderChlorDecayCard=function(){
     coverState.covered?' <span style="font-size:0.78rem;opacity:0.8">(Plane drauf)</span>':'';
   el.innerHTML='<div class="chlor-decay-card">'
     +'<div style="font-size:1.4rem">📉</div>'
-    +'<div style="flex:1">Chlor fällt voraussichtlich '+when+' ('+dateStr+') unter Minimum ('+settings.chlor.min+' mg/l) – Verbrauch: ~'+Math.abs(p.ratePerDay).toFixed(2)+' mg/l pro Tag'+coverHint+'</div>'
+    +'<div style="flex:1">Chlor fällt voraussichtlich '+when+' ('+dateStr+') unter Minimum ('+settings.chlor.min+' ppm) – Verbrauch: ~'+Math.abs(p.ratePerDay).toFixed(2)+' ppm pro Tag'+coverHint+'</div>'
     +'</div>';
 };
 
