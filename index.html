@@ -2791,6 +2791,31 @@ async function renderIphone(){
       const valStr=p.key==='orp'||p.key==='tds'?Math.round(v).toString():v.toFixed(1);
       return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9"><span style="font-weight:700;font-size:0.88rem">${p.label}</span><span style="font-weight:900;color:${col};font-size:0.88rem">${valStr}${p.unit} ${icon}</span></div>`;
     }).join('');
+    // Draw sparklines for iPhone (same as iPad)
+    const recentIphone=measurements.slice(-14);
+    setTimeout(function(){
+      params.filter(function(p){return last[p.key]!==undefined;}).forEach(function(p){
+        const canvas=document.getElementById('iphone-spark-'+p.key);if(!canvas)return;
+        const vals=recentIphone.filter(function(m){return m[p.key]!==undefined;}).map(function(m){return m[p.key];});
+        if(vals.length<2)return;
+        const s=settings[p.key]||DEFAULT_SETTINGS[p.key];if(!s)return;
+        const ctx=canvas.getContext('2d');const W=64;const H=22;
+        canvas.width=W;canvas.height=H;ctx.clearRect(0,0,W,H);
+        const vMin=Math.min.apply(null,vals.concat([s.min]))-0.2;
+        const vMax=Math.max.apply(null,vals.concat([s.max]))+0.2;
+        const xs=vals.map(function(_,i){return 2+(i/(vals.length-1))*(W-4);});
+        const ys=vals.map(function(v){return H-2-((v-vMin)/(vMax-vMin))*(H-4);});
+        ctx.strokeStyle=p.key==='ph'?'#0ea5e9':p.key==='chlor'?'#f59e0b':p.key==='orp'?'#8b5cf6':p.key==='tds'?'#0ea5e9':'#10b981';
+        ctx.lineWidth=1.8;ctx.beginPath();
+        xs.forEach(function(x,i){i===0?ctx.moveTo(x,ys[i]):ctx.lineTo(x,ys[i]);});
+        ctx.stroke();
+        vals.forEach(function(v,i){
+          const inRange=v>=s.min&&v<=s.max;
+          ctx.beginPath();ctx.arc(xs[i],ys[i],2,0,Math.PI*2);
+          ctx.fillStyle=inRange?ctx.strokeStyle:'#ef4444';ctx.fill();
+        });
+      });
+    },50);
   }
   // Timer Todos
   const timerIphone=document.getElementById('iphone-timertodos');
@@ -3002,7 +3027,7 @@ async function renderIpad(){
       const prevVal=measurements.slice(0,-1).filter(function(m){return m[p.key]!==undefined;}).slice(-1)[0]?.[p.key];
       let trend='';
       if(prevVal!==undefined){const d=v-prevVal;if(Math.abs(d)>=0.05)trend='<span style="font-size:0.72rem;font-weight:800;color:'+(Math.abs(d)<0.2?'#94a3b8':d>0?'#ef4444':'#3b82f6')+'">'+(d>0?'↑':'↓')+Math.abs(d).toFixed(1)+'</span>';}
-      rows+='<div style="display:flex;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9">'
+      rows+='<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9">'
         +'<span style="font-weight:700;font-size:0.88rem;min-width:62px">'+p.label+'</span>'
         +'<canvas id="'+sparkId+'" width="64" height="22" style="opacity:0.85;flex-shrink:0"></canvas>'
         +'<div style="display:flex;align-items:center;gap:5px;min-width:100px;justify-content:flex-end">'
@@ -5058,6 +5083,13 @@ function renderStockDashboard(){
   const el=document.getElementById('dash-stock');if(!el)return;
   // Build a map of stockName → poolProdukt for image & amazon lookup
   const stockToPoolId={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Langzeit-Chlortabs':'langzeit_chlortabs','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen'};
+  // Ensure all STOCK_PRODUCTS entries are in chemStock
+  Object.keys(STOCK_PRODUCTS).forEach(function(k){
+    if(!chemStock[k]){
+      chemStock[k]={qty:0,pkgSize:STOCK_PRODUCTS[k].pkgDefault,gebinde:[]};
+      sd('chem_stock_v2',chemStock);
+    }
+  });
   el.innerHTML=Object.entries(chemStock).map(([name,s])=>{
     const p=STOCK_PRODUCTS[name];if(!p)return'';
     const pct=s.pkgSize>0?Math.round((s.qty/s.pkgSize)*100):0;
@@ -5102,6 +5134,13 @@ function renderStockDashboard(){
 
 function openStockModal(){
   const el=document.getElementById('stock-edit-rows');if(!el)return;
+  // Ensure all STOCK_PRODUCTS entries are in chemStock
+  Object.keys(STOCK_PRODUCTS).forEach(function(k){
+    if(!chemStock[k]){
+      chemStock[k]={qty:0,pkgSize:STOCK_PRODUCTS[k].pkgDefault,gebinde:[]};
+      sd('chem_stock_v2',chemStock);
+    }
+  });
   el.innerHTML=Object.entries(chemStock).map(([name,s])=>{
     const p=STOCK_PRODUCTS[name];if(!p)return'';
     const safeId=name.replace(/[^a-zA-Z0-9]/g,'_');
@@ -8913,6 +8952,31 @@ function exportProduktJSON(){
   if(typeof toast === 'function') toast('📥 Export erfolgreich!', 'success', 2500);
 }
 
+
+// ============================================================
+// GEBINDE ACTION HELPERS (called from onclick attributes)
+// ============================================================
+function gebindeOeffnen(stockKey,gebindeId){
+  var s=chemStock[stockKey];if(!s||!s.gebinde)return;
+  var g=s.gebinde.find(function(x){return x.id===gebindeId;});
+  if(!g)return;
+  g.status='angebrochen';
+  s.qty=s.gebinde.filter(function(x){return x.status!=='verbraucht';}).reduce(function(a,x){return a+x.qty;},0);
+  sd('chem_stock_v2',chemStock);
+  renderStockDashboard&&renderStockDashboard();
+  // Refresh open modal if any
+  var openPoolId=window._openProduktDetailPoolId;
+  if(openPoolId)openProduktDetail(openPoolId);
+}
+function gebindeEntfernen(stockKey,gebindeId){
+  var s=chemStock[stockKey];if(!s||!s.gebinde)return;
+  s.gebinde=s.gebinde.filter(function(x){return x.id!==gebindeId;});
+  s.qty=s.gebinde.filter(function(x){return x.status!=='verbraucht';}).reduce(function(a,x){return a+x.qty;},0);
+  sd('chem_stock_v2',chemStock);
+  renderStockDashboard&&renderStockDashboard();
+  var openPoolId=window._openProduktDetailPoolId;
+  if(openPoolId)openProduktDetail(openPoolId);
+}
 // Reverse map: poolId → stock key
 function getStockKeyForPool(poolId){
   const map={'ph_minus':'pH-Minus','ph_plus':'pH-Plus','chlortabs':'Schnell-Chlortabs',
@@ -8947,7 +9011,7 @@ function openProduktDetail(poolId){
         <input type="number" id="pdg-qty-${g.id}" min="0" value="${g.qty}" style="width:85px;border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:0.88rem;font-weight:${isAnk?700:400}">
         <span style="font-size:0.8rem;color:var(--text-muted);flex:1">${stockProd?stockProd.unit:''} <em>${isAnk?'angebrochen':'verschlossen'}</em></span>
         ${isAnk?`<button onclick="markGebindeVerbraucht('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;cursor:pointer">✗ verbraucht</button>`
-               :`<button onclick="(function(){const s=chemStock['${stockKey}'];const g=s.gebinde.find(x=>x.id===${g.id});if(g){g.status='angebrochen';s.qty=s.gebinde.filter(x=>x.status!=='verbraucht').reduce((a,x)=>a+x.qty,0);sd('chem_stock_v2',chemStock);renderStockDashboard&&renderStockDashboard();openProduktDetail('${poolId}');}})()" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;cursor:pointer">↑ öffnen</button>`}
+               :`<button onclick="gebindeOeffnen('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;cursor:pointer">↑ öffnen</button>`}
         <button onclick="(function(){const s=chemStock['${stockKey}'];s.gebinde=s.gebinde.filter(x=>x.id!==${g.id});s.qty=s.gebinde.filter(x=>x.status!=='verbraucht').reduce((a,x)=>a+x.qty,0);sd('chem_stock_v2',chemStock);openProduktDetail('${poolId}');})()" style="font-size:0.72rem;padding:3px 7px;border-radius:6px;background:none;color:#94a3b8;border:1px solid var(--border);cursor:pointer">🗑</button>
       </div>`;
     }).join('');
@@ -9046,6 +9110,7 @@ function openProduktDetail(poolId){
       <button class="btn btn-outline" onclick="closeModal('modal-produkt-detail')">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveProduktDetail('${p.poolId}')">💾 Speichern</button>
     </div>`;
+  window._openProduktDetailPoolId=poolId;
   el.classList.add('open');
 }
 
