@@ -2464,7 +2464,7 @@ function renderEmpfehlungen(id){
     const drain=Math.round(10520*(last.tds-800)/last.tds);
     tips.push({type:'warn',msg:`Wasserbelastung (TDS) zu hoch (${last.tds} ppm) → ${drain} Liter ablassen und mit Frischwasser auffüllen`});
   }
-  maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`;}}}); 
+  maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`});}}); 
   el.innerHTML=tips.map(t=>`
     <div class="empfehlung ${t.type}" style="cursor:${t.helpIdx!==undefined?'pointer':'default'};justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" ${t.helpIdx!==undefined?`onclick="showBoard('hilfe');setTimeout(()=>startTodo(${t.helpIdx}),100)"`:''}>
       <span>💡 ${t.msg}</span>
