@@ -204,7 +204,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .fab-items{display:none;flex-direction:column;align-items:flex-end;gap:7px}
 .fab-items.open{display:flex}
 /* ===== CHEMIKALIEN-VORRAT ===== */
-.stock-item{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--border);overflow:hidden;min-width:0}
+.stock-item{display:flex;flex-direction:row;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);overflow:hidden;min-width:0}
 .stock-item:last-child{border-bottom:none}
 .stock-bar-wrap{flex:1;height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden}
 .stock-bar-fill{height:100%;border-radius:5px;transition:width 0.4s}
@@ -4971,14 +4971,37 @@ function markGebindeVerbraucht(stockKey,gebindeId){
   const s=chemStock[stockKey];if(!s||!s.gebinde)return;
   const g=s.gebinde.find(x=>x.id===gebindeId);
   if(!g)return;
+  // Mark as verbraucht
   g.status='verbraucht';
-  // Auto-open next closed one
+  // Find next verschlossen → open it with actual qty confirmation
   const next=s.gebinde.find(x=>x.status==='verschlossen');
-  if(next)next.status='angebrochen';
-  s.qty=s.gebinde.filter(g=>g.status!=='verbraucht').reduce((a,g)=>a+g.qty,0);
+  if(next){
+    const sp=STOCK_PRODUCTS[stockKey];
+    const defaultQty=sp?sp.pkgDefault:next.qty;
+    const actualQty=parseFloat(prompt(
+      'Neue Packung wird geöffnet!\nBitte tatsächliche Füllmenge eintragen ('+( sp?sp.unit:'') +'):',
+      defaultQty
+    ));
+    if(!isNaN(actualQty)&&actualQty>0){next.qty=actualQty;}
+    next.status='angebrochen';
+    if(typeof toast==='function')toast('✅ Neue Packung geöffnet ('+next.qty+(sp?' '+sp.unit:'')+')','success',2500);
+  } else {
+    if(typeof toast==='function')toast('⚠️ Letztes Gebinde aufgebraucht – bitte nachbestellen!','warn',3500);
+  }
+  s.qty=s.gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);
   sd('chem_stock_v2',chemStock);
   renderStockDashboard();
-  if(typeof toast==='function')toast('✅ Gebinde als verbraucht markiert'+(next?' – nächstes geöffnet':''),'success',2500);
+  // Refresh product modal if open
+  const openModal=document.querySelector('.modal-overlay.open #pd-gebinde-list-'+stockKey.replace(/[^a-z0-9_]/gi,''));
+  if(openModal){
+    const pid=Object.keys({ph_minus:'pH-Minus',ph_plus:'pH-Plus',chlortabs:'Schnell-Chlortabs',
+      langzeit_chlortabs:'Langzeit-Chlortabs',chlorplus:'Chlor Plus',algischutz:'Algenschutz',
+      flockmittel:'Flockmittel',poolklar:'Poolklar',teststreifen:'Teststreifen'})
+      .find(function(k){return ({ph_minus:'pH-Minus',ph_plus:'pH-Plus',chlortabs:'Schnell-Chlortabs',
+        langzeit_chlortabs:'Langzeit-Chlortabs',chlorplus:'Chlor Plus',algischutz:'Algenschutz',
+        flockmittel:'Flockmittel',poolklar:'Poolklar',teststreifen:'Teststreifen'})[k]===stockKey;});
+    if(pid)openProduktDetail(pid);
+  }
 }
 
 function updateGebindeQty(stockKey,gebindeId,qty){
@@ -5048,36 +5071,32 @@ function renderStockDashboard(){
     const wkUsage=estimateWeeklyUsage(name);
     let reichHtml='';
     if(wkUsage>0&&s.qty>0){const days=Math.round((s.qty/wkUsage)*7);const rc=days<7?'#dc2626':days<21?'#d97706':'#16a34a';reichHtml=`<div style="font-size:0.65rem;color:${rc};font-weight:800;white-space:nowrap">~${days}d</div>`;}
-    // Gebinde display
+    // Gebinde display - compact dashboard view
     initGebinde(name);
-    const activeGebinde=s.gebinde.filter(g=>g.status!=='verbraucht');
-    const gebindeHtml=activeGebinde.map(function(g){
-      const dot=g.status==='angebrochen'?'#f59e0b':'#94a3b8';
-      const statusLabel=g.status==='angebrochen'?'angebrochen':'verschlossen';
-      const verbrBtn=g.status==='angebrochen'
-        ?`<button onclick="markGebindeVerbraucht('${name}',${g.id})" style="font-size:0.65rem;padding:2px 6px;border-radius:5px;background:#fee2e2;color:#b91c1c;border:none;cursor:pointer">verbraucht</button>`
-        :`<button onclick="updateGebindeQty('${name}',${g.id},${g.qty})" style="font-size:0.65rem;padding:2px 6px;border-radius:5px;background:#f0fdf4;color:#166534;border:none;cursor:pointer">öffnen</button>`;
-      return`<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-top:1px solid #f1f5f9;font-size:0.75rem">
-        <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0;display:inline-block"></span>
-        <span style="flex:1;color:var(--text-primary);font-weight:${g.status==='angebrochen'?'700':'400'}">${g.qty} ${(STOCK_PRODUCTS[name]||{unit:""}).unit} <span style="color:var(--text-muted);font-weight:400">${statusLabel}</span></span>
-        ${verbrBtn}
-      </div>`;
-    }).join('');
-    const addBtn=`<button onclick="openAddGebindeModal('${name}')" style="font-size:0.72rem;padding:2px 8px;border-radius:6px;background:var(--pool-surface);border:1px solid var(--border);cursor:pointer;margin-top:4px;width:100%">+ Gebinde</button>`;
-    return`<div class="stock-item" style="overflow:hidden;flex-direction:column;align-items:stretch">
-      <div style="display:flex;align-items:center;gap:8px;padding-bottom:4px">
-        ${imgHtml}
-        <div style="font-size:0.8rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">${name}${warn}</div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;width:56px">
-          <div style="font-weight:800;font-size:0.78rem;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
-          ${reichHtml}
-        </div>
-        ${buyBtn}
+    const ank=s.gebinde.find(function(g){return g.status==='angebrochen';});
+    const verschl=s.gebinde.filter(function(g){return g.status==='verschlossen';});
+    const unit=(STOCK_PRODUCTS[name]||{unit:''}).unit;
+    let gebindeInfoHtml='';
+    if(ank){
+      gebindeInfoHtml+=`<span style="font-size:0.72rem;color:#f59e0b;font-weight:700">● ${ank.qty} ${unit} angebrochen</span>`;
+    }
+    if(verschl.length>0){
+      const vTotal=verschl.reduce(function(a,g){return a+g.qty;},0);
+      gebindeInfoHtml+=`<span style="font-size:0.72rem;color:#94a3b8;margin-left:8px">● ${vTotal} ${unit} verschlossen (${verschl.length}×)</span>`;
+    }
+    return`<div class="stock-item">
+      ${imgHtml}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">${name}${warn}</div>
+        ${gebindeInfoHtml?`<div style="margin-top:2px">${gebindeInfoHtml}</div>`:''}
       </div>
-      <div class="stock-bar-wrap" style="width:100%;margin-bottom:4px"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>
-      ${gebindeHtml}
-      ${addBtn}
-    </div>`;
+      <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;width:56px;gap:2px">
+        <div style="font-weight:800;font-size:0.78rem;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
+        ${reichHtml}
+      </div>
+      ${buyBtn}
+    </div>
+    <div class="stock-bar-wrap"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>`;
   }).join('');
 }
 
@@ -8915,12 +8934,44 @@ function openProduktDetail(poolId){
   const stockKey=getStockKeyForPool(poolId);
   const stock=stockKey&&chemStock[stockKey]?chemStock[stockKey]:null;
   const stockProd=stockKey&&STOCK_PRODUCTS[stockKey]?STOCK_PRODUCTS[stockKey]:null;
-  const stockHtml=stock&&stockProd?`<div class="card" style="margin-bottom:8px;background:var(--pool-surface)">
-    <div class="card-title" style="font-size:0.78rem">📦 Aktueller Vorrat (${stockProd.unit})</div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input id="pd-stock-qty-${poolId}" type="number" min="0" value="${stock.qty}" style="width:100px;border:2px solid var(--pool-blue);border-radius:8px;padding:5px 8px;font-size:0.9rem;font-weight:700">
-      <span style="font-size:0.82rem;color:var(--text-muted)">${stockProd.unit} (Packung: ${stock.pkgSize} ${stockProd.unit})</span>
-      <button class="btn btn-ok btn-sm" onclick="saveProduktStock('${poolId}','${stockKey}')">✔</button>
+  // Initialize gebinde
+  if(stockKey&&stock) initGebinde(stockKey);
+  const gebindeList=stock&&stock.gebinde?stock.gebinde.filter(function(g){return g.status!=='verbraucht';}) : [];
+
+  function renderGebindeRows(){
+    return gebindeList.map(function(g,i){
+      const isAnk=g.status==='angebrochen';
+      const dot=isAnk?'#f59e0b':'#94a3b8';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;margin-bottom:5px;background:${isAnk?'#fffbeb':'var(--pool-surface)'};border:1px solid ${isAnk?'#f59e0b':'var(--border)'}">
+        <span style="width:9px;height:9px;border-radius:50%;background:${dot};flex-shrink:0"></span>
+        <input type="number" id="pdg-qty-${g.id}" min="0" value="${g.qty}" style="width:85px;border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:0.88rem;font-weight:${isAnk?700:400}">
+        <span style="font-size:0.8rem;color:var(--text-muted);flex:1">${stockProd?stockProd.unit:''} <em>${isAnk?'angebrochen':'verschlossen'}</em></span>
+        ${isAnk?`<button onclick="markGebindeVerbraucht('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;cursor:pointer">✗ verbraucht</button>`
+               :`<button onclick="(function(){const s=chemStock['${stockKey}'];const g=s.gebinde.find(x=>x.id===${g.id});if(g){g.status='angebrochen';s.qty=s.gebinde.filter(x=>x.status!=='verbraucht').reduce((a,x)=>a+x.qty,0);sd('chem_stock_v2',chemStock);renderStockDashboard&&renderStockDashboard();openProduktDetail('${poolId}');}})()" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;cursor:pointer">↑ öffnen</button>`}
+        <button onclick="(function(){const s=chemStock['${stockKey}'];s.gebinde=s.gebinde.filter(x=>x.id!==${g.id});s.qty=s.gebinde.filter(x=>x.status!=='verbraucht').reduce((a,x)=>a+x.qty,0);sd('chem_stock_v2',chemStock);openProduktDetail('${poolId}');})()" style="font-size:0.72rem;padding:3px 7px;border-radius:6px;background:none;color:#94a3b8;border:1px solid var(--border);cursor:pointer">🗑</button>
+      </div>`;
+    }).join('');
+  }
+
+  function saveGebindeQtys(){
+    if(!stockKey||!stock||!stock.gebinde)return;
+    stock.gebinde.forEach(function(g){
+      const inp=document.getElementById('pdg-qty-'+g.id);
+      if(inp){const v=parseFloat(inp.value);if(!isNaN(v))g.qty=Math.max(0,v);}
+    });
+    stock.qty=stock.gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);
+    sd('chem_stock_v2',chemStock);
+  }
+
+  const stockHtml=stockKey&&stockProd?`<div class="card" style="margin-bottom:8px;background:var(--pool-surface)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="card-title" style="font-size:0.78rem;margin:0">📦 Vorrat & Gebinde (${stockProd.unit})</div>
+      <button onclick="(function(){const qty=parseFloat(prompt('Menge neues Gebinde (${stockProd.unit}):','${stockProd.pkgDefault||1000}'));if(!isNaN(qty)&&qty>0){addGebinde('${stockKey}',qty);openProduktDetail('${poolId}');}})()" style="font-size:0.72rem;padding:3px 10px;border-radius:6px;background:var(--pool-blue);color:white;border:none;cursor:pointer">+ Gebinde</button>
+    </div>
+    <div id="pd-gebinde-list-${poolId}">${renderGebindeRows()}</div>
+    <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:6px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:0.78rem;color:var(--text-muted)">Gesamt:</span>
+      <span style="font-size:0.88rem;font-weight:700;color:var(--text-primary)">${stock.qty} ${stockProd.unit}</span>
     </div>
   </div>`:'';
 
@@ -9243,15 +9294,17 @@ function saveProduktDetail(poolId){
   p.datenblatt = document.getElementById('datenblatt-input-'+poolId)?.value.trim() || '';
   p.amazon = document.getElementById('pd-amazon-'+poolId)?.value.trim() || '';
   // Dosierungen werden nicht mehr über DOM gespeichert (read-only)
-  // Vorrat aus Eingabefeld speichern (falls geändert)
+  // Vorrat: Gebinde-Mengen aus DOM speichern
   const _stockKey=getStockKeyForPool(poolId);
-  if(_stockKey){
-    const _qty=parseFloat(document.getElementById('pd-stock-qty-'+poolId)?.value);
-    if(!isNaN(_qty)){
-      if(!chemStock[_stockKey])chemStock[_stockKey]={qty:0,pkgSize:1000};
-      chemStock[_stockKey].qty=Math.max(0,_qty);
-      sd('chem_stock_v2',chemStock);
-    }
+  if(_stockKey&&chemStock[_stockKey]&&chemStock[_stockKey].gebinde){
+    chemStock[_stockKey].gebinde.forEach(function(g){
+      const inp=document.getElementById('pdg-qty-'+g.id);
+      if(inp){const v=parseFloat(inp.value);if(!isNaN(v))g.qty=Math.max(0,v);}
+    });
+    chemStock[_stockKey].qty=chemStock[_stockKey].gebinde
+      .filter(function(g){return g.status!=='verbraucht';})
+      .reduce(function(a,g){return a+g.qty;},0);
+    sd('chem_stock_v2',chemStock);
   }
   saveProdukte();
   renderProduktBoard();
