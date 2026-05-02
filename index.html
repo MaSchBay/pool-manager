@@ -6068,6 +6068,7 @@ function collectAllData(){
     settings:settings,
     timerTodos:timerTodos,
     chemStock:chemStock,
+    poolProdukte:poolProdukte,
     coverState:(typeof coverState!=='undefined'?coverState:null),
     coverHistory:ld('cover_history',[]),
     wuensche:(typeof wuensche!=='undefined'?wuensche:[]),
@@ -6175,6 +6176,33 @@ function applyImportedData(d,mergeMode){
   if(d.season){season=d.season;sdRaw('season',season);}
   if(d.settings){settings=d.settings;sdRaw('settings',settings);}
   if(d.chemStock){chemStock=d.chemStock;sdRaw('chem_stock_v2',chemStock);}
+  if(d.poolProdukte&&Array.isArray(d.poolProdukte)){
+    if(mergeMode){
+      // Merge: update bestellt/bestelltMenge/lieferDatum/preis from remote per poolId
+      // Remote wins for order-related fields (newer setAt)
+      d.poolProdukte.forEach(function(rp){
+        var lp=poolProdukte.find(function(p){return p.poolId===rp.poolId;});
+        if(!lp)return;
+        // Sync order state: remote wins if newer
+        var remoteOrderAt=rp.bestelltAm||rp.updatedAt||'';
+        var localOrderAt=lp.bestelltAm||lp.updatedAt||'';
+        if(!localOrderAt||(remoteOrderAt&&remoteOrderAt>localOrderAt)){
+          lp.bestellt=rp.bestellt;
+          lp.bestelltMenge=rp.bestelltMenge;
+          lp.bestelltAm=rp.bestelltAm;
+          lp.lieferDatum=rp.lieferDatum;
+        }
+        // Sync stock/price changes
+        if(rp.price!==undefined)lp.price=rp.price;
+        if(rp.notes!==undefined)lp.notes=rp.notes;
+        if(Array.isArray(rp.dosierungen))lp.dosierungen=rp.dosierungen;
+      });
+    } else {
+      poolProdukte=d.poolProdukte;
+    }
+    saveProdukte();
+    if(typeof renderProduktBoard==='function')renderProduktBoard();
+  }
   if(d.coverState&&typeof coverState!=='undefined'){
     if(mergeMode&&coverState&&coverState.since&&d.coverState&&d.coverState.since){
       // Neuerer Status gewinnt (höheres since-Datum)
@@ -6294,7 +6322,7 @@ async function initCloudSync(){
 
 // Wrap sd() to trigger autosync after DATA writes only (not UI-prefs)
 const sdRaw=sd;
-const AUTOSYNC_KEYS=['measurements','ban','maintenance','active_todos','history_log','season','settings','timer_todos','chem_stock_v2','wuensche','cover_state','cover_history','kinder_ban','pool_parties'];
+const AUTOSYNC_KEYS=['measurements','ban','maintenance','active_todos','history_log','season','settings','timer_todos','chem_stock_v2','pool_produkte_v1','wuensche','cover_state','cover_history','kinder_ban','pool_parties'];
 sd=function(k,v){
   sdRaw(k,v);
   if(AUTOSYNC_KEYS.indexOf(k)>-1&&typeof queueAutoSync==='function'&&!_syncInProgress){
