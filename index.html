@@ -4894,7 +4894,7 @@ if(!chemStock){
 // Migration: Add Langzeit-Chlortabs to stock if missing
 (function(){
   if(!chemStock['Langzeit-Chlortabs']){
-    chemStock['Langzeit-Chlortabs']={qty:STOCK_PRODUCTS['Langzeit-Chlortabs'].pkgDefault,pkgSize:STOCK_PRODUCTS['Langzeit-Chlortabs'].pkgDefault};
+    chemStock['Langzeit-Chlortabs']={qty:STOCK_PRODUCTS['Langzeit-Chlortabs'].pkgDefault,pkgSize:STOCK_PRODUCTS['Langzeit-Chlortabs'].pkgDefault,gebinde:[{id:Date.now(),qty:STOCK_PRODUCTS['Langzeit-Chlortabs'].pkgDefault,status:'angebrochen'}]};
     sd('chem_stock_v2',chemStock);
   }
 })();
@@ -9134,37 +9134,47 @@ Format: TT.MM.JJJJ`);
 function lieferungBestaetigen(poolId){
   const p = poolProdukte.find(x => x.poolId === poolId);
   if(!p || !p.bestellt) return;
-  // Map poolId → stock name
+  // Map poolId → stock name (complete list)
   const pid2stock = {
-    ph_minus:'pH-Minus', ph_plus:'pH-Plus', chlortabs:'Schnell-Chlortabs',
-    chlorplus:'Chlor Plus', algischutz:'Algenschutz', flockmittel:'Flockmittel',
-    poolklar:'Poolklar', teststreifen:'Teststreifen'
+    ph_minus:'pH-Minus', ph_plus:'pH-Plus',
+    langzeit_chlortabs:'Langzeit-Chlortabs',
+    chlortabs:'Schnell-Chlortabs',
+    chlorplus:'Chlor Plus', algischutz:'Algenschutz',
+    flockmittel:'Flockmittel', poolklar:'Poolklar', teststreifen:'Teststreifen'
   };
   const stockName = pid2stock[poolId];
-  // Parse quantity from bestelltMenge
-  if(stockName && chemStock[stockName]){
+  const bestelltNote = p.bestelltMenge ? ' ('+p.bestelltMenge+')' : '';
+  if(stockName){
+    // Ensure stock entry exists
+    if(!chemStock[stockName]){
+      const sp = STOCK_PRODUCTS[stockName];
+      chemStock[stockName] = {qty:0, pkgSize:sp?sp.pkgDefault:1000, gebinde:[]};
+    }
+    const s = chemStock[stockName];
+    // Parse quantity
     const numMatch = (p.bestelltMenge||'').match(/[\d.,]+/);
     const num = numMatch ? parseFloat(numMatch[0].replace(',','.')) : null;
     if(num !== null){
-      const p2 = STOCK_PRODUCTS[stockName];
-      // Convert to correct unit: if L → ml, if kg → g
       let addAmt = num;
       const menge = p.bestelltMenge||'';
       if(/L|Liter/i.test(menge)) addAmt = num * 1000;
       if(/kg|Kilo/i.test(menge)) addAmt = num * 1000;
-      chemStock[stockName].qty = (chemStock[stockName].qty||0) + addAmt;
+      // Add as a new VERSCHLOSSEN gebinde (keeps gebinde in sync)
+      if(!Array.isArray(s.gebinde)) s.gebinde = [];
+      s.gebinde.push({id:Date.now(), qty:addAmt, status:'verschlossen'});
+      s.qty = s.gebinde.filter(function(g){return g.status!=='verbraucht';})
+                       .reduce(function(a,g){return a+g.qty;}, 0);
       sd('chem_stock_v2', chemStock);
       renderStockDashboard();
     }
   }
   // Clear bestellt flag
-  p.bestellt = false;
-  p.bestelltMenge = '';
-  p.bestelltAm = null;
+  const noteName = p.name; // save before clearing
+  p.bestellt = false; p.bestelltMenge = ''; p.bestelltAm = null; p.lieferDatum = null;
   saveProdukte();
   renderProduktBoard();
-  logHistory({type:'wartung', time:new Date().toISOString(), note:`📦 Lieferung erhalten: ${p.name}${p.bestelltMenge?' ('+p.bestelltMenge+')':''}`});
-  if(typeof toast === 'function') toast(`✅ Lieferung "${p.name}" bestätigt – Bestand aktualisiert!`, 'success', 3500);
+  logHistory({type:'wartung', time:new Date().toISOString(), note:'📦 Lieferung erhalten: '+noteName+bestelltNote});
+  if(typeof toast === 'function') toast('✅ Lieferung "'+noteName+'" bestätigt – als verschlossenes Gebinde hinzugefügt!', 'success', 3500);
 }
 
 // ============================================================
