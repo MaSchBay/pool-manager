@@ -1794,8 +1794,9 @@ let historyLog    = ld('history_log',[]);
 let season        = ld('season',{start:'',end:''});
 let settings      = ld('settings', JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
 // Migration: add orp and tds settings if missing
-if(!settings.orp)settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));
-if(!settings.tds)settings.tds=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.tds));
+if(!settings.orp||!settings.orp.min){settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));sd('settings',settings);}
+if(!settings.tds||!settings.tds.min){settings.tds=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.tds));sd('settings',settings);}
+Object.keys(DEFAULT_SETTINGS).forEach(function(k){if(!settings[k]){settings[k]=JSON.parse(JSON.stringify(DEFAULT_SETTINGS[k]));sd('settings',settings);}});
 if(!settings.orp)settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));
 let timerTodos    = ld('timer_todos',[]); // [{id,title,dueAt,todoId,stepIdx}]
 let editIndex     = -1;
@@ -1866,6 +1867,13 @@ async function fetchWeather(){
 // SETTINGS
 // ============================================================
 function renderEinstellungen(){
+  // Force-ensure all settings keys exist before rendering
+  Object.keys(DEFAULT_SETTINGS).forEach(function(k){
+    if(!settings[k]||settings[k].min===undefined){
+      settings[k]=JSON.parse(JSON.stringify(DEFAULT_SETTINGS[k]));
+      sd('settings',settings);
+    }
+  });
   renderBackupSection();
   updateAnthropicKeyStatus();
   const el=document.getElementById('settings-targets');if(!el)return;
@@ -1877,6 +1885,7 @@ function renderEinstellungen(){
     {key:'tds',    label:'💧 TDS (Wasserbelastung)',  unit:'ppm', desc:'Ziel ~800 ppm | Idealbereich 250–1500 ppm'},
   ];
   const rows=params.map(function(p){
+    if(!settings[p.key]&&DEFAULT_SETTINGS[p.key]){settings[p.key]=JSON.parse(JSON.stringify(DEFAULT_SETTINGS[p.key]));sd('settings',settings);}
     const s=settings[p.key];
     if(!s||s.target===undefined)return '';
     const u=p.unit?(' ('+p.unit+')'):'';
@@ -2550,6 +2559,25 @@ function adjustTaskQty(d){
   el.value=Math.max(0,(parseInt(el.value)||0)+d);
 }
 
+
+function getBanHoursForTask(taskId){
+  var taskToProduct={
+    'chlor_tabs':'chlortabs','langzeit_chlor':'langzeit_chlortabs',
+    'chlorplus':'chlorplus','schockchlorung':'chlorplus',
+    'ph_minus':'ph_minus','phminus':'ph_minus',
+    'ph_plus':'ph_plus','phplus':'ph_plus',
+    'poolklar':'poolklar','flocken':'flockmittel',
+    'algischutz':'algischutz','algenschutz':'algischutz'
+  };
+  var poolId=taskToProduct[taskId]||taskId;
+  var prod=poolProdukte.find(function(p){return p.poolId===poolId;});
+  if(!prod||!Array.isArray(prod.dosierungen))return null;
+  var maxBan=0,banName='';
+  prod.dosierungen.forEach(function(d){
+    if((d.banHours||0)>maxBan){maxBan=d.banHours;banName=d.name||prod.name;}
+  });
+  return maxBan>0?{hours:maxBan,name:banName||prod.name}:null;
+}
 function confirmTask(){
   const id=document.getElementById('task-confirm-id').value;
   const note=document.getElementById('task-confirm-note').value;
@@ -2578,9 +2606,9 @@ function confirmTask(){
     phminus:   {hours:4,name:'pH-Minus'},
     phplus:    {hours:4,name:'pH-Plus'},
   };
-  const banInfo=TASK_BAN_MAP[id];
+  const banInfo=TASK_BAN_MAP[id]||getBanHoursForTask(id);
   closeModal('modal-task-confirm');
-  if(banInfo){
+  if(banInfo&&banInfo.hours>0){
     // Open the explicit ban-confirm modal
     const until=new Date(Date.now()+banInfo.hours*3600000);
     until.setMinutes(until.getMinutes()-until.getTimezoneOffset());
@@ -2694,6 +2722,8 @@ function getWaterIssues(m){
 // iPHONE
 // ============================================================
 async function renderIphone(){
+  try{
+  console.log('[PM] renderIphone start');
   const now=new Date();
   document.getElementById('iphone-datetime').textContent=now.toLocaleString('de-DE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   // Score badge in header
@@ -2715,9 +2745,10 @@ async function renderIphone(){
   }
   renderTimerTodos('iphone-timertodos');
   // Values (iPhone-style – same as before)
-  const last=getLastMeasurement();
+  let last;
+  try{last=getLastMeasurement();}catch(e){console.error('[PM] getLastMeasurement:',e);last=null;}
   const vEl=document.getElementById('iphone-values');
-  if(!last){vEl.innerHTML='<p style="color:var(--text-muted);font-size:0.88rem">Keine Messdaten</p>';}
+  if(!vEl){}else if(!last){vEl.innerHTML='<p style="color:var(--text-muted);font-size:0.88rem">Keine Messdaten</p>';}
   else{
     const ago=timeAgo(last.time);
     const params=[{key:'ph',label:'pH',unit:''},{key:'chlor',label:'Chlor / FAC',unit:' ppm'},{key:'orp',label:'ORP',unit:' mV'},{key:'tds',label:'TDS',unit:' ppm'},{key:'temp',label:'Temp',unit:' °C'}];
@@ -2825,8 +2856,8 @@ async function renderIphone(){
       const ctx=chartEl.getContext('2d');ctx.clearRect(0,0,W,H);
       const scores=recent7.map(m=>{
         const vals=[
-          m.ph!==undefined?Math.max(0,100-Math.abs(m.ph-settings.ph.target)/((settings.ph.max-settings.ph.min)/2)*50):null,
-          m.chlor!==undefined?Math.max(0,100-Math.abs(m.chlor-settings.chlor.target)/((settings.chlor.max-settings.chlor.min)/2)*50):null,
+          m.ph!==undefined&&settings.ph?Math.max(0,100-Math.abs(m.ph-settings.ph.target)/((settings.ph.max-settings.ph.min)/2)*50):null,
+          m.chlor!==undefined&&settings.chlor?Math.max(0,100-Math.abs(m.chlor-settings.chlor.target)/((settings.chlor.max-settings.chlor.min)/2)*50):null,
         ].filter(x=>x!==null);
         return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
       }).filter(x=>x!==null);
@@ -2844,6 +2875,15 @@ async function renderIphone(){
         });
         ctx.fillStyle='#94a3b8';ctx.font='9px Nunito Sans';ctx.textAlign='left';ctx.fillText('7 Tage',4,10);
       }
+    }
+  }
+  }catch(e){
+    console.error('[Pool Manager] renderIphone error:',e);
+    console.error('Stack:',e.stack);
+    // Show error in the WASSERQUALITÄT card so it's visible without console
+    const vEl2=document.getElementById('iphone-values');
+    if(vEl2&&!vEl2.innerHTML){
+      vEl2.innerHTML='<div style="color:#dc2626;font-size:0.78rem;padding:8px">⚠️ Fehler beim Laden: '+String(e.message||e)+'</div>';
     }
   }
 }
@@ -2870,6 +2910,7 @@ function ipadCard(label,content,extra){
 }
 
 async function renderIpad(){
+  try{
   const now=new Date();
   document.getElementById('ipad-datetime').textContent=now.toLocaleString('de-DE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
   renderBanBanner('ipad-ban-banner');
@@ -3851,10 +3892,12 @@ function renderCharts(){
     if(lbl)lbl.textContent=`Letzte ${chartRange} Tage`;
   }
   const s=settings;
+  const sORP=s.orp||DEFAULT_SETTINGS.orp;
+  const sTDS=s.tds||DEFAULT_SETTINGS.tds;
   drawChart('chart-ph',filtered,'ph','#0ea5e9',[s.ph.min,s.ph.max],s.ph.target,s.ph.min-0.5,s.ph.max+0.5);
   drawChart('chart-chlor',filtered,'chlor','#f59e0b',[s.chlor.min,s.chlor.max],s.chlor.target,0,s.chlor.max+1.5);
-  drawChart('chart-orp',filtered,'orp','#8b5cf6',[s.orp.min,s.orp.max],s.orp.target,400,900);
-  drawChart('chart-tds',filtered,'tds','#0ea5e9',[s.tds.min,s.tds.max],s.tds.target,0,2500);
+  drawChart('chart-orp',filtered,'orp','#8b5cf6',[sORP.min,sORP.max],sORP.target,400,900);
+  drawChart('chart-tds',filtered,'tds','#0ea5e9',[sTDS.min,sTDS.max],sTDS.target,0,2500);
   drawChart('chart-temp',filtered,'temp','#10b981',null,s.temp.target,s.temp.min-2,s.temp.max+2);
   // Filterdruck: alle Messungen (nicht Zeitraum-gefiltert – wird selten gemessen)
   drawChart('chart-druck',measurements,'druck','#92400e',[0,0.56],null,0,1.6);
@@ -3866,12 +3909,22 @@ function drawChart(canvasId,data,key,color,range,target,yMin,yMax){
   const W=canvas.parentElement.offsetWidth||900;const H=160;
   canvas.width=W;canvas.height=H;ctx.clearRect(0,0,W,H);
   const pts=data.filter(m=>m[key]!==undefined&&m[key]!==null);
-  ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
+  // Show no-data message via sibling div (canvas may have W=0 before layout)
+  let noDataDiv=canvas.parentElement.querySelector('.chart-no-data');
   if(!pts.length){
-    ctx.fillStyle='#94a3b8';ctx.font='13px sans-serif';ctx.textAlign='center';
-    ctx.fillText('Noch keine Messdaten für diesen Wert',W/2,H/2);
+    canvas.style.display='none';
+    if(!noDataDiv){
+      noDataDiv=document.createElement('div');
+      noDataDiv.className='chart-no-data';
+      noDataDiv.style.cssText='padding:18px 0;text-align:center;font-size:0.82rem;color:#94a3b8;font-style:italic';
+      canvas.parentElement.appendChild(noDataDiv);
+    }
+    noDataDiv.textContent='Noch keine Messdaten – wird nach der nächsten Messung angezeigt.';
     return;
   }
+  if(noDataDiv)noDataDiv.remove();
+  canvas.style.display='';
+  ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
   const P={t:16,r:20,b:36,l:46};const cW=W-P.l-P.r,cH=H-P.t-P.b;
   // Grid
   for(let i=0;i<=4;i++){
@@ -4575,7 +4628,7 @@ function calcPoolScore(){
   // TDS: score based on deviation from target 800 (lower=better, but not too low)
   function tdsScore(val){
     if(val===undefined||val===null)return null;
-    const s2=settings.tds;
+    const s2=settings.tds||DEFAULT_SETTINGS.tds;
     const dist=Math.abs(val-s2.target);
     const range=s2.max-s2.min;
     if(val<s2.min)return 85; // sehr sauber – kein Problem
@@ -4586,7 +4639,7 @@ function calcPoolScore(){
   const weights=[
     {score:paramScore(last.ph,s.ph.min,s.ph.max,s.ph.target), w:25},
     {score:paramScore(last.chlor,s.chlor.min,s.chlor.max,s.chlor.target), w:25},
-    {score:paramScore(last.orp,s.orp.min,s.orp.max,s.orp.target), w:30},
+    {score:paramScore(last.orp,(s.orp||DEFAULT_SETTINGS.orp).min,(s.orp||DEFAULT_SETTINGS.orp).max,(s.orp||DEFAULT_SETTINGS.orp).target), w:30},
     {score:tdsScore(last.tds), w:20},
   ].filter(x=>x.score!==null);
 
@@ -8383,6 +8436,39 @@ function saveProdukte(){ sd('pool_produkte_v1', poolProdukte); }
   if(changed){ saveProdukte(); }
   sd(DOSI_KEY, true);
   console.log('[Pool Manager] Dosierungs-Migration v1 abgeschlossen.');
+})();
+
+// Migration v2: fix banHours that may have been stored incorrectly
+(function migrateBanHoursV2(){
+  var KEY2='dosi_ban_migration_v2';
+  if(ld(KEY2,false))return;
+  var corrections={
+    'algischutz': [{name:'Grunddosierung',ban:2},{name:'Stoßdosis',ban:2}],
+    'poolklar':   [{name:'Wöchentlich',ban:2},{name:'Stoßdosierung',ban:2}],
+    'chlorplus':  [{name:'Schockchlorung',ban:8},{name:'Stoßdosierung',ban:8}],
+    'ph_minus':   [{name:'pH senken',ban:4}],
+    'ph_plus':    [{name:'pH heben',ban:4}],
+  };
+  var changed=false;
+  poolProdukte.forEach(function(p){
+    var corr=corrections[p.poolId];
+    if(!corr||!Array.isArray(p.dosierungen))return;
+    p.dosierungen.forEach(function(d){
+      corr.forEach(function(c){
+        if(d.name&&d.name.toLowerCase().indexOf(c.name.toLowerCase())>=0&&d.banHours!==c.ban){
+          d.banHours=c.ban;changed=true;
+        }
+      });
+      // Generic fix: if banHours is 1 and product should have ban > 1
+      if(d.banHours===1){
+        var maxCorr=0;
+        corr.forEach(function(c){if(c.ban>maxCorr)maxCorr=c.ban;});
+        if(maxCorr>1){d.banHours=maxCorr;changed=true;}
+      }
+    });
+  });
+  if(changed)saveProdukte();
+  sd(KEY2,true);
 })();
 
 // ---- Render ----
