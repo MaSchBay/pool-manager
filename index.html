@@ -2722,7 +2722,6 @@ function getWaterIssues(m){
 // iPHONE
 // ============================================================
 async function renderIphone(){
-  try{
   console.log('[PM] renderIphone start');
   const now=new Date();
   document.getElementById('iphone-datetime').textContent=now.toLocaleString('de-DE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -2877,15 +2876,7 @@ async function renderIphone(){
       }
     }
   }
-  }catch(e){
-    console.error('[Pool Manager] renderIphone error:',e);
-    console.error('Stack:',e.stack);
-    // Show error in the WASSERQUALITÄT card so it's visible without console
-    const vEl2=document.getElementById('iphone-values');
-    if(vEl2&&!vEl2.innerHTML){
-      vEl2.innerHTML='<div style="color:#dc2626;font-size:0.78rem;padding:8px">⚠️ Fehler beim Laden: '+String(e.message||e)+'</div>';
-    }
-  }
+
 }
 
 // ---- iPad orientation state ----
@@ -2910,7 +2901,6 @@ function ipadCard(label,content,extra){
 }
 
 async function renderIpad(){
-  try{
   const now=new Date();
   document.getElementById('ipad-datetime').textContent=now.toLocaleString('de-DE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
   renderBanBanner('ipad-ban-banner');
