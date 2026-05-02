@@ -9245,20 +9245,37 @@ function lieferungBestaetigen(poolId){
     }
     const s = chemStock[stockName];
     // Parse quantity
-    const numMatch = (p.bestelltMenge||'').match(/[\d.,]+/);
-    const num = numMatch ? parseFloat(numMatch[0].replace(',','.')) : null;
-    if(num !== null){
-      let addAmt = num;
+    const sp = STOCK_PRODUCTS[stockName];
+    const unit = sp ? sp.unit : '';
+    // Ask: how many packages, what size each?
+    const anzahlStr = prompt('Lieferung für "'+p.name+'" erhalten!\n\nWie viele Packungen wurden geliefert?', '1');
+    const anzahl = parseInt(anzahlStr);
+    if(!isNaN(anzahl) && anzahl > 0) {
+      const numMatch = (p.bestelltMenge||'').match(/[\d.,]+/);
+      const totalNum = numMatch ? parseFloat(numMatch[0].replace(',','.')) : null;
+      let defaultQtyPerPkg = sp ? sp.pkgDefault : (totalNum && anzahl ? Math.round(totalNum/anzahl) : 1000);
+      // Convert total if needed
       const menge = p.bestelltMenge||'';
-      if(/L|Liter/i.test(menge)) addAmt = num * 1000;
-      if(/kg|Kilo/i.test(menge)) addAmt = num * 1000;
-      // Add as a new VERSCHLOSSEN gebinde (keeps gebinde in sync)
-      if(!Array.isArray(s.gebinde)) s.gebinde = [];
-      s.gebinde.push({id:Date.now(), qty:addAmt, status:'verschlossen'});
-      s.qty = s.gebinde.filter(function(g){return g.status!=='verbraucht';})
-                       .reduce(function(a,g){return a+g.qty;}, 0);
-      sd('chem_stock_v2', chemStock);
-      renderStockDashboard();
+      if(totalNum && anzahl) {
+        let totalAmt = totalNum;
+        if(/\bL\b|Liter/i.test(menge)) totalAmt = totalNum * 1000;
+        if(/\bkg\b|Kilo/i.test(menge)) totalAmt = totalNum * 1000;
+        defaultQtyPerPkg = Math.round(totalAmt / anzahl);
+      }
+      const qtyStr = prompt('Menge pro Packung ('+unit+'):', defaultQtyPerPkg);
+      const qtyPer = parseFloat(qtyStr);
+      if(!isNaN(qtyPer) && qtyPer > 0) {
+        if(!Array.isArray(s.gebinde)) s.gebinde = [];
+        for(let i = 0; i < anzahl; i++) {
+          s.gebinde.push({id: Date.now() + i, qty: qtyPer, status: 'verschlossen'});
+        }
+        s.qty = s.gebinde.filter(function(g){return g.status!=='verbraucht';})
+                         .reduce(function(a,g){return a+g.qty;}, 0);
+        sd('chem_stock_v2', chemStock);
+        renderStockDashboard();
+        // Update toast message
+        bestelltNote = ' – '+anzahl+'× '+qtyPer+' '+unit+' als verschlossene Gebinde eingetragen';
+      }
     }
   }
   // Clear bestellt flag
