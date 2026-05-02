@@ -2455,25 +2455,19 @@ function calcPhMinus(p){return`${Math.round(((p-settings.ph.target)/0.2)*150*POO
 
 function getTaskDoseHint(taskId){
   const last=getLastMeasurement();
-  // Chlor-adaptive Dosierung für 10,5m³
-  // Standard: 3 Tabs alle 3 Tage; bei niedrigem Chlor max. 1 Tab mehr
-  let chlorTabs=3; // Fixwert für ~10m³
-  let chlorNote='';
-  if(last?.chlor!==undefined){
-    const s=settings.chlor;
-    if(last.chlor>s.target+0.5){
-      chlorTabs=2;
-      chlorNote=' ⬇️ reduziert (Chlor erhöht)';
-    } else if(last.chlor<s.min){
-      chlorTabs=4; // max. 1 Tab mehr bei wirklich niedrigem Chlor
-      chlorNote=' ⬆️ leicht erhöht (Chlor niedrig)';
+  // Smart chlor hint – recommends extra tab when chlor is low
+  if(taskId==='chlor_tabs'||taskId==='langzeit_chlor'){
+    const s=settings.chlor||DEFAULT_SETTINGS.chlor;
+    if(last&&last.chlor!==undefined){
+      if(last.chlor<s.min){
+        return`→ 4 Langzeit-Tabs + ⚠️ 1 Schnell-Tab empfohlen (Chlor niedrig: ${last.chlor} ppm)`;
+      } else if(last.chlor>s.target+0.5){
+        return`→ 4 Langzeit-Tabs (Chlor ok: ${last.chlor} ppm)`;
+      }
     }
+    return'→ 4 Langzeit-Tabs wöchentlich · ggf. 3–5 Schnell-Tabs bei Bedarf';
   }
-  const hints={
-    'chlor_tabs':`→ ${chlorTabs} Tabs à 20g in Skimmer${chlorNote}`,
-    'algischutz':`→ ${Math.round(100*POOL_VOLUME/10)} ml Algenschutz`,
-    'poolklar':`→ ${Math.round(50*POOL_VOLUME/10)} ml Poolklar`,
-    'flockmittel':`→ ${Math.round(12*POOL_VOLUME/10)} ml Flockmittel`,
+  const staticHints={
     'filter_clean':'→ Rückspülen 2–3 Min, dann Nachspülen',
     'filter_reinigen':'→ Rückspülen & Nachspülen – Druck war zu hoch (≥ 0,56 Bar)',
     'druck_check':'→ Manometer ablesen: &lt; 0,56 Bar normal | ≥ 0,56 Bar = Rückspülen!',
@@ -2481,7 +2475,18 @@ function getTaskDoseHint(taskId){
     'abdeckung':'→ Plane abwaschen & auf Risse prüfen',
     'test':'→ GIDIGI-Messgerät: pH, ORP, FAC, TDS ablesen und eintragen',
   };
-  return hints[taskId]||'';
+  if(staticHints[taskId])return staticHints[taskId];
+  // Other chemical tasks: read from confirmed product dosierungen
+  const taskToProduct={
+    'algischutz':'algischutz','poolklar':'poolklar',
+    'flocken':'flockmittel','ph_minus':'ph_minus','ph_plus':'ph_plus','chlorplus':'chlorplus',
+  };
+  const poolId=taskToProduct[taskId]||taskId;
+  const prod=poolProdukte.find(function(p){return p.poolId===poolId;});
+  if(!prod||!Array.isArray(prod.dosierungen)||!prod.dosierungen.length)return'';
+  const d=prod.dosierungen[0];
+  const banStr=d.banHours?(d.banHours<1?' · 🚫 '+(d.banHours*60)+' min':' · 🚫 '+d.banHours+'h'):'';
+  return'→ '+d.amount+' '+d.unit+(d.name?' ('+d.name+')':'')+banStr;
 }
 
 function renderTasksDashboard(){
@@ -2602,9 +2607,10 @@ function confirmTask(){
   const TASK_BAN_MAP={
     algischutz:{hours:2,name:'Algenschutz'},
     poolklar:  {hours:2,name:'Poolklar'},
-    chlorplus: {hours:8,name:'Chlor Plus (Schockchlorung)'},
-    phminus:   {hours:4,name:'pH-Minus'},
-    phplus:    {hours:4,name:'pH-Plus'},
+    chlorplus: {hours:0.5,name:'Chlor Plus (Normaldosierung / Stoßchlorung)'},
+    // pH-Minus and pH-Plus: no ban per confirmed settings
+    // phminus:   {hours:0,name:'pH-Minus'},
+    // phplus:    {hours:0,name:'pH-Plus'},
   };
   const banInfo=TASK_BAN_MAP[id]||getBanHoursForTask(id);
   closeModal('modal-task-confirm');
@@ -3454,7 +3460,7 @@ function poolTempEstimate(idx,airMax,airMin,wmoCode){
 // ============================================================
 // DOSIERUNG
 // ============================================================
-const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0,chlorplus:8,flockmittel:0,poolklar:2,algenschutz:2,phminus:4,phplus:4};
+const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0.5,chlorplus:0.5,flockmittel:0,poolklar:0,algenschutz:0,phminus:0,phplus:0};
 const PRODUCTS={
   schnellchlor:{name:'Schnell-Chlortabs 20g',
     fields:[{id:'mode',label:'Modus',type:'select',opts:['Regelbetrieb (alle 3 Tage)','Stoßbehandlung']}],
@@ -3483,79 +3489,56 @@ const PRODUCTS={
     calc(v){
       const cur=parseFloat(v.current_chlor);
       const days=parseFloat(v.days_since)||7;
-      const tgt=settings.chlor.target||2;
-      const perWeekTabs=Math.round(4*POOL_VOLUME/10+0.5); // 4 Tabs/10m³/Woche
-      const maintenanceTabs=Math.round(perWeekTabs*(days/7));
-      if(isNaN(cur)||cur>=tgt){
-        return{amount:`${perWeekTabs} Langzeit-Tabs/Woche (${perWeekTabs*20}g) in Skimmer`,note:`Grundchlorierung für ${Math.round(POOL_VOLUME*1000)}L. Wöchentlich prüfen.`};
+      const tgt=(settings.chlor||DEFAULT_SETTINGS.chlor).target;
+      const min=(settings.chlor||DEFAULT_SETTINGS.chlor).min;
+      const perWeek=4; // 4 Langzeit-Tabs/Woche für ~10m³ (bestätigt)
+      if(isNaN(cur)){
+        return{amount:`${perWeek} Langzeit-Tabs/Woche (${perWeek*20}g) – Chlor bitte messen!`,note:'Gemessenen Wert eingeben für genaue Empfehlung'};
       }
-      const deficit=tgt-cur;
-      // Each 20g Langzeit-Tab raises ~0.2 ppm per 10m³ (slow over days)
-      const extraTabs=Math.ceil(deficit/0.2*(POOL_VOLUME/10));
-      return{amount:`${perWeekTabs} Langzeit-Tabs wöchentlich + ${extraTabs} extra zur Aufstockung`,note:`Chlor ${cur}→${tgt} ppm. Extra-Tabs sofort + Regeltabs in Skimmer.`};
+      if(cur>=tgt){
+        return{amount:`${perWeek} Langzeit-Tabs (${perWeek*20}g) – wöchentlich`,note:`✅ Chlor ${cur} ppm ist gut. Grunddosierung beibehalten.`};
+      } else if(cur>=min){
+        return{amount:`${perWeek} Langzeit-Tabs + ⚠️ 1 Schnell-Chlortab empfohlen`,note:`Chlor ${cur} ppm leicht niedrig → LZ-Tabs als Basis + 1 Schnelltab zum Ausgleich`};
+      } else {
+        return{amount:`${perWeek} Langzeit-Tabs + 🚨 Schockchlorung: ${Math.round(158)} g Chlor Plus`,note:`Chlor ${cur} ppm zu niedrig → erst Schockchlorung (158g), dann Langzeit-Tabs als Basis. 30 min Badeverbot.`};
+      }
     },
-    instr:`<div style="background:#f0fdf4;padding:10px;border-radius:8px;border-left:4px solid #16a34a;margin-bottom:10px"><strong style="color:#166534">✅ Primäre Chlorierungsmethode</strong><br><span style="font-size:0.82rem">Über Skimmer oder Dosierschwimmer – langsam löslich über mehrere Tage</span></div><ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Tabs in <strong>Skimmer</strong> oder Dosierschwimmer legen</li><li>Wöchentlich prüfen und ggf. nachfüllen</li><li>Bei Bedarf mit Schnelltabs ergänzen</li><li>Niemals mit anderen Chlormitteln mischen!</li><li>Tabs sind 20g – langsam löslich</li></ol>`},
-  schnellchlor:{name:'Schnell-Chlortabs 20g (Ergänzung)',
-    fields:[
-      {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC) – GIDIGI Messgerät',type:'number',step:0.1},
-    ],
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Tabs in <strong>Skimmer oder Dosierschwimmer</strong></li><li>Filter mind. 2h laufen lassen</li><li>Nach 4–6h erneut messen</li></ol>`},
+  schnellchlor:{name:'Schnell-Chlortabs 20g',
+    fields:[{id:'mode',label:'Modus',type:'select',opts:['Normalbetrieb (alle 3 Tage)','Stoßchlorung (alle 2 Wochen)']}],
     calc(v){
-      const cur=parseFloat(v.current_chlor);
-      const tgt=settings.chlor.target||2;
-      if(isNaN(cur)){const t=Math.round(3*POOL_VOLUME/10);return{amount:`${t} Schnell-Tabs (${t*20}g)`,note:'In Skimmer – bei unbekanntem Chlorwert'};}
-      if(cur>=tgt){return{amount:'Keine Schnelltabs nötig',note:`Chlor ${cur} ppm liegt im Zielbereich. Langzeit-Tabs reichen.`};}
-      const deficit=tgt-cur;
-      // 1 Schnelltab (20g) raises ~0.35 ppm per 10m³ quickly
-      const tabs=Math.max(1,Math.ceil(deficit/0.35*(POOL_VOLUME/10)));
-      return{amount:`${tabs} Schnell-Chlortabs (${tabs*20}g)`,note:`Ergänzung: Chlor ${cur}→${tgt} ppm. Tabs in Skimmer, Filter läuft min. 2h.`};
+      const stoss=v.mode&&v.mode.startsWith('Stoß');
+      const t=stoss?5:3;
+      return{amount:`${t} Tabs à 20g = ${t*20}g`,note:stoss?'Stoßchlorung alle 2 Wochen':'Normalbetrieb alle 3 Tage – in Skimmer legen'};
     },
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Nur zur <strong>Ergänzung</strong> wenn Langzeit-Tabs nicht reichen</li><li>In Skimmer legen</li><li>Filter mind. 2h laufen lassen</li><li>Nach 2-4h erneut messen</li></ol>`},
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 einstellen</li><li>Tabs in <strong>Skimmer</strong></li><li>Filter laufen lassen</li><li>Nie mit anderen Chemikalien mischen!</li></ol>`},
   mischdosi:{name:'🔀 Mischdosierung: Langzeit + Schnell',
     fields:[
-      {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC) – FAC',type:'number',step:0.1},
+      {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC)',type:'number',step:0.1},
       {id:'days_since',label:'Tage seit letzter Chlor-Dosierung',type:'number',step:1,autoFill:'chlor_days'},
     ],
     calc(v){
       const cur=parseFloat(v.current_chlor);
       const days=parseFloat(v.days_since)||7;
-      const tgt=settings.chlor.target||2;
-      const min=settings.chlor.min||1;
-      const max=settings.chlor.max||3;
+      const tgt=(settings.chlor||DEFAULT_SETTINGS.chlor).target;
+      const min=(settings.chlor||DEFAULT_SETTINGS.chlor).min;
+      const max=(settings.chlor||DEFAULT_SETTINGS.chlor).max;
       if(isNaN(cur)){
-        const t=Math.round(4*POOL_VOLUME/10+0.5);
-        return{amount:`${t} Langzeit-Tabs/Woche – Chlor bitte messen!`,note:'Gemessenen Wert eingeben für intelligente Dosierung'};
+        return{amount:`4 Langzeit-Tabs/Woche – Chlor bitte messen!`,note:'Gemessenen Wert eingeben für intelligente Dosierung'};
       }
       const deficit=tgt-cur;
-      const perWeekLZ=Math.round(4*POOL_VOLUME/10+0.5);
-      const maintLZ=Math.round(perWeekLZ*(days/7));
       if(cur>=tgt){
-        return{amount:`${perWeekLZ} Langzeit-Tabs (${perWeekLZ*20}g) – wöchentlich`,note:`✅ Chlor ${cur} ppm ist gut. Nur Grunddosierung nötig.`};
-      } else if(cur>=min && deficit<=0.5){
-        // Slight deficit: LZ-Tabs + 1-2 Schnelltabs
-        const schnellT=Math.ceil(deficit/0.35*(POOL_VOLUME/10));
-        return{amount:`${maintLZ} Langzeit-Tabs + ${schnellT} Schnell-Chlortabs`,note:`Chlor ${cur}→${tgt}: LZ-Tabs als Basis + ${schnellT} Schnelltab(s) für raschen Anstieg`};
+        return{amount:`4 Langzeit-Tabs (wöchentlich)`,note:`✅ Chlor ${cur} ppm ist gut. Nur Grunddosierung nötig.`};
+      } else if(cur>=min&&deficit<=0.5){
+        return{amount:`4 Langzeit-Tabs + 1 Schnell-Chlortab empfohlen`,note:`Chlor ${cur}→${tgt} ppm: LZ-Tabs als Basis + 1 Schnelltab für raschen Anstieg`};
       } else if(deficit<=1.5){
-        // Bigger deficit: recommend granulate over tabs
-        const g=Math.round((deficit/2)*175*POOL_VOLUME/10);
-        const schnellT=Math.ceil(deficit/0.35*(POOL_VOLUME/10));
-        return{amount:`⚠️ ${schnellT} Schnell-Tabs ODER ${g}g Chlor Plus Granulat + ${maintLZ} Langzeit-Tabs`,note:`Chlor ${cur} ppm – deutliches Defizit. Granulat wirkt schneller. Danach Langzeit-Tabs als Basis.`};
+        return{amount:`⚠️ 3–5 Schnell-Tabs ODER 158g Chlor Plus + 4 Langzeit-Tabs`,note:`Chlor ${cur} ppm – deutliches Defizit. Granulat wirkt schneller. Danach LZ-Tabs als Basis.`};
       } else {
-        // Large deficit: Schockchlorung
-        const g=Math.round(175*POOL_VOLUME/10);
-        return{amount:`🚨 Schockchlorung: ${g}g Chlor Plus + danach ${perWeekLZ} Langzeit-Tabs/Woche`,note:`Chlor ${cur} ppm – kritisch! Schockchlorung nötig. Badeverbot 8h.`};
+        return{amount:`🚨 Schockchlorung: 158g Chlor Plus (30 min Badeverbot) + danach 4 Langzeit-Tabs/Woche`,note:`Chlor ${cur} ppm zu niedrig → Schockchlorung nötig. Erst nach 30 min messen und prüfen.`};
       }
     },
-    instr:`<div style="background:linear-gradient(135deg,#f0fdf4,#ede9fe);padding:10px;border-radius:8px;margin-bottom:10px"><strong>🧠 Intelligente Chlorstrategie:</strong><br><span style="font-size:0.81rem;line-height:1.6">• Basis: Langzeit-Tabs wöchentlich im Skimmer<br>• Kleines Defizit: + Schnelltabs<br>• Großes Defizit: Granulat + danach Langzeit-Tabs<br>• Kein Badeverbot bei reinen Chlortabs</span></div><ol style="line-height:1.8;font-size:0.88rem;padding-left:16px"><li>FAC-Wert eingeben (GIDIGI Messgerät)</li><li>Empfehlung berechnen</li><li>Dokumentieren und umsetzen</li><li>Nach 4-8h nachmessen</li></ol>`},
-  phminus:{name:'pH-Minus Granulat',
-    fields:[{id:'current_ph',label:'Aktueller pH-Wert',type:'number',step:0.1}],
-    calc(v){const c=parseFloat(v.current_ph);const tgt=settings.ph.target;if(isNaN(c)||c<=tgt)return{amount:'Keine Zugabe nötig',note:''};const g=Math.round(((c-tgt)/0.2)*150*POOL_VOLUME/10);return{amount:`${g}g pH-Minus Granulat`,note:`Senkt pH von ${c} → ${tgt}. In Stufen à 4h.`}},
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Im Eimer auflösen</li><li>Entlang Beckenrand, Filter läuft</li><li>Nicht in Metallnähe</li><li>Nach 4h pH prüfen</li><li>Mehrere Stufen</li></ol>`},
-  phplus:{name:'pH-Plus Granulat',
-    fields:[{id:'current_ph',label:'Aktueller pH-Wert',type:'number',step:0.1}],
-    calc(v){const c=parseFloat(v.current_ph);const tgt=settings.ph.target;if(isNaN(c)||c>=tgt)return{amount:'Keine Zugabe nötig',note:''};const g=Math.round(((tgt-c)/0.2)*100*POOL_VOLUME/10);return{amount:`${g}g pH-Plus Granulat`,note:`Hebt pH von ${c} → ${tgt}`}},
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Im Eimer auflösen</li><li>Entlang Beckenrand, Filter läuft</li><li>Nach 4h pH prüfen</li></ol>`},
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Chlor zu niedrig: erst Granulat, dann Tabs</li><li>Chlor ok: nur LZ-Tabs reichen</li><li>Nach Dosierung mind. 4h messen</li></ol>`}
 };
-
 function selectProduct(key,card){
   document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');selProduct=key;
   const p=PRODUCTS[key];document.getElementById('dosi-title').textContent=`📊 ${p.name}`;
@@ -8461,6 +8444,66 @@ function saveProdukte(){ sd('pool_produkte_v1', poolProdukte); }
   sd(KEY2,true);
 })();
 
+// Migration v3: Write interview-confirmed dosierungen for all products
+(function migrateDosierungenV3(){
+  var KEY3='dosi_migration_v3_confirmed';
+  if(ld(KEY3,false))return;
+
+  var CONFIRMED={
+    langzeit_chlortabs:[
+      {name:'Wöchentlich (Skimmer/Dosierschwimmer)',amount:4,unit:'Stk',banHours:0,
+       note:'4 Tabs (20g) pro 10.000L pro Woche. Primäre Grundchlorierung.'}
+    ],
+    chlortabs:[
+      {name:'Normalbetrieb (alle 3 Tage)',amount:3,unit:'Stk',banHours:0,
+       note:'3 Tabs (20g) alle 3 Tage bei normalem Bedarf.'},
+      {name:'Stoßchlorung (alle 2 Wochen)',amount:5,unit:'Stk',banHours:0,
+       note:'5 Tabs (20g) alle 2 Wochen als Stoßbehandlung.'}
+    ],
+    chlorplus:[
+      {name:'Normaldosierung / Stoßchlorung',amount:158,unit:'g',banHours:0.5,
+       note:'150–200g pro 10m³ möglich. Direkt ins Beckenwasser geben, Pumpe laufen lassen. 30 min Badeverbot.'}
+    ],
+    flockmittel:[
+      {name:'Wöchentlich',amount:20,unit:'ml',banHours:0,
+       note:'20ml pro 10.000L pro Woche bei laufender Filteranlage.'},
+      {name:'Bei Bedarf – Stoßdosierung',amount:32,unit:'ml',banHours:0,
+       note:'30–60ml/10m³ bei starker Trübung. Nach 1 Tag Boden absaugen.'}
+    ],
+    poolklar:[
+      {name:'Wöchentlich',amount:53,unit:'ml',banHours:0,
+       note:'50ml/10m³ wöchentlich unverdünnt ins Becken. Filter mind. 2h laufen lassen.'},
+      {name:'Bei starker Trübung (Stoß)',amount:53,unit:'ml',banHours:0,
+       note:'Zusätzliche 50ml/10m³ bei starker Trübung.'}
+    ],
+    algischutz:[
+      {name:'Erstdosierung',amount:263,unit:'ml',banHours:0,
+       note:'250ml/10m³ zur Erstbefüllung oder nach Reinigung.'},
+      {name:'Nachdosierung (alle 14 Tage)',amount:105,unit:'ml',banHours:0,
+       note:'100ml/10m³ alle 14 Tage als Dauerschutz.'},
+      {name:'Stoßbehandlung',amount:263,unit:'ml',banHours:0,
+       note:'250ml/10m³ bei sichtbarem Algenbefall.'}
+    ],
+    ph_minus:[
+      {name:'pH senken (pro 0,2 Einheiten)',amount:158,unit:'g',banHours:0,
+       note:'Ca. 150g/10m³ senken pH um ~0,2. Vorlösen, gleichmäßig verteilen. Wert nach 4h kontrollieren.'}
+    ],
+    ph_plus:[
+      {name:'pH heben (pro 0,2 Einheiten)',amount:105,unit:'g',banHours:0,
+       note:'Ca. 100g/10m³ heben pH um ~0,2. Vorlösen, gleichmäßig verteilen. Wert nach 4h kontrollieren.'}
+    ]
+  };
+
+  poolProdukte.forEach(function(p){
+    if(CONFIRMED[p.poolId]){
+      p.dosierungen=JSON.parse(JSON.stringify(CONFIRMED[p.poolId]));
+    }
+  });
+  saveProdukte();
+  sd(KEY3,true);
+  console.log('[Pool Manager] Dosierungs-Migration v3 (bestätigt) abgeschlossen.');
+})();
+
 // ---- Render ----
 function renderProduktBoard(){
   const grid = document.getElementById('produkt-grid');
@@ -8783,7 +8826,7 @@ function openProduktDetail(poolId){
         <input id="pd-brand-${p.poolId}" type="text" placeholder="Marke" value="${(p.brand||'').replace(/"/g,'&quot;')}" style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem">
         <div style="display:flex;gap:6px">
           <input id="pd-size-${p.poolId}" type="text" placeholder="Größe (z.B. 1 kg)" value="${(p.size||'').replace(/"/g,'&quot;')}" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem">
-          <input id="pd-price-${p.poolId}" type="text" placeholder="Preis €" value="${(p.price||'').replace(/"/g,'&quot;')}" style="width:80px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem">
+          <span style="font-size:0.88rem;font-weight:700;padding:0 4px">€</span><input id="pd-price-${p.poolId}" type="text" placeholder="z.B. 12,99" value="${(p.price||'').replace(/"/g,'&quot;')}" style="width:80px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem">
         </div>
       </div>
     </div>
@@ -8792,13 +8835,17 @@ function openProduktDetail(poolId){
       <div class="card-title" style="font-size:0.78rem">📋 Notizen</div>
       <textarea id="pd-notes-${p.poolId}" rows="2" placeholder="Dosierhinweise, Notizen..." style="width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem;resize:vertical;box-sizing:border-box">${p.notes||''}</textarea>
     </div>
-    <div class="card" style="margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="card-title" style="font-size:0.78rem;margin:0">⚗️ Dosierungen & Badeverbote</div>
-        <button class="btn btn-primary btn-sm" onclick="addDosierung('${p.poolId}')">+ Hinzufügen</button>
-      </div>
-      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px">Name · Menge · Einheit · Verbot (h) · Hinweis. Verbot ≥ 0: Badeverbot wird nach Mittelgabe gesetzt.</div>
-      <div id="pd-dosi-list">${dosiRows||'<p style="font-size:0.82rem;color:var(--text-muted)">Noch keine Dosierungen hinterlegt.</p>'}</div>
+    <div class="card" style="margin-bottom:8px;background:var(--pool-surface)">
+      <div class="card-title" style="font-size:0.78rem">⚗️ Dosierungen & Badeverbote</div>
+      ${p.dosierungen&&p.dosierungen.length?p.dosierungen.map(function(d,i){
+        return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:white">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center">'
+          +'<span style="font-weight:700;font-size:0.83rem">'+d.name+'</span>'
+          +'<span style="font-size:0.78rem;color:var(--text-muted)">'+d.amount+' '+d.unit+(d.banHours?(' · 🚫 '+(d.banHours<1?(d.banHours*60)+' min':d.banHours+'h')):'')+'</span>'
+          +'</div>'
+          +(d.note?'<div style="font-size:0.73rem;color:var(--text-muted);margin-top:3px">'+d.note+'</div>':'')
+          +'</div>';
+      }).join(''):'<p style="font-size:0.82rem;color:var(--text-muted)">Keine Dosierungen hinterlegt.</p>'}
     </div>
     <div class="card" style="margin-bottom:8px">
       <div class="card-title" style="font-size:0.78rem">📄 Datenblatt & Shop</div>
@@ -9057,8 +9104,7 @@ function saveProduktDetail(poolId){
   p.notes = document.getElementById('pd-notes-'+poolId)?.value.trim() || '';
   p.datenblatt = document.getElementById('datenblatt-input-'+poolId)?.value.trim() || '';
   p.amazon = document.getElementById('pd-amazon-'+poolId)?.value.trim() || '';
-  // Dosierungen aus DOM speichern
-  if(Array.isArray(p.dosierungen))saveDosierungenFromDOM(p);
+  // Dosierungen werden nicht mehr über DOM gespeichert (read-only)
   saveProdukte();
   renderProduktBoard();
   closeModal('modal-produkt-detail');
