@@ -1613,7 +1613,9 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:14px">Die Wartezeit ist abgelaufen. Jetzt messen und Werte eintragen:</p>
     <div class="grid-2">
       <div class="form-group"><label class="form-label">pH</label><input type="number" id="timer-input-ph" step="0.1"></div>
-      <div class="form-group"><label class="form-label">Chlor / FAC ppm</label><input type="number" id="timer-input-chlor" step="0.1"></div>
+      <div class="form-group"><label class="form-label">FAC / Chlor ppm</label><input type="number" id="timer-input-chlor" step="0.1"></div>
+      <div class="form-group"><label class="form-label">ORP mV <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label><input type="number" id="timer-input-orp" step="10" placeholder="z.B. 700"></div>
+      <div class="form-group"><label class="form-label">TDS ppm <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label><input type="number" id="timer-input-tds" step="50" placeholder="z.B. 800"></div>
       <div class="form-group"><label class="form-label">Temp °C</label><input type="number" id="timer-input-temp" step="0.5"></div>
     </div>
     <input type="hidden" id="timer-measure-id">
@@ -1783,7 +1785,7 @@ if(!maintenanceTasks.find(t=>t.id==='filter_reinigen')){
   sd('maintenance',maintenanceTasks);
 }
 // Migration: remove retired tasks (Skimmerkorb, Poolwände bürsten)
-{const retired=['skimmer','wand_brush'];const before=maintenanceTasks.length;maintenanceTasks=maintenanceTasks.filter(t=>!retired.includes(t.id));if(maintenanceTasks.length!==before)sd('maintenance',maintenanceTasks);}
+{const retired=['skimmer','wand_brush','skimmerkorb','pool_walls'];const before=maintenanceTasks.length;maintenanceTasks=maintenanceTasks.filter(t=>!retired.includes(t.id));if(maintenanceTasks.length!==before)sd('maintenance',maintenanceTasks);}
 let weatherData   = null;
 let weatherCache  = ld('weather_cache',null);
 let weatherCacheT = ld('weather_cache_time',0);
@@ -1796,6 +1798,9 @@ let settings      = ld('settings', JSON.parse(JSON.stringify(DEFAULT_SETTINGS)))
 // Migration: add orp and tds settings if missing
 if(!settings.orp||!settings.orp.min){settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));sd('settings',settings);}
 if(!settings.tds||!settings.tds.min){settings.tds=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.tds));sd('settings',settings);}
+if(!settings.chlor||!settings.chlor.min){settings.chlor=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.chlor));sd('settings',settings);}
+if(!settings.ph||!settings.ph.min){settings.ph=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.ph));sd('settings',settings);}
+if(!settings.temp||!settings.temp.min){settings.temp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.temp));sd('settings',settings);}
 Object.keys(DEFAULT_SETTINGS).forEach(function(k){if(!settings[k]){settings[k]=JSON.parse(JSON.stringify(DEFAULT_SETTINGS[k]));sd('settings',settings);}});
 if(!settings.orp)settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));
 let timerTodos    = ld('timer_todos',[]); // [{id,title,dueAt,todoId,stepIdx}]
@@ -2024,7 +2029,21 @@ function setOrKeepLongerBan(newBan){
   sd('ban',ban);
   return true;
 }
-function clearBan(){ban=null;sd('ban',null);renderDashboard();renderFrau();renderIphone();renderBanBanner('ipad-ban-banner');}
+function clearBan(){
+  ban=null;sd('ban',null);
+  // Also clear any kinder bans of type 'pool_closed'
+  const kstate=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
+  let kchanged=false;
+  Object.keys(kstate).forEach(function(name){
+    if(kstate[name]&&kstate[name].type==='pool_closed'){
+      kstate[name]=null;kchanged=true;
+      logHistory({type:'kinder_ban',time:new Date().toISOString(),
+        note:'✅ Badeverbot '+name+' aufgehoben (Pool geöffnet)',name,aufgehoben:true});
+    }
+  });
+  if(kchanged){sd('kinder_ban',kstate);renderKinderBan();renderKinderBanDashboard();renderKinderBanMary();}
+  renderDashboard();renderFrau();renderIphone();renderBanBanner('ipad-ban-banner');
+}
 function openBanEdit(){
   if(!ban)return;
   const u=new Date(ban.until);u.setMinutes(u.getMinutes()-u.getTimezoneOffset());
@@ -2124,11 +2143,14 @@ function saveTimerMeasure(){
   const id=parseInt(document.getElementById('timer-measure-id').value);
   const ph=parseFloat(document.getElementById('timer-input-ph').value);
   const chlor=parseFloat(document.getElementById('timer-input-chlor').value);
+  const orp=parseFloat(document.getElementById('timer-input-orp')?.value);
+  const tds=parseFloat(document.getElementById('timer-input-tds')?.value);
   const temp=parseFloat(document.getElementById('timer-input-temp').value);
   const entry={time:new Date().toISOString()};
   if(!isNaN(ph))entry.ph=ph;if(!isNaN(chlor))entry.chlor=chlor;
+  if(!isNaN(orp))entry.orp=orp;if(!isNaN(tds))entry.tds=tds;
   if(!isNaN(temp))entry.temp=temp;
-  if(entry.ph||entry.chlor||entry.temp){
+  if(entry.ph||entry.chlor||entry.temp||entry.orp||entry.tds){
     measurements.push(entry);sd('measurements',measurements);
     logHistory({type:'messung',time:entry.time,...entry,note:'Nach Timer-Erinnerung gemessen'});
     checkAutoBan(entry);
@@ -2442,7 +2464,7 @@ function renderEmpfehlungen(id){
     const drain=Math.round(10520*(last.tds-800)/last.tds);
     tips.push({type:'warn',msg:`Wasserbelastung (TDS) zu hoch (${last.tds} ppm) → ${drain} Liter ablassen und mit Frischwasser auffüllen`});
   }
-  maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>2)tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hoursOverdue(t)}h überfällig)`})});
+  maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`;}}});
   el.innerHTML=tips.map(t=>`
     <div class="empfehlung ${t.type}" style="cursor:${t.helpIdx!==undefined?'pointer':'default'};justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" ${t.helpIdx!==undefined?`onclick="showBoard('hilfe');setTimeout(()=>startTodo(${t.helpIdx}),100)"`:''}>
       <span>💡 ${t.msg}</span>
@@ -3586,6 +3608,10 @@ function logDosierung(productKey,amount){
     setOrKeepLongerBan(newBan);
   }
   if(banH>0){addTimerTodo(`Nach ${p.name}: Wasser messen`,banH);}
+  // Filter-Laufzeit-Timer nach Dosierung
+  const _filterMap={'Chlor Plus':2,'Poolklar':2,'Flockmittel':0.25};
+  const _filterH=_filterMap[p.name]||0;
+  if(_filterH>0)addTimerTodo(`Filter ausschalten – ${p.name} fertig`,_filterH);
   if(typeof toast==='function')toast('Dosierung "'+p.name+' – '+amount+'" dokumentiert'+(banH>0?' – Badeverbot & Timer aktiv':''),'success',3500);
   else alert(`✅ Dosierung "${p.name} – ${amount}" dokumentiert!${banH>0?' Badeverbot gesetzt und Mess-Timer läuft.':''}`);
 }
@@ -4423,7 +4449,7 @@ function completeTodoStepWithMeasure(todoId,stepIdx){
   document.getElementById('timer-measure-title').textContent=`${todo.title} – ${step.text}`;
   // Abuse timer measure modal for inline measurement
   document.getElementById('timer-measure-id').value=`todo_${todoId}_${stepIdx}`;
-  ['ph','chlor','temp'].forEach(k=>document.getElementById('timer-input-'+k).value='');
+  ['ph','chlor','orp','tds','temp'].forEach(k=>{const el=document.getElementById('timer-input-'+k);if(el)el.value='';});
   document.getElementById('modal-timer-measure').classList.add('open');
 }
 
@@ -4919,6 +4945,58 @@ function estimateStockFromHistory(){
 }
 
 
+// ============================================================
+// MEHRFACH-GEBINDE: Multi-container stock management
+// ============================================================
+function initGebinde(stockKey){
+  const s=chemStock[stockKey];if(!s)return;
+  if(!Array.isArray(s.gebinde)||s.gebinde.length===0){
+    // Initialize from existing qty
+    s.gebinde=[{id:Date.now(),qty:s.qty,status:'angebrochen'}];
+    sd('chem_stock_v2',chemStock);
+  }
+}
+
+function addGebinde(stockKey,qty){
+  const s=chemStock[stockKey];if(!s)return;
+  initGebinde(stockKey);
+  s.gebinde.push({id:Date.now(),qty:Math.max(0,qty),status:'verschlossen'});
+  s.qty=s.gebinde.filter(g=>g.status!=='verbraucht').reduce((a,g)=>a+g.qty,0);
+  sd('chem_stock_v2',chemStock);
+  renderStockDashboard();
+  if(typeof toast==='function')toast('📦 Neues Gebinde hinzugefügt','success',2000);
+}
+
+function markGebindeVerbraucht(stockKey,gebindeId){
+  const s=chemStock[stockKey];if(!s||!s.gebinde)return;
+  const g=s.gebinde.find(x=>x.id===gebindeId);
+  if(!g)return;
+  g.status='verbraucht';
+  // Auto-open next closed one
+  const next=s.gebinde.find(x=>x.status==='verschlossen');
+  if(next)next.status='angebrochen';
+  s.qty=s.gebinde.filter(g=>g.status!=='verbraucht').reduce((a,g)=>a+g.qty,0);
+  sd('chem_stock_v2',chemStock);
+  renderStockDashboard();
+  if(typeof toast==='function')toast('✅ Gebinde als verbraucht markiert'+(next?' – nächstes geöffnet':''),'success',2500);
+}
+
+function updateGebindeQty(stockKey,gebindeId,qty){
+  const s=chemStock[stockKey];if(!s||!s.gebinde)return;
+  const g=s.gebinde.find(x=>x.id===gebindeId);
+  if(g){g.qty=Math.max(0,qty);}
+  s.qty=s.gebinde.filter(g=>g.status!=='verbraucht').reduce((a,g)=>a+g.qty,0);
+  sd('chem_stock_v2',chemStock);
+  renderStockDashboard();
+}
+
+function openAddGebindeModal(stockKey){
+  const sp=STOCK_PRODUCTS[stockKey];if(!sp)return;
+  const qty=parseFloat(prompt(`Menge des neuen Gebindes (${sp.unit}):`,sp.pkgDefault||1000));
+  if(!isNaN(qty)&&qty>0)addGebinde(stockKey,qty);
+}
+
+
 // Estimate weekly usage of a stock item from history (last 4 weeks)
 function estimateWeeklyUsage(stockName){
   try{
@@ -4970,15 +5048,35 @@ function renderStockDashboard(){
     const wkUsage=estimateWeeklyUsage(name);
     let reichHtml='';
     if(wkUsage>0&&s.qty>0){const days=Math.round((s.qty/wkUsage)*7);const rc=days<7?'#dc2626':days<21?'#d97706':'#16a34a';reichHtml=`<div style="font-size:0.65rem;color:${rc};font-weight:800;white-space:nowrap">~${days}d</div>`;}
-    return`<div class="stock-item" style="overflow:hidden">
-      ${imgHtml}
-      <div style="font-size:0.8rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">${name}${warn}</div>
-      <div class="stock-bar-wrap" style="flex:2;min-width:40px"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;width:56px">
-        <div style="font-weight:800;font-size:0.78rem;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
-        ${reichHtml}
+    // Gebinde display
+    initGebinde(name);
+    const activeGebinde=s.gebinde.filter(g=>g.status!=='verbraucht');
+    const gebindeHtml=activeGebinde.map(function(g){
+      const dot=g.status==='angebrochen'?'#f59e0b':'#94a3b8';
+      const statusLabel=g.status==='angebrochen'?'angebrochen':'verschlossen';
+      const verbrBtn=g.status==='angebrochen'
+        ?`<button onclick="markGebindeVerbraucht('${name}',${g.id})" style="font-size:0.65rem;padding:2px 6px;border-radius:5px;background:#fee2e2;color:#b91c1c;border:none;cursor:pointer">verbraucht</button>`
+        :`<button onclick="updateGebindeQty('${name}',${g.id},${g.qty})" style="font-size:0.65rem;padding:2px 6px;border-radius:5px;background:#f0fdf4;color:#166534;border:none;cursor:pointer">öffnen</button>`;
+      return`<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-top:1px solid #f1f5f9;font-size:0.75rem">
+        <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0;display:inline-block"></span>
+        <span style="flex:1;color:var(--text-primary);font-weight:${g.status==='angebrochen'?'700':'400'}">${g.qty} ${p.unit} <span style="color:var(--text-muted);font-weight:400">${statusLabel}</span></span>
+        ${verbrBtn}
+      </div>`;
+    }).join('');
+    const addBtn=`<button onclick="openAddGebindeModal('${name}')" style="font-size:0.72rem;padding:2px 8px;border-radius:6px;background:var(--pool-surface);border:1px solid var(--border);cursor:pointer;margin-top:4px;width:100%">+ Gebinde</button>`;
+    return`<div class="stock-item" style="overflow:hidden;flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:center;gap:8px;padding-bottom:4px">
+        ${imgHtml}
+        <div style="font-size:0.8rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">${name}${warn}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;width:56px">
+          <div style="font-weight:800;font-size:0.78rem;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
+          ${reichHtml}
+        </div>
+        ${buyBtn}
       </div>
-      ${buyBtn}
+      <div class="stock-bar-wrap" style="width:100%;margin-bottom:4px"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>
+      ${gebindeHtml}
+      ${addBtn}
     </div>`;
   }).join('');
 }
@@ -7347,17 +7445,31 @@ function kinderBanState(){
 }
 
 function setKinderBan(name,days){
-  // Immer frisch aus localStorage lesen um andere Kinder nicht zu überschreiben
   const state=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
-  const until=new Date(Date.now()+days*86400000).toISOString();
-  state[name]={until,setAt:new Date().toISOString(),days};
+  const existing=state[name];
+  const currentDays=(existing&&new Date(existing.until)>new Date()&&existing.days)?existing.days:0;
+  const newDays=currentDays+days;
+  const until=new Date(Date.now()+newDays*86400000).toISOString();
+  state[name]={until,setAt:new Date().toISOString(),days:newDays};
+  sd('kinder_ban',state);
+  const label=newDays===1?'1 Tag':newDays+' Tage';
+  logHistory({type:'kinder_ban',time:new Date().toISOString(),
+    note:'🚫 Badeverbot '+name+' – '+label+' (gesamt)',name,days:newDays,until});
+  renderKinderBan();renderKinderBanDashboard();renderKinderBanMary();
+  if(typeof toast==='function')toast('🚫 Badeverbot '+name+': '+label,'warn',3000);
+  if(navigator.vibrate)navigator.vibrate([40,30,40]);
+}
+
+function setKinderBanPoolClosed(name){
+  const state=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
+  // until=far future; type='pool_closed' means: cleared when pool is opened
+  const until=new Date(Date.now()+365*86400000).toISOString();
+  state[name]={until,setAt:new Date().toISOString(),days:null,type:'pool_closed'};
   sd('kinder_ban',state);
   logHistory({type:'kinder_ban',time:new Date().toISOString(),
-    note:'🚫 Badeverbot '+name+' – '+days+(days===7?' Woche':days===1?' Tag':' Tage'),name,days,until});
-  renderKinderBan();
-  renderKinderBanDashboard();
-  renderKinderBanMary();
-  if(typeof toast==='function')toast('🚫 Badeverbot für '+name+' gesetzt ('+days+(days===7?' Woche':days===1?' Tag':' Tage')+')','warn',3000);
+    note:'🚫 Badeverbot '+name+' – bis Pool wieder geöffnet',name,type:'pool_closed',until});
+  renderKinderBan();renderKinderBanDashboard();renderKinderBanMary();
+  if(typeof toast==='function')toast('🚫 Badeverbot '+name+' bis Pool geöffnet','warn',3000);
   if(navigator.vibrate)navigator.vibrate([40,30,40]);
 }
 
@@ -7399,18 +7511,25 @@ function renderKinderBan(){
       '<div class="kinder-avatar '+(active?'ban':'ok')+'">'+initial+'</div>'+
       '<div class="kinder-ban-info">'+
         '<div class="kinder-ban-name">'+(active?'🚫 ':'✅ ')+name+'</div>'+
-        '<div class="kinder-ban-detail '+(active?'ban':'ok')+'">'+(active?'Badeverbot – noch '+cd:'Baden erlaubt')+'</div>'+
+        '<div class="kinder-ban-detail '+(active?'ban':'ok')+'">'+(active?(b.type==='pool_closed'?'Badeverbot – bis Pool geöffnet':'Badeverbot – noch '+cd):'Baden erlaubt')+'</div>'+
         '<div class="kinder-ban-btns" id="kban-btns-'+name+'"></div>'+
       '</div>'+
       (active?'<div class="kinder-ban-timer">'+cd+'</div>':'');
     el.appendChild(div);
     const btnDiv=document.getElementById('kban-btns-'+name);
-    [[1,'1 Tag','kban-1d'],[2,'2 Tage','kban-2d'],[3,'3 Tage','kban-3d'],[7,'1 Woche','kban-7d']].forEach(function(x){
-      const btn=document.createElement('button');
-      btn.className='kban-btn '+x[2];btn.textContent=x[1];
-      btn.addEventListener('click',function(){setKinderBan(name,x[0]);});
-      btnDiv.appendChild(btn);
-    });
+    // +1 Tag button
+    const btn1=document.createElement('button');
+    btn1.className='kban-btn kban-1d';
+    btn1.textContent=active?'+1 Tag':'1 Tag Verbot';
+    btn1.addEventListener('click',function(){setKinderBan(name,1);});
+    btnDiv.appendChild(btn1);
+    // Bis Pool geöffnet button
+    const btnPool=document.createElement('button');
+    btnPool.className='kban-btn kban-pool';
+    btnPool.textContent='Bis Pool geöffnet';
+    btnPool.style.cssText='font-size:0.72rem;padding:4px 8px';
+    btnPool.addEventListener('click',function(){setKinderBanPoolClosed(name);});
+    btnDiv.appendChild(btnPool);
     if(active){
       const auf=document.createElement('button');
       auf.className='kban-btn kban-auf';auf.textContent='✅ Gute Führung';
