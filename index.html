@@ -3465,22 +3465,22 @@ const PRODUCTS={
   schnellchlor:{name:'Schnell-Chlortabs 20g',
     fields:[{id:'mode',label:'Modus',type:'select',opts:['Regelbetrieb (alle 3 Tage)','Stoßbehandlung']}],
     calc(v){const s=v.mode==='Stoßbehandlung';const t=Math.round((s?5:3)*POOL_VOLUME/10);return{amount:`${t} Tabs à 20g = ${t*20}g`,note:'In Skimmer oder Überlauf'}},
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 einstellen</li><li>Tabs in <strong>Skimmer</strong></li><li>Filter laufen lassen</li><li>Nie mit anderen Chemikalien mischen!</li></ol>`},
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 einstellen</li><li>Tabs in <strong>Skimmer</strong></li><li>Filter laufen lassen</li><li>Nie mit anderen Chemikalien mischen!</li><li>🔬 Nach 4–6h: FAC messen</li></ol>`},
   chlorplus:{name:'Chlor Plus – Schockchlorung',
     fields:[{id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC)',type:'number',step:0.1}],
-    calc(){return{amount:`${Math.round(175*POOL_VOLUME/10)}g Chlor Plus`,note:'⚠️ Badeverbot 8h! Danach messen.'}},
-    instr:`<div style="background:#fff1f2;padding:10px;border-radius:8px;border-left:4px solid #ef4444;margin-bottom:10px"><strong style="color:#b91c1c">⚠️ Badeverbot 8 Stunden!</strong></div><ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH auf 7,0–7,6</li><li>Granulat im <strong>Eimer mit Wasser auflösen</strong></li><li>Filter einschalten</li><li>Lösung entlang Beckenrand eingießen</li><li>NIE mit anderen Chlorprodukten mischen → Explosion!</li><li>Abends dosieren (UV baut Chlor ab)</li><li>Filter mind. 8h laufen</li></ol>`},
+    calc(){return{amount:`${Math.round(175*POOL_VOLUME/10)}g Chlor Plus`,note:'⚠️ Badeverbot 30 min! Danach pH, ORP, FAC messen.'}},
+    instr:`<div style="background:#fff1f2;padding:10px;border-radius:8px;border-left:4px solid #ef4444;margin-bottom:10px"><strong style="color:#b91c1c">⚠️ Badeverbot 30 Minuten!</strong></div><ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 prüfen</li><li>150–200g/10m³ im <strong>Eimer mit Wasser auflösen</strong></li><li>Filter einschalten, Lösung entlang Beckenrand eingießen</li><li>NIE mit anderen Chlorprodukten mischen!</li><li>Abends dosieren (UV baut Chlor ab)</li><li>Filter mind. 2h laufen lassen</li><li>🔬 Nach 30 Min: pH, ORP, FAC messen</li></ol>`},
   flockmittel:{name:'Flockmittel Flüssig',
     fields:[{id:'mode',label:'Anwendung',type:'select',opts:['Kontinuierlich','Einmalbehandlung (trüb)']}],
     calc(v){const ml=v.mode.startsWith('Ein')?Math.round(45*POOL_VOLUME/10):Math.round(12*POOL_VOLUME/10);return{amount:`${ml}ml Flockmittel Flüssig`,note:'Über Skimmer bei laufendem Filter'}},
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 prüfen</li><li>Über Skimmer bei laufendem Filter</li><li>Mind. 15 Min laufen</li><li>Nach 24h Bodensauger</li></ol>`},
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 prüfen</li><li>Wöchentlich: 20ml direkt in Skimmer</li><li>Stoßdosierung: 32–63ml, Filter mind. 2h</li><li>Nach 24h Boden absaugen (nur Stoßdosierung)</li><li>🔬 Kein Nachmessen nötig</li></ol>`},
   poolklar:{name:'Poolklar',fields:[],
     calc(){return{amount:`${Math.round(50*POOL_VOLUME/10)}ml Poolklar`,note:'Wöchentlich. Filter mind. 2h.'}},
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>50ml/10m³ wöchentlich direkt ins Becken</li><li>Filter mind. <strong>2h</strong> laufen</li></ol>`},
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>53ml direkt ins Becken (unverdünnt)</li><li>Bei Trübung: zusätzliche 53ml</li><li>Filter mind. <strong>2h</strong> laufen lassen</li><li>🔬 Kein Badeverbot – direkt nutzbar</li></ol>`},
   algenschutz:{name:'Algenschutz',
     fields:[{id:'mode',label:'Anwendung',type:'select',opts:['Grunddosierung (14-tägig)','Intensiv','Stoß (Algen sichtbar)']}],
     calc(v){let ml=Math.round(100*POOL_VOLUME/10);if(v.mode.startsWith('Int'))ml=Math.round(150*POOL_VOLUME/10);if(v.mode.startsWith('Stoß'))ml=Math.round(250*POOL_VOLUME/10);return{amount:`${ml}ml Algenschutz`,note:'Im Eimer verdünnt, entlang Beckenrand'}},
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Im Eimer verdünnen</li><li>Entlang Beckenrand eingießen</li><li>Alle 14 Tage: 100ml/10m³</li></ol>`},
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Erstdosierung & Stoß: 263ml entlang Beckenrand</li><li>Nachdosierung: 105ml alle 14 Tage</li><li>🔬 Kein Badeverbot – direkt nutzbar</li></ol>`},
   langzeittabs:{name:'Langzeit-Chlortabs 20g (primär)',
     fields:[
       {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC) – GIDIGI Messgerät',type:'number',step:0.1},
@@ -3537,13 +3537,13 @@ const PRODUCTS={
         return{amount:`🚨 Schockchlorung: 158g Chlor Plus (30 min Badeverbot) + danach 4 Langzeit-Tabs/Woche`,note:`Chlor ${cur} ppm zu niedrig → Schockchlorung nötig. Erst nach 30 min messen und prüfen.`};
       }
     },
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Chlor zu niedrig: erst Granulat, dann Tabs</li><li>Chlor ok: nur LZ-Tabs reichen</li><li>Nach Dosierung mind. 4h messen</li></ol>`}
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Chlor zu niedrig: erst Chlor Plus Granulat (158g), dann LZ-Tabs</li><li>Chlor ok: 4 LZ-Tabs/Woche reichen</li><li>Sehr niedrig: Schockchlorung (158g) + 30 Min Badeverbot</li><li>🔬 Nach 30 Min–4h: FAC, ORP, pH messen</li></ol>`}
 };
 function selectProduct(key,card){
   document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');selProduct=key;
   const p=PRODUCTS[key];document.getElementById('dosi-title').textContent=`📊 ${p.name}`;
   const banH=BAN_H[key];
-  let fHtml=banH>0?`<div style="background:#fff1f2;padding:9px;border-radius:8px;margin-bottom:10px;font-size:0.83rem;font-weight:700;color:#b91c1c">⚠️ Badeverbot ${banH}h nach Anwendung</div>`:'';
+  let fHtml=banH>0?`<div style="background:#fff1f2;padding:9px;border-radius:8px;margin-bottom:10px;font-size:0.83rem;font-weight:700;color:#b91c1c">⚠️ Badeverbot ${banH<1?(banH*60)+' Min':(banH+'h')} nach Anwendung</div>`:'';
   p.fields.forEach(f=>{
     fHtml+=`<div class="form-group"><label class="form-label">${f.label}`;
     if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)fHtml+=` <span style="font-size:0.72rem;color:#16a34a;font-weight:700">(aus Verlauf: ${ad}d)</span>`;}
@@ -3871,94 +3871,110 @@ function renderCharts(){
   drawChart('chart-chlor',filtered,'chlor','#f59e0b',[s.chlor.min,s.chlor.max],s.chlor.target,0,s.chlor.max+1.5);
   drawChart('chart-orp',filtered,'orp','#8b5cf6',[sORP.min,sORP.max],sORP.target,400,900);
   drawChart('chart-tds',filtered,'tds','#0ea5e9',[sTDS.min,sTDS.max],sTDS.target,0,2500);
-  drawChart('chart-temp',filtered,'temp','#10b981',null,s.temp.target,s.temp.min-2,s.temp.max+2);
+  drawChart('chart-temp',measurements,'temp','#10b981',null,s.temp.target,10,40);
   // Filterdruck: alle Messungen (nicht Zeitraum-gefiltert – wird selten gemessen)
   drawChart('chart-druck',measurements,'druck','#92400e',[0,0.56],null,0,1.6);
 }
 
-function drawChart(canvasId,data,key,color,range,target,yMin,yMax){
+function drawChart(canvasId,data,key,color,range,target,_yMinHint,_yMaxHint){
   const canvas=document.getElementById(canvasId);if(!canvas)return;
   const ctx=canvas.getContext('2d');
   const W=canvas.parentElement.offsetWidth||900;const H=160;
   canvas.width=W;canvas.height=H;ctx.clearRect(0,0,W,H);
   const pts=data.filter(m=>m[key]!==undefined&&m[key]!==null);
-  // Show no-data message via sibling div (canvas may have W=0 before layout)
+  // No-data message
   let noDataDiv=canvas.parentElement.querySelector('.chart-no-data');
   if(!pts.length){
     canvas.style.display='none';
-    if(!noDataDiv){
-      noDataDiv=document.createElement('div');
-      noDataDiv.className='chart-no-data';
-      noDataDiv.style.cssText='padding:18px 0;text-align:center;font-size:0.82rem;color:#94a3b8;font-style:italic';
-      canvas.parentElement.appendChild(noDataDiv);
-    }
+    if(!noDataDiv){noDataDiv=document.createElement('div');noDataDiv.className='chart-no-data';
+      noDataDiv.style.cssText='padding:24px 0;text-align:center;font-size:0.82rem;color:#94a3b8;font-style:italic';
+      canvas.parentElement.appendChild(noDataDiv);}
     noDataDiv.textContent='Noch keine Messdaten – wird nach der nächsten Messung angezeigt.';
     return;
   }
   if(noDataDiv)noDataDiv.remove();
   canvas.style.display='';
+  // Auto-scale Y from actual data + range bounds
+  const vals=pts.map(p=>p[key]);
+  const allVals=range?[...vals,range[0],range[1]]:[...vals];
+  if(target!==null&&target!==undefined)allVals.push(target);
+  let dataMin=Math.min(...allVals),dataMax=Math.max(...allVals);
+  const span=dataMax-dataMin||1;
+  const pad=span*0.18;
+  let yMin=dataMin-pad,yMax=dataMax+pad;
+  if(yMin<span*0.3&&yMin>-0.5)yMin=0;
+  if(_yMinHint===0)yMin=0;
+  // Background
   ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
-  const P={t:16,r:20,b:36,l:46};const cW=W-P.l-P.r,cH=H-P.t-P.b;
-  // Grid
+  const P={t:16,r:22,b:36,l:48};const cW=W-P.l-P.r,cH=H-P.t-P.b;
+  const toY=v=>P.t+cH-((v-yMin)/(yMax-yMin))*cH;
+  const toX=(i,n)=>P.l+(n>1?i/(n-1):0.5)*cW;
+  // Grid lines
   for(let i=0;i<=4;i++){
-    const y=P.t+(i/4)*cH;ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;
+    const v=yMin+(i/4)*(yMax-yMin);const y=toY(v);
+    ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(P.l,y);ctx.lineTo(P.l+cW,y);ctx.stroke();
-    const val=(yMax-(i/4)*(yMax-yMin)).toFixed(1);
-    ctx.fillStyle='#94a3b8';ctx.font='11px Nunito Sans';ctx.textAlign='right';ctx.fillText(val,P.l-4,y+4);
+    const lbl=Math.abs(v)<10?v.toFixed(1):Math.round(v).toString();
+    ctx.fillStyle='#94a3b8';ctx.font='10px sans-serif';ctx.textAlign='right';
+    ctx.fillText(lbl,P.l-4,y+4);
   }
-  // Target line
-  if(target!==null){
-    const ty=P.t+cH-((target-yMin)/(yMax-yMin))*cH;
-    ctx.strokeStyle='#22c55e';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
-    ctx.beginPath();ctx.moveTo(P.l,ty);ctx.lineTo(P.l+cW,ty);ctx.stroke();
-    ctx.setLineDash([]);ctx.fillStyle='#22c55e';ctx.font='10px Nunito Sans';ctx.textAlign='left';
-    ctx.fillText('Ziel',P.l+4,ty-3);
-  }
-  // Range band
+  // Target zone (filled green rectangle)
   if(range){
-    const y1=P.t+cH-((range[1]-yMin)/(yMax-yMin))*cH;
-    const y2=P.t+cH-((range[0]-yMin)/(yMax-yMin))*cH;
-    ctx.fillStyle='rgba(34,197,94,0.08)';ctx.fillRect(P.l,y1,cW,y2-y1);
-    ctx.strokeStyle='rgba(34,197,94,0.5)';ctx.lineWidth=1;ctx.setLineDash([4,3]);
+    const y1=toY(range[1]),y2=toY(range[0]);
+    ctx.fillStyle='rgba(34,197,94,0.13)';ctx.fillRect(P.l,y1,cW,y2-y1);
+    ctx.strokeStyle='rgba(34,197,94,0.55)';ctx.lineWidth=1;ctx.setLineDash([5,4]);
     ctx.beginPath();ctx.moveTo(P.l,y1);ctx.lineTo(P.l+cW,y1);ctx.stroke();
     ctx.beginPath();ctx.moveTo(P.l,y2);ctx.lineTo(P.l+cW,y2);ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle='rgba(34,197,94,0.8)';ctx.font='9px Nunito Sans';ctx.textAlign='left';
-    ctx.fillText('Max '+range[1],P.l+2,y1-2);
-    ctx.fillText('Min '+range[0],P.l+2,y2+10);
+    ctx.fillStyle='rgba(22,163,74,0.85)';ctx.font='9px sans-serif';ctx.textAlign='left';
+    const fmtR=v=>Number.isInteger(v)?v:v.toFixed(1);
+    ctx.fillText('Max '+fmtR(range[1]),P.l+3,y1-2);
+    ctx.fillText('Min '+fmtR(range[0]),P.l+3,y2+9);
+  }
+  // Target line (solid green)
+  if(target!==null&&target!==undefined){
+    const ty=toY(target);
+    ctx.strokeStyle='#16a34a';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(P.l,ty);ctx.lineTo(P.l+cW,ty);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#16a34a';ctx.font='9px sans-serif';ctx.textAlign='left';
+    const fmtT=v=>Number.isInteger(v)?v:v.toFixed(1);
+    ctx.fillText('Ziel '+fmtT(target),P.l+4,ty-3);
   }
   if(pts.length<2){
-    ctx.fillStyle='#94a3b8';ctx.font='12px Nunito Sans';ctx.textAlign='center';
-    ctx.fillText(pts.length===0?'Keine Daten':'Nur 1 Messung',P.l+cW/2,H/2);return;
+    ctx.fillStyle='#94a3b8';ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillText(pts.length===0?'Keine Daten':'Nur 1 Messung – mehr Daten nötig',P.l+cW/2,H/2);return;
   }
-  const xs=pts.map((_,i)=>P.l+(i/(pts.length-1))*cW);
-  const ys=pts.map(p=>P.t+cH-((p[key]-yMin)/(yMax-yMin))*cH);
-  // Line
-  ctx.strokeStyle=color;ctx.lineWidth=2.5;
+  const xs=pts.map((_,i)=>toX(i,pts.length));
+  const ys=pts.map(p=>toY(p[key]));
+  // Smooth bezier line
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';
   ctx.beginPath();ctx.moveTo(xs[0],ys[0]);
-  for(let i=1;i<xs.length;i++)ctx.lineTo(xs[i],ys[i]);
-  ctx.stroke();
-  // Dots – red if out of range
+  for(let i=1;i<xs.length;i++){
+    const mx=(xs[i-1]+xs[i])/2,my=(ys[i-1]+ys[i])/2;
+    ctx.quadraticCurveTo(xs[i-1],ys[i-1],mx,my);
+  }
+  ctx.lineTo(xs[xs.length-1],ys[ys.length-1]);ctx.stroke();
+  // Dots – larger red if out of range
   pts.forEach((p,i)=>{
-    const ok=!range||(p[key]>=range[0]&&p[key]<=range[1]);
-    ctx.beginPath();ctx.arc(xs[i],ys[i],4.5,0,Math.PI*2);
-    ctx.fillStyle=ok?color:'#dc2626';ctx.fill();
+    const inRange=!range||(p[key]>=range[0]&&p[key]<=range[1]);
+    const dc=inRange?color:'#dc2626';const r=inRange?4:5.5;
+    ctx.beginPath();ctx.arc(xs[i],ys[i],r,0,Math.PI*2);
+    ctx.fillStyle=dc;ctx.fill();
     ctx.strokeStyle='white';ctx.lineWidth=1.5;ctx.stroke();
   });
   // Date labels
-  const step=Math.max(1,Math.floor(pts.length/8));
+  const step=Math.max(1,Math.floor(pts.length/7));
   pts.forEach((p,i)=>{
-    if(i%step===0){
+    if(i%step===0||i===pts.length-1){
       const d=new Date(p.time);
-      ctx.fillStyle='#94a3b8';ctx.font='10px Nunito Sans';ctx.textAlign='center';
+      ctx.fillStyle='#94a3b8';ctx.font='10px sans-serif';ctx.textAlign='center';
       ctx.fillText(`${d.getDate()}.${d.getMonth()+1}`,xs[i],H-6);
     }
   });
 }
 
-// ============================================================
-// HISTORY
-// ============================================================
+
 function logHistory(e){historyLog.push(e);sd('history_log',historyLog)}
 
 let historieSelectMode=false;
