@@ -2032,17 +2032,8 @@ function setOrKeepLongerBan(newBan){
 }
 function clearBan(){
   ban=null;sd('ban',null);
-  // Also clear any kinder bans of type 'pool_closed'
-  const kstate=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
-  let kchanged=false;
-  Object.keys(kstate).forEach(function(name){
-    if(kstate[name]&&kstate[name].type==='pool_closed'){
-      kstate[name]=null;kchanged=true;
-      logHistory({type:'kinder_ban',time:new Date().toISOString(),
-        note:'✅ Badeverbot '+name+' aufgehoben (Pool geöffnet)',name,aufgehoben:true});
-    }
-  });
-  if(kchanged){sd('kinder_ban',kstate);renderKinderBan();renderKinderBanDashboard();renderKinderBanMary();}
+  // Note: pool_closed kinder bans are only cleared when the cover is removed (toggleCover)
+  // NOT when the main swim ban is cleared
   renderDashboard();renderFrau();renderIphone();renderBanBanner('ipad-ban-banner');
 }
 function openBanEdit(){
@@ -7597,9 +7588,9 @@ function setKinderBanPoolClosed(name){
   state[name]={until,setAt:new Date().toISOString(),days:null,type:'pool_closed'};
   sd('kinder_ban',state);
   logHistory({type:'kinder_ban',time:new Date().toISOString(),
-    note:'🚫 Badeverbot '+name+' – bis Pool wieder geöffnet',name,type:'pool_closed',until});
+    note:'🚫 Badeverbot '+name+' – bis Plane wieder ab (Pool geöffnet)',name,type:'pool_closed',until});
   renderKinderBan();renderKinderBanDashboard();renderKinderBanMary();
-  if(typeof toast==='function')toast('🚫 Badeverbot '+name+' bis Pool geöffnet','warn',3000);
+  if(typeof toast==='function')toast('🚫 Badeverbot '+name+' bis Plane wieder ab','warn',3000);
   if(navigator.vibrate)navigator.vibrate([40,30,40]);
 }
 
@@ -7641,7 +7632,7 @@ function renderKinderBan(){
       '<div class="kinder-avatar '+(active?'ban':'ok')+'">'+initial+'</div>'+
       '<div class="kinder-ban-info">'+
         '<div class="kinder-ban-name">'+(active?'🚫 ':'✅ ')+name+'</div>'+
-        '<div class="kinder-ban-detail '+(active?'ban':'ok')+'">'+(active?(b.type==='pool_closed'?'Badeverbot – bis Pool geöffnet':'Badeverbot – noch '+cd):'Baden erlaubt')+'</div>'+
+        '<div class="kinder-ban-detail '+(active?'ban':'ok')+'">'+(active?(b.type==='pool_closed'?'Badeverbot – bis Plane wieder ab':'Badeverbot – noch '+cd):'Baden erlaubt')+'</div>'+
         '<div class="kinder-ban-btns" id="kban-btns-'+name+'"></div>'+
       '</div>'+
       (active?'<div class="kinder-ban-timer">'+cd+'</div>':'');
@@ -7656,7 +7647,7 @@ function renderKinderBan(){
     // Bis Pool geöffnet button
     const btnPool=document.createElement('button');
     btnPool.className='kban-btn kban-pool';
-    btnPool.textContent='Bis Pool geöffnet';
+    btnPool.textContent='Bis Plane wieder ab';
     btnPool.style.cssText='font-size:0.72rem;padding:4px 8px';
     btnPool.addEventListener('click',function(){setKinderBanPoolClosed(name);});
     btnDiv.appendChild(btnPool);
@@ -8061,6 +8052,20 @@ function toggleCover(){
   sd('cover_history',history);
   const action=coverState.covered?'Plane drauf':'Plane ab';
   logHistory({type:'cover',time:now,note:action,covered:coverState.covered});
+  // Wenn Pool geöffnet (Plane ab): Kinder-Badeverbote "bis Pool geöffnet" aufheben
+  if(!coverState.covered && prevCovered){
+    const kstate=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
+    let kchanged=false;
+    Object.keys(kstate).forEach(function(name){
+      if(kstate[name]&&kstate[name].type==='pool_closed'){
+        kstate[name]=null;kchanged=true;
+        logHistory({type:'kinder_ban',time:now,
+          note:'✅ Badeverbot '+name+' aufgehoben (Plane ab – Pool geöffnet)',name,aufgehoben:true});
+        if(typeof toast==='function')toast('✅ Badeverbot '+name+' aufgehoben – Plane ab','success',3000);
+      }
+    });
+    if(kchanged){sd('kinder_ban',kstate);renderKinderBan&&renderKinderBan();renderKinderBanDashboard&&renderKinderBanDashboard();renderKinderBanMary&&renderKinderBanMary();}
+  }
   // Sofortiger Push für Cover-Status (nicht nur Queue)
   applyCovertIntervals();
   if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){
