@@ -8624,6 +8624,14 @@ function saveProdukte(){ sd('pool_produkte_v1', poolProdukte); }
   }
 })();
 
+// Migration: Alca-Plus hinzufügen falls nicht vorhanden
+(function(){
+  if(!poolProdukte.find(function(p){return p.poolId==='alca_plus';})){
+    const def=POOL_PRODUKT_DEFAULTS.find(function(d){return d.poolId==='alca_plus';});
+    if(def){ poolProdukte.push(JSON.parse(JSON.stringify(def))); saveProdukte(); }
+  }
+})();
+
 // ============================================================
 // MIGRATION: Dosierungen & Badeverbote einmalig importieren
 // Wird nur ausgefuehrt wenn noch kein Eintrag dosierungen hat
