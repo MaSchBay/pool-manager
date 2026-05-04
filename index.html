@@ -3591,6 +3591,48 @@ const PRODUCTS={
       return{amount:rounds+'× '+amt+'g – je 4h Abstand',note:reason+'\n→ Je Runde: '+amt+'g im Eimer auflösen, entlang Beckenrand. Pumpe 4h laufen. Dann pH messen.\n⚠️ Schätzung basierend auf TDS. Für genaue Werte Alkalinität-Teststreifen verwenden.'};
     },
     instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Im Eimer Wasser auflösen</li><li>Entlang Beckenrand einschütten</li><li>Pumpe mind. <strong>4h</strong></li><li>Dann pH messen – erst danach pH korrigieren</li></ol>`},
+  phminus:{name:'pH-Minus Granulat',
+    fields:[
+      {id:'current_ph',label:'Aktueller pH-Wert (gemessen)',type:'number',step:0.1},
+      {id:'target_ph',label:'Ziel-pH-Wert',type:'number',step:0.1}
+    ],
+    calc(v){
+      const cur=parseFloat(v.current_ph);
+      const tgt=parseFloat(v.target_ph)||7.3;
+      const POOL_L=10.52;
+      if(isNaN(cur))return{amount:'Aktuellen pH-Wert eingeben',note:''};
+      if(cur<=tgt)return{amount:'Kein pH-Minus nötig – pH ist bereits im Zielbereich',note:'Aktueller pH '+cur.toFixed(1)+' ≤ Ziel '+tgt.toFixed(1)};
+      const diff=cur-tgt;
+      const runden=Math.ceil(diff/0.2);
+      const amt=Math.round(158*POOL_L/10);
+      const total=Math.round(amt*runden);
+      return{
+        amount:runden+'× '+amt+'g = '+total+'g gesamt',
+        note:'pH '+cur.toFixed(1)+' → '+tgt.toFixed(1)+' (Δ'+diff.toFixed(1)+')\nJe 0,2 pH-Senkung: '+amt+'g. Im Eimer vorlösen, gleichmäßig verteilen. Nach jeder Runde 4h warten und nachmessen.'
+      };
+    },
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH messen – Wert eingeben</li><li>Granulat im <strong>Eimer vorlösen</strong></li><li>Gleichmäßig verteilen</li><li><strong>4h warten</strong>, dann erneut messen</li><li>Ggf. wiederholen bis Zielwert erreicht</li></ol>`},
+  phplus:{name:'pH-Plus Granulat',
+    fields:[
+      {id:'current_ph',label:'Aktueller pH-Wert (gemessen)',type:'number',step:0.1},
+      {id:'target_ph',label:'Ziel-pH-Wert',type:'number',step:0.1}
+    ],
+    calc(v){
+      const cur=parseFloat(v.current_ph);
+      const tgt=parseFloat(v.target_ph)||7.3;
+      const POOL_L=10.52;
+      if(isNaN(cur))return{amount:'Aktuellen pH-Wert eingeben',note:''};
+      if(cur>=tgt)return{amount:'Kein pH-Plus nötig – pH ist bereits im Zielbereich',note:'Aktueller pH '+cur.toFixed(1)+' ≥ Ziel '+tgt.toFixed(1)};
+      const diff=tgt-cur;
+      const runden=Math.ceil(diff/0.2);
+      const amt=Math.round(105*POOL_L/10);
+      const total=Math.round(amt*runden);
+      return{
+        amount:runden+'× '+amt+'g = '+total+'g gesamt',
+        note:'pH '+cur.toFixed(1)+' → '+tgt.toFixed(1)+' (Δ'+diff.toFixed(1)+')\nJe 0,2 pH-Hebung: '+amt+'g. Im Eimer vorlösen, gleichmäßig verteilen. Nach jeder Runde 4h warten und nachmessen.'
+      };
+    },
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH messen – Wert eingeben</li><li>Granulat im <strong>Eimer vorlösen</strong></li><li>Gleichmäßig verteilen</li><li><strong>4h warten</strong>, dann erneut messen</li><li>Ggf. wiederholen bis Zielwert erreicht</li></ol>`},
   mischdosi:{name:'🔀 Mischdosierung: Langzeit + Schnell',
     fields:[
       {id:'current_chlor',label:'Aktueller Chlorwert (ppm FAC)',type:'number',step:0.1},
@@ -3631,6 +3673,8 @@ function selectProduct(key,card){
     else{
       let initVal='';
       if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)initVal=ad;}
+      if(f.id==='current_ph'){const last=getLastMeasurement();if(last&&last.ph!==undefined)initVal=last.ph;}
+      if(f.id==='target_ph'){initVal=((settings&&settings.ph)||DEFAULT_SETTINGS.ph).target;}
       fHtml+=`<input type="number" id="dosi-${f.id}" step="${f.step||1}" value="${initVal}">`;
     }
     fHtml+=`</div>`;
@@ -6227,10 +6271,16 @@ function applyImportedData(d,mergeMode){
           lp.bestelltAm=rp.bestelltAm;
           lp.lieferDatum=rp.lieferDatum;
         }
-        // Sync stock/price changes
+        // Sync all product fields (remote wins for most fields)
         if(rp.price!==undefined)lp.price=rp.price;
         if(rp.notes!==undefined)lp.notes=rp.notes;
         if(Array.isArray(rp.dosierungen))lp.dosierungen=rp.dosierungen;
+        if(rp.active!==undefined)lp.active=rp.active;
+        if(rp.brand!==undefined)lp.brand=rp.brand;
+        if(rp.size!==undefined)lp.size=rp.size;
+        if(rp.amazon!==undefined)lp.amazon=rp.amazon;
+        if(rp.datenblatt!==undefined)lp.datenblatt=rp.datenblatt;
+        if(rp.img!==undefined)lp.img=rp.img;
       });
     } else {
       poolProdukte=d.poolProdukte;
