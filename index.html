@@ -4979,6 +4979,7 @@ const STOCK_PRODUCTS = {
   'Poolklar':       {unit:'ml', pkgDefault:1000, perUse:Math.round(50*POOL_VOLUME/10),                  useName:'Wöchentlich'},
   'Algenschutz':    {unit:'ml', pkgDefault:1000, perUse:Math.round(100*POOL_VOLUME/10),                 useName:'Grunddosierung'},
   'Teststreifen':   {unit:'Stk',pkgDefault:50,   perUse:1,                                              useName:'Pro Messung 1 Streifen'},
+  'Alca-Plus':      {unit:'g',  pkgDefault:5000, perUse:Math.round(190*POOL_VOLUME/10),                 useName:'TA-Wert heben (+10 ppm)'},
 };
 
 // Bestand: { [name]: { qty: Zahl (in Einheit), pkgSize: Verpackungsgröße } }
@@ -4993,7 +4994,7 @@ if(!chemStock){
 }
 
 // Migration: Add Alca-Plus to stock if missing
-(function(){if(!chemStock['Alca-Plus']){chemStock['Alca-Plus']={qty:0,pkgSize:1000,gebinde:[]};sd('chem_stock_v2',chemStock);}})();
+(function(){if(!chemStock['Alca-Plus']){var _ap=STOCK_PRODUCTS['Alca-Plus'];chemStock['Alca-Plus']={qty:0,pkgSize:_ap?_ap.pkgDefault:5000,gebinde:[]};sd('chem_stock_v2',chemStock);}})();
 
 // Migration: Add Langzeit-Chlortabs to stock if missing
 (function(){
