@@ -2427,6 +2427,92 @@ function renderWeatherWarning(id,w){
   el.innerHTML=`<div class="weather-warning" style="background:${bg};border-color:${border};color:${col}">${warnings}</div>`;
 }
 
+
+// ============================================================
+// ALCA-PLUS MONITORING: 4 triggers for instability warnings
+// ============================================================
+function checkAlcaPlusNeeded(){
+  const LOCKOUT_KEY='alca_plus_lockout';
+  const LAST_DOSI_KEY='alca_plus_last_dosi';
+  // Check 8h lockout
+  const lockout=ld(LOCKOUT_KEY,null);
+  if(lockout&&(new Date()-new Date(lockout))<8*3600000)return null;
+
+  const last=getLastMeasurement();
+  const now=new Date();
+  const tds=last?last.tds:null;
+  let triggers=[];
+
+  // Trigger 1: pH jump >0.3 in 48h without pH dosing
+  const last48m=measurements.filter(function(m){return m.ph&&m.time&&(now-new Date(m.time))<172800000;});
+  if(last48m.length>=2){
+    const hasPhDosing=historyLog.some(function(e){
+      const note=(e.note||'').toLowerCase();
+      const age=e.time?(now-new Date(e.time))/3600000:999;
+      return age<=48&&(note.includes('ph-minus')||note.includes('ph-plus'));
+    });
+    if(!hasPhDosing){
+      const phVals=last48m.map(function(m){return m.ph;});
+      if(Math.max.apply(null,phVals)-Math.min.apply(null,phVals)>0.3)
+        triggers.push('pH-Sprung >0,3 in 48h');
+    }
+  }
+  // Trigger 2: pH- dosing in last 4h
+  const phMinusDosi=historyLog.find(function(e){
+    const note=(e.note||'').toLowerCase();
+    const age=e.time?(now-new Date(e.time))/3600000:999;
+    return age<=4&&note.includes('ph-minus');
+  });
+  if(phMinusDosi)triggers.push('pH-Minus Dosierung vor weniger als 4h');
+  // Trigger 3: TDS drop >50 ppm in 24h (Frischwasser)
+  const last24m=measurements.filter(function(m){return m.tds&&m.time&&(now-new Date(m.time))<86400000;});
+  if(last24m.length>=2){
+    const tdsVals=last24m.map(function(m){return m.tds;});
+    if(Math.max.apply(null,tdsVals)-Math.min.apply(null,tdsVals)>50)
+      triggers.push('TDS-Abfall >50 ppm in 24h (Frischwasser erkannt)');
+  }
+  // Trigger 4: >30 days since last Alca-Plus dosing
+  const lastDosi=ld(LAST_DOSI_KEY,null);
+  if(!lastDosi||(now-new Date(lastDosi))>30*86400000)
+    triggers.push(lastDosi?'Letzte Alca-Plus Dosierung vor mehr als 30 Tagen':'Noch keine Alca-Plus Dosierung dokumentiert');
+
+  if(triggers.length===0)return null;
+
+  // Build dosage recommendation
+  let doseRec='';
+  if(tds!==undefined&&tds!==null){
+    if(tds<300)doseRec='Empfohlene Menge: 380g, nach 4h wiederholen, insgesamt 2–3 Runden.';
+    else if(tds<=600)doseRec='Empfohlene Menge: 190–380g, nach 4h Kontrolle.';
+    else doseRec='Empfohlene Menge: 190g zur Erhaltung.';
+  } else {
+    doseRec='TDS-Wert messen für genaue Dosierempfehlung.';
+  }
+  return{
+    triggers:triggers,
+    msg:'⚠️ Deine Alkalinität könnte zu niedrig sein – der pH-Wert könnte instabil werden oder ist es bereits. Empfehlung: Bayrol Alca-Plus dosieren.',
+    dose:doseRec,
+    disclaimer:'Diese Empfehlung basiert auf dem TDS-Wert als Näherung, da kein TA-Messgerät vorhanden. Kein pH+ während der Alca-Plus Behandlung zugeben. pH-Wert nach jeder Runde kontrollieren.'
+  };
+}
+
+function logAlcaDosierung(amountG){
+  sd('alca_plus_last_dosi',new Date().toISOString());
+  sd('alca_plus_lockout',new Date().toISOString());
+  // Deduct from stock
+  if(chemStock['Alca-Plus']){
+    initGebinde('Alca-Plus');
+    const ank=chemStock['Alca-Plus'].gebinde.find(function(g){return g.status==='angebrochen';});
+    if(ank){ank.qty=Math.max(0,ank.qty-amountG);}
+    chemStock['Alca-Plus'].qty=chemStock['Alca-Plus'].gebinde
+      .filter(function(g){return g.status!=='verbraucht';})
+      .reduce(function(a,g){return a+g.qty;},0);
+    sd('chem_stock_v2',chemStock);
+    renderStockDashboard&&renderStockDashboard();
+  }
+  logHistory({type:'dosierung',time:new Date().toISOString(),note:'🧱 Alca-Plus: '+amountG+'g dosiert (Alkalinität)'});
+  if(typeof toast==='function')toast('🧱 '+amountG+'g Alca-Plus dosiert – nächste Empfehlung frühestens in 8h','success',4000);
+}
+
 function renderEmpfehlungen(id){
   const el=document.getElementById(id);if(!el)return;
   const last=getLastMeasurement();if(!last){el.innerHTML='';return}
@@ -2470,7 +2556,13 @@ function renderEmpfehlungen(id){
         var phVals=last48.map(function(m){return m.ph;});
         var phMin=Math.min.apply(null,phVals),phMax=Math.max.apply(null,phVals);
         if(phMax-phMin>0.3){
-          tips.push({type:'warn',msg:'⚠️ pH-Wert instabil ('+phMin.toFixed(1)+'-'+phMax.toFixed(1)+' in 48h) – deutet auf niedrige Alkalinität hin. Empfehlung: Alca-Plus dosieren.'});
+          const alcaCheck=checkAlcaPlusNeeded();
+        if(alcaCheck){
+          const alcaMsg=alcaCheck.msg+'\n'+alcaCheck.dose+'\n'+alcaCheck.disclaimer;
+          tips.push({type:'warn',msg:alcaMsg,
+            extraBtn:`<button onclick="logAlcaDosierung(${Math.round(190*POOL_VOLUME/10)})" style="margin-top:4px;font-size:0.75rem;padding:4px 10px;border-radius:6px;background:#16a34a;color:white;border:none;cursor:pointer">✅ ${Math.round(190*POOL_VOLUME/10)}g Alca-Plus dosiert</button>`
+          });
+        }
         }
       }
     }
@@ -2767,7 +2859,7 @@ async function renderIphone(){
   // Score badge in header
   const scoreBadge=document.getElementById('iphone-score-badge');
   if(scoreBadge){
-    const sc=calcPoolScore();
+    let sc=null;try{sc=calcPoolScore();}catch(e){console.warn('[PM] ipad score:',e.message);}
     if(sc!==null){
       const col=sc>=80?'#4ade80':sc>=60?'#86efac':sc>=40?'#fbbf24':'#f87171';
       scoreBadge.innerHTML=`<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1.8rem;color:${col};line-height:1">${sc}</div><div style="font-size:0.65rem;opacity:0.8;margin-top:1px">Qualität</div>`;
@@ -2972,7 +3064,7 @@ async function renderIpad(){
   // Score badge in header
   const scoreBadge=document.getElementById('ipad-score-badge');
   if(scoreBadge){
-    const sc=calcPoolScore();
+    let sc=null;try{sc=calcPoolScore();}catch(e){console.warn('[PM] ipad score:',e.message);}
     if(sc!==null){
       const col=sc>=80?'#4ade80':sc>=60?'#86efac':sc>=40?'#fbbf24':'#f87171';
       scoreBadge.innerHTML='<div style="font-family:\'Nunito\',sans-serif;font-weight:900;font-size:1.6rem;color:'+col+';line-height:1">'+sc+'</div><div style="font-size:0.62rem;opacity:0.8;text-align:center">Qualität</div>';
@@ -3682,6 +3774,8 @@ function selectProduct(key,card){
   document.getElementById('dosi-content').innerHTML=`${fHtml}<button class="btn btn-primary btn-sm" onclick="calcDosage()">🧮 Berechnen</button><div id="dosi-result" style="margin-top:12px"></div>`;
   document.getElementById('dosi-instructions-card').style.display='block';
   document.getElementById('dosi-instructions').innerHTML=p.instr;
+  // Auto-calculate after fields are rendered (uses auto-filled pH values)
+  setTimeout(calcDosage,15);
 }
 
 function calcDosage(){
@@ -4773,7 +4867,7 @@ function renderPoolGauge(){
   const svg=document.getElementById('dash-gauge-svg');
   if(!needle||!txt||!svg)return;
 
-  const score=calcPoolScore();
+  let score=null;try{score=calcPoolScore();}catch(e){console.warn('[PM] score:',e.message);}
   svg.querySelectorAll('.gauge-dyn').forEach(e=>e.remove());
 
   function gPoint(pct,r=80){
@@ -4925,7 +5019,7 @@ function renderBadeplaner(weatherData){
     let status,icon,bg,txt;
     if(!isDay)                          {status='night'; icon='🌙';bg='#f1f5f9';txt='#64748b';}
     else if(slotHasBan)                 {status='ban';   icon='🚫';bg='#fee2e2';txt='#b91c1c';}
-    else if(code>=95)                   {status='bad';   icon='⛈️';bg='#fee2e2';txt='#b91c1c';}
+    else if(code>=95)                   {status='unwetter'; icon='⚡';bg='#fef3c7';txt='#92400e';}
     else if(code>=80)                   {status='warn';  icon='🌧️';bg='#fffbeb';txt='#92400e';}
     else if(code>=61)                   {status='warn';  icon='🌦️';bg='#fffbeb';txt='#92400e';}
     else if(temp<16)                    {status='warn';  icon='🥶';bg='#eff6ff';txt='#1e40af';}
@@ -4938,14 +5032,14 @@ function renderBadeplaner(weatherData){
   // Render as compact chip row
   const html=`<div style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0">
     ${slots.map(s=>`
-      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:${s.bg};border-radius:10px;padding:7px 8px;min-width:46px;border:1px solid ${s.status==='good'?'#bbf7d0':s.status==='bad'||s.status==='ban'?'#fecaca':s.status==='night'?'#e2e8f0':'#fde68a'}">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:${s.bg};border-radius:10px;padding:7px 8px;min-width:46px;border:1px solid ${s.status==='good'?'#bbf7d0':s.status==='ban'?'#fecaca':s.status==='bad'?'#fee2e2':s.status==='unwetter'?'#fef3c7':s.status==='night'?'#e2e8f0':'#fde68a'}">
         <div style="font-size:0.68rem;font-weight:800;color:${s.txt}">${s.hour}:00</div>
         <div style="font-size:1.1rem">${s.icon}</div>
         <div style="font-size:0.68rem;font-weight:700;color:${s.txt}">${s.temp}°</div>
       </div>`).join('')}
   </div>
   <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;font-size:0.75rem;color:var(--text-muted)">
-    <span>🏊 Ideal</span><span>⚠️ Eingeschränkt</span><span>🌙 Nacht</span><span>🚫 Badeverbot</span>
+    <span>🏊 Ideal</span><span>⚠️ Eingeschränkt</span><span>⚡ Unwetter</span><span>🌙 Nacht</span><span>🚫 Badeverbot</span>
     ${!waterOk&&last?`<span style="color:#92400e;font-weight:700">⚠️ Wasserqualität prüfen!</span>`:''}
   </div>`;
   el.innerHTML=html;
@@ -5006,16 +5100,27 @@ if(!chemStock){
 // Abzug wenn dosiert wird
 function stockDeductDosierung(productKey, amount){
   const stockMap={
-    schnellchlor:'Schnell-Chlortabs', chlorplus:'Chlor Plus', flockmittel:'Flockmittel',
-    poolklar:'Poolklar', algenschutz:'Algenschutz', phminus:'pH-Minus', phplus:'pH-Plus'
+    schnellchlor:'Schnell-Chlortabs', langzeittabs:'Langzeit-Chlortabs',
+    chlorplus:'Chlor Plus', flockmittel:'Flockmittel',
+    poolklar:'Poolklar', algenschutz:'Algenschutz',
+    phminus:'pH-Minus', phplus:'pH-Plus', alcaplus:'Alca-Plus',teststreifen:'Teststreifen'
   };
   const name=stockMap[productKey];
   if(!name||!chemStock[name])return;
   const p=STOCK_PRODUCTS[name];
   // Parse amount from string like "18 Tabs à 20g = 360g" or "183ml" or "525g"
-  const numMatch=amount.match(/^(\d+)/);
-  const num=numMatch?parseInt(numMatch[1]):p.perUse;
-  chemStock[name].qty=Math.max(0, chemStock[name].qty - num);
+  // Parse amount: "4 Langzeit-Tabs" → 4, "158g" → 158, "53ml" → 53
+  let num=p?p.perUse:0;
+  const numMatch=amount.match(/(\d+(?:\.\d+)?)/);
+  if(numMatch)num=parseFloat(numMatch[1]);
+  // Deduct from angebrochenes Gebinde first
+  if(Array.isArray(chemStock[name].gebinde)&&chemStock[name].gebinde.length>0){
+    const ank=chemStock[name].gebinde.find(function(g){return g.status==='angebrochen';});
+    if(ank){ank.qty=Math.max(0,ank.qty-num);chemStock[name].qty=chemStock[name].gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);}
+    else{chemStock[name].qty=Math.max(0,chemStock[name].qty-num);}
+  } else {
+    chemStock[name].qty=Math.max(0, chemStock[name].qty - num);
+  }
   sd('chem_stock_v2',chemStock);
 }
 
@@ -6529,6 +6634,15 @@ function renderChlorDecayCard(){
   const chlorTabsDone=chlorTask&&chlorTask.lastDone&&lastMeasTime&&new Date(chlorTask.lastDone)>lastMeasTime;
   const chlorPlusDone=chlorPlusTask&&chlorPlusTask.lastDone&&lastMeasTime&&new Date(chlorPlusTask.lastDone)>lastMeasTime;
   if(chlorTabsDone||chlorPlusDone)return; // Banner ausblenden
+  // Also suppress if chlorine was dosed in the last 24h (from history)
+  const now24=new Date();
+  const recentChlorDose=historyLog.some(function(e){
+    if(!e.time||!e.note)return false;
+    const age=(now24-new Date(e.time))/3600000;
+    const note=(e.note||'').toLowerCase();
+    return age<=24&&(note.includes('chlor')||note.includes('tab'));
+  });
+  if(recentChlorDose)return; // Dosed recently – suppress warning
 
   // Aktueller Chlor-Wert
   const currentChlor=last?last.chlor:null;
@@ -6544,20 +6658,20 @@ function renderChlorDecayCard(){
 
   if(p.days<1){
     // Chlor fällt heute – dringend
-    if(currentChlor!==null&&currentChlor<minChlor*0.5){
-      // Sehr niedrig → Granulat/Schockchlorung
-      empfehlung='⚡ Chlor sehr niedrig → Schockchlorung mit Chlor Plus empfohlen';
-      empIcon='⚡';empColor='#dc2626';
-      quickTaskId='chlor_plus';quickTaskName='Chlor Plus dosieren';
+    if(currentChlor!==null&&currentChlor<0.3){
+      // Kritisch niedrig → Granulat als Notfallmittel
+      empfehlung='🚨 Chlor kritisch niedrig – Notfall: Chlor Plus als Schockchlorung verwenden (dann sofort Chlortabs einlegen)';
+      empIcon='🚨';empColor='#dc2626';
+      quickTaskId='chlor_plus';quickTaskName='Notfall: Chlor Plus';
     } else {
       empfehlung='🚨 Dringend: heute noch Chlortabs nachlegen';
       empIcon='🚨';empColor='#dc2626';
     }
   } else if(p.days<3){
-    if(currentChlor!==null&&currentChlor<minChlor){
-      empfehlung='⚡ Chlor unter Minimum → Chlor Plus oder Schockchlorung empfohlen';
-      empIcon='⚡';empColor='#dc2626';
-      quickTaskId='chlor_plus';quickTaskName='Chlor Plus dosieren';
+    if(currentChlor!==null&&currentChlor<0.3){
+      empfehlung='🚨 Chlor kritisch – Notfall: Chlor Plus verwenden';
+      empIcon='🚨';empColor='#dc2626';
+      quickTaskId='chlor_plus';quickTaskName='Notfall: Chlor Plus';
     } else {
       empfehlung='💊 Bald Chlortabs nachlegen (in '+Math.round(p.days)+' Tagen nötig)';
     }
