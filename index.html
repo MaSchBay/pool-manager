@@ -1820,7 +1820,6 @@ function defaultMaintenance(){
     {id:'boden_saug',name:'Poolboden absaugen',interval:7,lastDone:null,cat:'reinigung'},
     {id:'abdeckung',name:'Plane reinigen & prüfen',interval:14,lastDone:null,cat:'reinigung'},
     {id:'filter_sand',name:'Filtersand erneuern',interval:365,lastDone:null,cat:'filter'},
-    {id:'druck_check',name:'Sandfilter-Druck ablesen',interval:7,lastDone:null,cat:'filter'},
     {id:'saisonstart',name:'Saisonstart: Erstbehandlung',interval:365,lastDone:null,cat:'saison'},
     {id:'saisonende',name:'Saisonende: Winterung',interval:365,lastDone:null,cat:'saison'},
   ];
@@ -2580,6 +2579,13 @@ function calcPhMinus(p){return`${Math.round(((p-settings.ph.target)/0.2)*150*POO
 
 function getTaskDoseHint(taskId){
   const last=getLastMeasurement();
+  // Alca-Plus Erhaltungsgabe: only recommend if TDS suggests TA might be low
+  if(taskId==='alca_plus_check'){
+    if(!last||last.tds===undefined)return '→ 190g Alca-Plus als Erhaltungsdosis. TDS messen für genauere Empfehlung.';
+    if(last.tds>600)return '→ TDS '+last.tds+' ppm: Erhaltungsdosis 190g ausreichend. Im Eimer lösen, Pumpe 4h.';
+    if(last.tds>300)return '→ TDS '+last.tds+' ppm: 190g Alca-Plus empfohlen. Im Eimer lösen, Pumpe 4h, dann pH prüfen.';
+    return '→ TDS '+last.tds+' ppm (niedrig): 2–3 Runden à 190g empfohlen. Jeweils 4h Abstand, pH zwischen Runden messen.';
+  }
   // Smart chlor hint – recommends extra tab when chlor is low
   if(taskId==='chlor_tabs'||taskId==='langzeit_chlor'){
     const s=settings.chlor||DEFAULT_SETTINGS.chlor;
@@ -3791,7 +3797,7 @@ function calcDosage(){
 
 function logDosierung(productKey,amount){
   const p=PRODUCTS[productKey];const banH=BAN_H[productKey];
-  const _stockKey_={'langzeittabs':'Langzeit-Chlortabs','schnellchlor':'Schnell-Chlortabs','mischdosi':'Mischdosierung','mischdosi':'Mischdosierung','chlorplus':'Chlor Plus','flockmittel':'Flockmittel','poolklar':'Poolklar','algenschutz':'Algenschutz','phminus':'pH-Minus','phplus':'pH-Plus'}[productKey]||p.name;
+  const _stockKey_={'langzeittabs':'Langzeit-Chlortabs','schnellchlor':'Schnell-Chlortabs','mischdosi':'Chlor Plus','chlorplus':'Chlor Plus','flockmittel':'Flockmittel','poolklar':'Poolklar','algenschutz':'Algenschutz','phminus':'pH-Minus','phplus':'pH-Plus','alcaplus':'Alca-Plus'}[productKey]||p.name;
   logHistory({type:'dosierung',time:new Date().toISOString(),product:_stockKey_,note:`${p.name}: ${amount}`});
   // Bestand abziehen
   stockDeductDosierung(productKey, amount);
@@ -8204,6 +8210,36 @@ function applyCovertIntervals(){
   if(changed)sd('maintenance',maintenanceTasks);
 }
 
+
+// Migration: Add missing chemical tasks
+(function(){
+  var newTasks=[
+    {id:'langzeit_chlor',name:'Langzeit-Chlortabs nachfüllen',interval:7,lastDone:null,cat:'chemie'},
+    {id:'chlorplus',name:'Chlor Plus / Schockchlorung',interval:30,lastDone:null,cat:'chemie'},
+
+    {id:'alca_plus_check',name:'Alca-Plus Erhaltungsgabe (190g)',interval:30,lastDone:null,cat:'chemie'},
+  ];
+  var changed=false;
+  newTasks.forEach(function(t){
+    if(!maintenanceTasks.find(function(x){return x.id===t.id;})){
+      maintenanceTasks.push(t);changed=true;
+    }
+  });
+  // Remove duplicate druck_check (keep only first)
+  var seen=new Set();
+  maintenanceTasks=maintenanceTasks.filter(function(t){
+    if(seen.has(t.id))return false;
+    seen.add(t.id);return true;
+  });
+  // Remove pH-Minus and pH-Plus - not scheduled tasks, arise from water testing
+  var before=maintenanceTasks.length;
+  maintenanceTasks=maintenanceTasks.filter(function(t){
+    return t.id!=='ph_minus'&&t.id!=='ph_plus';
+  });
+  if(maintenanceTasks.length!==before)changed=true;
+  if(changed)sd('maintenance',maintenanceTasks);
+})();
+
 function toggleCover(){
   const now=new Date().toISOString();
   const prevCovered=coverState.covered;
@@ -9465,7 +9501,7 @@ function lieferungBestaetigen(poolId){
     flockmittel:'Flockmittel', poolklar:'Poolklar', teststreifen:'Teststreifen'
   };
   const stockName = pid2stock[poolId];
-  const bestelltNote = p.bestelltMenge ? ' ('+p.bestelltMenge+')' : '';
+  let bestelltNote = p.bestelltMenge ? ' ('+p.bestelltMenge+')' : '';
   if(stockName){
     // Ensure stock entry exists
     if(!chemStock[stockName]){
