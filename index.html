@@ -822,6 +822,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <div id="ban-banner-main"></div>
   <div id="nachmess-timer-banner"></div>
   <div id="filter-timer-banner"></div>
+  <div id="shelly-filter-card"></div>
   <div id="kinder-ban-dashboard"></div>
   <div class="card" id="timer-card-dashboard" style="display:none">
     <div class="card-title" style="justify-content:space-between">
@@ -1408,6 +1409,10 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="testAnthropicConnection()">🔌 Verbindung testen</button>
     </div>
   </div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">🔌 Shelly Filter-Steuerung</div>
+    <div id="shelly-settings-section"></div>
+  </div>
   <div class="card">
     <div class="card-title">🎯 Zielwerte & Bereiche</div>
     <div id="settings-targets"></div>
@@ -1934,6 +1939,7 @@ function renderEinstellungen(){
   document.getElementById('settings-current-vals').innerHTML=
     '<p style="font-weight:700;margin-bottom:4px">Letzte Messung</p>'
     +'<p style="font-size:0.85rem;color:var(--text-secondary)">'+measStr+'</p>';
+  if(typeof renderShellySettings==='function')renderShellySettings();
 }
 
 function renderBackupSection(){
@@ -2324,6 +2330,7 @@ async function renderDashboard(){
   if(typeof renderBackupReminder==='function')renderBackupReminder();
   if(typeof renderRainReminder==='function')renderRainReminder(w);
   if(typeof renderChlorDecayCard==='function')renderChlorDecayCard();
+  if(typeof renderShellyCard==='function')renderShellyCard();
 }
 
 function getValueIcon(v, s){
@@ -5832,6 +5839,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   renderKinderBanMary();
   renderPartyDashboard();
   updateAnthropicKeyStatus();
+  if(typeof initShelly==='function')initShelly();
 });
 
 // ============================================================
@@ -9774,6 +9782,369 @@ function loadProduktImage(poolId, input){
   };
   reader.readAsDataURL(file);
 }
+
+
+// ============================================================
+// SHELLY 1PM MINI – FILTER-INTEGRATION
+// ============================================================
+
+const SHELLY_DEFAULTS = {
+  ip: '',
+  powerThreshold: 30,
+  nightCutoff: '22:00',
+  morningWakeup: '05:30',
+  dailyTargetH: 8,
+  enabled: false,
+  sondermodus24h: false
+};
+
+let shellySettings = Object.assign({}, SHELLY_DEFAULTS, ld('shelly_settings', {}));
+let _shellyState = {
+  online: false,
+  output: null,
+  power: null,
+  lastPoll: null,
+  gfciWarning: ld('shelly_gfci_warning', false)
+};
+let _shellyLastTickMin = -1;
+
+// ── Runtime-Tracking (per Tag) ───────────────────────────────
+function getShellyRuntime(){
+  const today = new Date().toISOString().slice(0,10);
+  const saved = ld('shelly_runtime', {date:'', minutes:0});
+  if(saved.date !== today) return {date: today, minutes: 0};
+  return saved;
+}
+function addShellyRuntime(minutes){
+  const rt = getShellyRuntime();
+  rt.minutes = (rt.minutes||0) + minutes;
+  sd('shelly_runtime', rt);
+}
+
+// ── Shelly API ───────────────────────────────────────────────
+async function shellyGetStatus(){
+  if(!shellySettings.ip) return null;
+  try{
+    const ctrl = new AbortController();
+    const tid = setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch('http://'+shellySettings.ip+'/rpc/Switch.GetStatus?id=0', {signal:ctrl.signal});
+    clearTimeout(tid);
+    if(!r.ok) return null;
+    return await r.json();
+  }catch(e){ return null; }
+}
+
+async function shellyCommand(on){
+  if(!shellySettings.ip) return false;
+  try{
+    const ctrl = new AbortController();
+    const tid = setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch('http://'+shellySettings.ip+'/rpc/Switch.Set?id=0&on='+on, {signal:ctrl.signal});
+    clearTimeout(tid);
+    if(!r.ok) return false;
+    if(!on){
+      _shellyState.gfciWarning = true;
+      sd('shelly_gfci_warning', true);
+    }
+    _shellyState.output = on;
+    renderShellyCard();
+    return true;
+  }catch(e){ return false; }
+}
+
+// ── Haupt-Tick (jede Minute) ─────────────────────────────────
+async function shellyTick(){
+  if(!shellySettings.enabled || !shellySettings.ip) return;
+
+  const status = await shellyGetStatus();
+  if(status !== null){
+    _shellyState.online  = true;
+    _shellyState.output  = status.output;
+    _shellyState.power   = status.apower != null ? status.apower : null;
+    _shellyState.lastPoll = new Date().toISOString();
+    // Laufzeit tracken: Shelly EIN + Leistung über Schwellwert
+    const running = _shellyState.output &&
+      (_shellyState.power === null || _shellyState.power > shellySettings.powerThreshold);
+    if(running) addShellyRuntime(1);
+  } else {
+    _shellyState.online = false;
+  }
+
+  // Zeitplan prüfen (nur einmal je Kalenderminute)
+  const now = new Date();
+  const curMin = now.getHours()*60 + now.getMinutes();
+  if(curMin !== _shellyLastTickMin){
+    _shellyLastTickMin = curMin;
+    await shellyCheckSchedules(now);
+  }
+
+  renderShellyCard();
+}
+
+// ── Zeitplan-Logik ───────────────────────────────────────────
+async function shellyCheckSchedules(now){
+  if(!shellySettings.enabled || !shellySettings.ip) return;
+
+  const rt         = getShellyRuntime();
+  const targetMin  = shellySettings.dailyTargetH * 60;
+  const targetOk   = rt.minutes >= targetMin;
+  const sonder     = shellySettings.sondermodus24h;
+  const hh         = String(now.getHours()).padStart(2,'0');
+  const mm         = String(now.getMinutes()).padStart(2,'0');
+  const curHHMM    = hh+':'+mm;
+  const today      = now.toISOString().slice(0,10);
+
+  // 1. Morgenwecker: Shelly EIN wenn ausgeschaltet
+  if(curHHMM === shellySettings.morningWakeup && _shellyState.output === false){
+    const ok = await shellyCommand(true);
+    if(ok){
+      if(typeof logHistory==='function')
+        logHistory({type:'wartung', time:now.toISOString(),
+          note:'⏰ Shelly: Automatisch eingeschaltet (Morgenwecker '+shellySettings.morningWakeup+' Uhr)'});
+      if(typeof toast==='function') toast('⏰ Shelly: Filter eingeschaltet (Morgenwecker)','success',4000);
+    }
+  }
+
+  // 2. Nachtruhe (ausser Sondermodus)
+  if(curHHMM === shellySettings.nightCutoff && !sonder && _shellyState.output === true){
+    const ok = await shellyCommand(false);
+    if(ok){
+      if(typeof logHistory==='function')
+        logHistory({type:'wartung', time:now.toISOString(),
+          note:'🌙 Shelly: Nachtruhe-Abschaltung ('+shellySettings.nightCutoff+' Uhr)'});
+      if(typeof toast==='function') toast('🌙 Filter-Nachtruhe: Shelly abgeschaltet','warn',6000);
+    }
+  }
+
+  // 3. Tagesziel erreicht (einmal pro Tag)
+  if(targetOk && !sonder && _shellyState.output === true){
+    const lastShutdown = ld('shelly_target_shutdown','');
+    if(lastShutdown !== today){
+      sd('shelly_target_shutdown', today);
+      const ok = await shellyCommand(false);
+      if(ok){
+        if(typeof logHistory==='function')
+          logHistory({type:'wartung', time:now.toISOString(),
+            note:'🏁 Shelly: Tagesziel '+shellySettings.dailyTargetH+'h erreicht – abgeschaltet'});
+        if(typeof toast==='function')
+          toast('🏁 Tagesziel '+shellySettings.dailyTargetH+'h erreicht – Filter abgeschaltet','success',6000);
+      }
+    }
+  }
+
+  // 4. Nach Dosierung: NUR wenn Tagesziel bereits erreicht
+  const filterTimer = ld('filter_timer', null);
+  if(filterTimer && new Date(filterTimer.until) <= now && !sonder && _shellyState.output === true && targetOk){
+    const lastDoseShutdown = ld('shelly_dose_shutdown','');
+    if(lastDoseShutdown !== filterTimer.startedAt){
+      sd('shelly_dose_shutdown', filterTimer.startedAt);
+      const ok = await shellyCommand(false);
+      if(ok){
+        const namen = {chlorplus:'Chlor Plus', poolklar:'Poolklar', flockmittel:'Flockmittel'};
+        const pName = namen[filterTimer.product]||filterTimer.product;
+        if(typeof logHistory==='function')
+          logHistory({type:'wartung', time:now.toISOString(),
+            note:'⚗️ Shelly: Nach '+pName+'-Timer – Tagesziel bereits erreicht – abgeschaltet'});
+        if(typeof toast==='function')
+          toast('⚗️ Dosier-Timer abgelaufen – Tagesziel erreicht: Filter abgeschaltet','success',5000);
+      }
+    }
+  }
+}
+
+// ── Dashboard-Karte ──────────────────────────────────────────
+function renderShellyCard(){
+  const el = document.getElementById('shelly-filter-card');
+  if(!el) return;
+  if(!shellySettings.enabled || !shellySettings.ip){ el.innerHTML=''; return; }
+
+  const rt        = getShellyRuntime();
+  const targetMin = shellySettings.dailyTargetH * 60;
+  const pct       = Math.min(100, Math.round(rt.minutes / targetMin * 100));
+  const rtH       = Math.floor(rt.minutes/60);
+  const rtM       = rt.minutes % 60;
+  const rtStr     = rtH > 0 ? rtH+'h '+rtM+'min' : rtM+'min';
+  const targetOk  = rt.minutes >= targetMin;
+  const sonder    = shellySettings.sondermodus24h;
+
+  const running = _shellyState.output &&
+    (_shellyState.power === null || _shellyState.power > shellySettings.powerThreshold);
+  const statCol  = !_shellyState.online ? '#94a3b8' : running ? '#16a34a' : '#6b7280';
+  const statIcon = !_shellyState.online ? '📡' : running ? '✅' : '🔴';
+  const pwr      = (_shellyState.power !== null && running)
+    ? ' · '+Math.round(_shellyState.power)+' W' : '';
+  const statText = !_shellyState.online ? 'Keine Verbindung'
+    : running ? 'Läuft'+pwr : 'Aus / Pause';
+  const barCol   = targetOk ? '#16a34a' : pct >= 50 ? '#0ea5e9' : '#f59e0b';
+  const border   = running ? '#bbf7d0' : '#fca5a5';
+
+  let html =
+    '<div class="card" style="margin-bottom:16px;border:2px solid '+border+'">'+
+      '<div class="card-title" style="justify-content:space-between">'+
+        '<span>🔌 Filter / Shelly</span>'+
+        (sonder
+          ? '<span style="font-size:0.7rem;font-weight:700;background:#fee2e2;color:#b91c1c;padding:3px 10px;border-radius:8px">24h-Betrieb AN</span>'
+          : '')+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+
+        '<div style="text-align:center;min-width:64px">'+
+          '<div style="font-size:2rem">'+statIcon+'</div>'+
+          '<div style="font-size:0.7rem;font-weight:800;color:'+statCol+'">'+statText+'</div>'+
+        '</div>'+
+        '<div style="flex:1;min-width:160px">'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'+
+            '<span style="font-size:0.78rem;font-weight:700">Betrieb heute</span>'+
+            '<span style="font-size:0.78rem;font-weight:800;color:'+barCol+'">'+rtStr+' / '+shellySettings.dailyTargetH+'h</span>'+
+          '</div>'+
+          '<div style="height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden">'+
+            '<div style="height:100%;width:'+pct+'%;background:'+barCol+';border-radius:6px;transition:width 0.5s"></div>'+
+          '</div>'+
+          '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">'+
+            '🌙 Nachtruhe: '+shellySettings.nightCutoff+' Uhr &nbsp;·&nbsp; ⏰ Wecker: '+shellySettings.morningWakeup+' Uhr'+
+          '</div>'+
+        '</div>'+
+        (_shellyState.online
+          ? '<div style="display:flex;flex-direction:column;gap:5px">'+
+              '<button onclick="shellyManualOn()" style="padding:5px 14px;border-radius:8px;border:none;background:#16a34a;color:white;font-family:Nunito,sans-serif;font-weight:700;font-size:0.78rem;cursor:pointer">▲ Ein</button>'+
+              '<button onclick="shellyManualOff()" style="padding:5px 14px;border-radius:8px;border:none;background:#dc2626;color:white;font-family:Nunito,sans-serif;font-weight:700;font-size:0.78rem;cursor:pointer">▼ Aus</button>'+
+              '<button onclick="shellySondermodus()" style="padding:4px 10px;border-radius:8px;border:2px solid '+(sonder?'#dc2626':'#9ca3af')+';background:'+(sonder?'#fee2e2':'transparent')+';color:'+(sonder?'#b91c1c':'#6b7280')+';font-family:Nunito,sans-serif;font-weight:700;font-size:0.7rem;cursor:pointer;white-space:nowrap">24h '+(sonder?'AN':'AUS')+'</button>'+
+            '</div>'
+          : '')+
+      '</div>';
+
+  // GFCI-Warnung
+  if(_shellyState.gfciWarning){
+    html +=
+      '<div style="margin-top:10px;background:#fee2e2;border:2px solid #ef4444;border-radius:10px;padding:10px 12px;display:flex;align-items:flex-start;gap:10px">'+
+        '<div style="font-size:1.4rem;flex-shrink:0">⚡</div>'+
+        '<div style="flex:1">'+
+          '<div style="font-size:0.82rem;font-weight:800;color:#b91c1c">Personenschutzschalter (FI) zurücksetzen!</div>'+
+          '<div style="font-size:0.75rem;color:#dc2626;margin-top:2px">Der Shelly hat die Stromversorgung getrennt. Bevor der Filter wieder anlaufen kann, muss der FI-Schalter von Hand zurückgesetzt werden.</div>'+
+        '</div>'+
+        '<button onclick="shellyDismissGfci()" style="background:none;border:none;color:#b91c1c;cursor:pointer;font-size:1.2rem;flex-shrink:0;padding:0 2px" title="Meldung schliessen">×</button>'+
+      '</div>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function shellyDismissGfci(){
+  _shellyState.gfciWarning = false;
+  sd('shelly_gfci_warning', false);
+  renderShellyCard();
+}
+
+async function shellyManualOn(){
+  const ok = await shellyCommand(true);
+  if(ok && typeof toast==='function') toast('🔌 Filter manuell eingeschaltet','success',3000);
+  renderShellyCard();
+}
+
+async function shellyManualOff(){
+  if(!confirm('Filter jetzt ausschalten?\n\n⚡ Hinweis: Der Personenschutzschalter (FI) muss danach manuell zurückgesetzt werden!')) return;
+  const ok = await shellyCommand(false);
+  if(ok && typeof toast==='function') toast('🔴 Filter abgeschaltet – FI muss manuell zurückgesetzt werden','warn',6000);
+  renderShellyCard();
+}
+
+function shellySondermodus(){
+  shellySettings.sondermodus24h = !shellySettings.sondermodus24h;
+  sd('shelly_settings', shellySettings);
+  if(typeof toast==='function')
+    toast(shellySettings.sondermodus24h ? '🔴 24h-Betrieb aktiviert – keine Nachtruhe' : '✅ 24h-Betrieb deaktiviert – Nachtruhe aktiv','info',3500);
+  renderShellyCard();
+  renderShellySettings();
+}
+
+// ── Einstellungen-Card ───────────────────────────────────────
+function renderShellySettings(){
+  const el = document.getElementById('shelly-settings-section');
+  if(!el) return;
+  el.innerHTML =
+    '<div style="display:grid;gap:12px">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<input type="checkbox" id="sh-enabled" '+(shellySettings.enabled?'checked':'')+' style="width:20px;height:20px;accent-color:var(--pool-blue)">'+
+        '<label for="sh-enabled" style="font-weight:700;font-size:0.88rem;cursor:pointer">Shelly-Integration aktivieren</label>'+
+      '</div>'+
+      '<div>'+
+        '<div class="form-label">IP-Adresse des Shelly (z.B. 192.168.178.42)</div>'+
+        '<input type="text" id="sh-ip" value="'+shellySettings.ip+'" placeholder="192.168.178.42" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.88rem;font-family:monospace">'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+        '<div>'+
+          '<div class="form-label">Schwellwert: Filter läuft (Watt)</div>'+
+          '<input type="number" id="sh-threshold" value="'+shellySettings.powerThreshold+'" min="5" max="500" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.88rem">'+
+        '</div>'+
+        '<div>'+
+          '<div class="form-label">Tagesziel (Stunden)</div>'+
+          '<input type="number" id="sh-target" value="'+shellySettings.dailyTargetH+'" min="1" max="24" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.88rem">'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+        '<div>'+
+          '<div class="form-label">🌙 Nachtruhe ab (Uhr)</div>'+
+          '<input type="time" id="sh-night" value="'+shellySettings.nightCutoff+'" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.88rem">'+
+        '</div>'+
+        '<div>'+
+          '<div class="form-label">⏰ Morgenwecker (Uhr)</div>'+
+          '<input type="time" id="sh-morning" value="'+shellySettings.morningWakeup+'" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.88rem">'+
+        '</div>'+
+      '</div>'+
+      '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 12px">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+          '<input type="checkbox" id="sh-sonder" '+(shellySettings.sondermodus24h?'checked':'')+' style="width:18px;height:18px;accent-color:#dc2626">'+
+          '<label for="sh-sonder" style="font-weight:700;font-size:0.85rem;cursor:pointer;color:#c2410c">🔴 Sondermodus 24h-Betrieb</label>'+
+        '</div>'+
+        '<div style="font-size:0.75rem;color:#92400e;margin-top:4px;padding-left:28px">Deaktiviert Nachtruhe und Tagesziel-Abschaltung (z.B. nach Schockchlorung oder starker Algenbildung)</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        '<button class="btn btn-primary btn-sm" onclick="saveShellySettings()">💾 Speichern</button>'+
+        '<button class="btn btn-outline btn-sm" onclick="shellySaveAndTest()">🔌 Verbindung testen</button>'+
+      '</div>'+
+      '<div id="sh-test-result" style="font-size:0.8rem;min-height:18px"></div>'+
+    '</div>';
+}
+
+function saveShellySettings(){
+  shellySettings.enabled          = document.getElementById('sh-enabled')?.checked||false;
+  shellySettings.ip               = (document.getElementById('sh-ip')?.value||'').trim();
+  shellySettings.powerThreshold   = parseFloat(document.getElementById('sh-threshold')?.value)||30;
+  shellySettings.dailyTargetH     = parseFloat(document.getElementById('sh-target')?.value)||8;
+  shellySettings.nightCutoff      = document.getElementById('sh-night')?.value||'22:00';
+  shellySettings.morningWakeup    = document.getElementById('sh-morning')?.value||'05:30';
+  shellySettings.sondermodus24h   = document.getElementById('sh-sonder')?.checked||false;
+  sd('shelly_settings', shellySettings);
+  if(typeof toast==='function') toast('✅ Shelly-Einstellungen gespeichert','success',2500);
+  renderShellyCard();
+}
+
+async function shellySaveAndTest(){
+  saveShellySettings();
+  const el = document.getElementById('sh-test-result');
+  if(el) el.innerHTML = '<span style="color:#6b7280">⏳ Verbinde…</span>';
+  const status = await shellyGetStatus();
+  if(status){
+    const sw   = status.output ? 'EIN' : 'AUS';
+    const pwr  = status.apower != null ? ' · '+Math.round(status.apower)+' W' : '';
+    const tmp  = status.temperature?.tC != null ? ' · '+Math.round(status.temperature.tC)+' °C' : '';
+    if(el) el.innerHTML = '<span style="color:#16a34a">✅ Verbunden – Schalter: '+sw+pwr+tmp+'</span>';
+    _shellyState.online = true;
+    _shellyState.output = status.output;
+    _shellyState.power  = status.apower ?? null;
+    renderShellyCard();
+  } else {
+    if(el) el.innerHTML = '<span style="color:#dc2626">❌ Keine Verbindung – IP prüfen, selbes WLAN? (HTTP Mixed-Content: App muss über http:// oder file:// geöffnet sein)</span>';
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────
+function initShelly(){
+  renderShellyCard();
+  shellyTick();                        // sofortiger erster Poll
+  setInterval(shellyTick, 60000);      // danach jede Minute
+}
+
 
 </script>
 
