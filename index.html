@@ -9265,11 +9265,14 @@ function renderFilterTimer(){
     '</div>';
 }
 
-// Hook into logDosierung to start filter timer
+// Hook into logDosierung to start filter timer + Shelly-Einmal-Timer
 const _origLogDosierung = logDosierung;
 logDosierung = function(productKey, amount){
   _origLogDosierung(productKey, amount);
-  if(DOSI_TO_FILTER[productKey]) startFilterTimer(productKey);
+  if(DOSI_TO_FILTER[productKey]){
+    startFilterTimer(productKey);
+    if(typeof shellyPushDoseTimer==='function') shellyPushDoseTimer(productKey);
+  }
 };
 
 // Also hook into wartung completion (completeMaintenance)
@@ -9892,12 +9895,43 @@ async function shellyLocalRPC(method, params){
   const s = shellySettings;
   if(!s.ip) return null;
   try{
-    const paramStr = Object.entries(params||{}).map(([k,v])=>k+'='+encodeURIComponent(JSON.stringify(v))).join('&');
-    const url = 'http://'+s.ip+'/rpc/'+method+(paramStr?'?'+paramStr:'');
-    const r = await _shellyFetchTimeout(url,{}, 3000);
+    const r = await _shellyFetchTimeout('http://'+s.ip+'/rpc',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id:1, method:method, params:params||{}})
+    }, 5000);
     if(!r.ok) return null;
-    return await r.json();
+    const d = await r.json();
+    return d.error ? {_err:d.error.message||JSON.stringify(d.error)} : d.result;
   }catch(e){ return null; }
+}
+
+// Generisches Cloud-RPC (für Schedule-Befehle etc.)
+async function shellyCloudRPC(method, params){
+  const s = shellySettings;
+  if(!s.cloudServer||!s.cloudAuthKey||!s.cloudDeviceId)
+    return {_err:'Konfiguration unvollständig'};
+  try{
+    const body = new URLSearchParams({
+      auth_key: s.cloudAuthKey, id: s.cloudDeviceId,
+      method: method, params: JSON.stringify(params||{})
+    });
+    const r = await _shellyFetchTimeout(s.cloudServer+'/device/rpc',{
+      method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: body.toString()
+    }, 10000);
+    const txt = await r.text();
+    let d; try{ d=JSON.parse(txt); }catch(_){ return {_err:'Kein JSON: '+txt.slice(0,80)}; }
+    if(!r.ok) return {_err:'HTTP '+r.status+': '+txt.slice(0,100)};
+    if(!d.isok) return {_err:'Cloud-Fehler: '+(d.errors||JSON.stringify(d)).toString().slice(0,100)};
+    return d.data;  // enthält RPC-Ergebnis
+  }catch(e){ return {_err:'Fehler: '+e.message}; }
+}
+
+// Einheitlich: RPC an Shelly senden (egal ob Cloud oder Lokal)
+async function shellyRPC(method, params){
+  if(shellySettings.mode==='cloud') return await shellyCloudRPC(method, params);
+  return await shellyLocalRPC(method, params);
 }
 
 // ── Einheitliche API (mode-abhängig) ────────────────────────
@@ -9948,81 +9982,106 @@ async function shellyTick(){
     _shellyState.online = false;
   }
 
-  const now = new Date();
-  const curMin = now.getHours()*60 + now.getMinutes();
-  if(curMin !== _shellyLastTickMin){
-    _shellyLastTickMin = curMin;
-    await shellyCheckSchedules(now);
-  }
   renderShellyCard();
 }
 
 // ── Zeitplan-Logik ───────────────────────────────────────────
-async function shellyCheckSchedules(now){
-  const rt         = getShellyRuntime();
-  const targetMin  = shellySettings.dailyTargetH * 60;
-  const targetOk   = rt.minutes >= targetMin;
-  const sonder     = shellySettings.sondermodus24h;
-  const hh         = String(now.getHours()).padStart(2,'0');
-  const mm         = String(now.getMinutes()).padStart(2,'0');
-  const curHHMM    = hh+':'+mm;
-  const today      = now.toISOString().slice(0,10);
+// ── Zeitpläne auf Shelly pushen ─────────────────────────────
+// IDs die wir verwalten (fest, damit wir sie gezielt löschen können)
+const SHELLY_SCHED_NIGHT   = 'pool_night';
+const SHELLY_SCHED_MORNING = 'pool_morning';
 
-  // 1. Morgenwecker
-  if(curHHMM === shellySettings.morningWakeup && _shellyState.output === false){
-    const ok = await shellyCommand(true);
-    if(ok){
-      if(typeof logHistory==='function')
-        logHistory({type:'wartung', time:now.toISOString(),
-          note:'⏰ Shelly: Automatisch eingeschaltet (Morgenwecker '+shellySettings.morningWakeup+' Uhr)'});
-      if(typeof toast==='function') toast('⏰ Shelly: Filter eingeschaltet (Morgenwecker)','success',4000);
+function _shellyTimespecFromHHMM(hhmm){
+  const [h,m] = hhmm.split(':').map(Number);
+  return '0 '+m+' '+h+' * * *';  // Shelly cron: sec min hour day mon dow
+}
+
+async function shellyPushSchedules(){
+  const s = shellySettings;
+  const el = document.getElementById('sh-sched-result');
+  const setEl = t => { if(el) el.innerHTML=t; };
+
+  setEl('<span style="color:#64748b">⏳ Zeitpläne werden übertragen…</span>');
+
+  // 1. Bestehende Pool-Zeitpläne löschen (anhand Tag im names-Feld)
+  const listRes = await shellyRPC('Schedule.List',{});
+  if(listRes && !listRes._err && listRes.jobs){
+    for(const job of listRes.jobs){
+      if(job.id && (job.timespec===_shellyTimespecFromHHMM(s.nightCutoff)
+                  ||job.timespec===_shellyTimespecFromHHMM(s.morningWakeup)
+                  ||(job.calls&&JSON.stringify(job.calls).includes('pool_')))){
+        await shellyRPC('Schedule.Delete',{id:job.id});
+      }
     }
-  }
-
-  // 2. Nachtruhe (ausser Sondermodus)
-  if(curHHMM === shellySettings.nightCutoff && !sonder && _shellyState.output === true){
-    const ok = await shellyCommand(false);
-    if(ok){
-      if(typeof logHistory==='function')
-        logHistory({type:'wartung', time:now.toISOString(),
-          note:'🌙 Shelly: Nachtruhe-Abschaltung ('+shellySettings.nightCutoff+' Uhr)'});
-      if(typeof toast==='function') toast('🌙 Filter-Nachtruhe: Shelly abgeschaltet','warn',6000);
-    }
-  }
-
-  // 3. Tagesziel erreicht (einmal pro Tag)
-  if(targetOk && !sonder && _shellyState.output === true){
-    const lastShutdown = ld('shelly_target_shutdown','');
-    if(lastShutdown !== today){
-      sd('shelly_target_shutdown', today);
-      const ok = await shellyCommand(false);
-      if(ok){
-        if(typeof logHistory==='function')
-          logHistory({type:'wartung', time:now.toISOString(),
-            note:'🏁 Shelly: Tagesziel '+shellySettings.dailyTargetH+'h erreicht – abgeschaltet'});
-        if(typeof toast==='function')
-          toast('🏁 Tagesziel '+shellySettings.dailyTargetH+'h erreicht – Filter abgeschaltet','success',6000);
+    // Alle pool_* Jobs weg: Suche nach enableStatus
+    const list2 = await shellyRPC('Schedule.List',{});
+    if(list2&&list2.jobs){
+      for(const j of list2.jobs){
+        const c=JSON.stringify(j);
+        if(c.includes(SHELLY_SCHED_NIGHT)||c.includes(SHELLY_SCHED_MORNING))
+          await shellyRPC('Schedule.Delete',{id:j.id});
       }
     }
   }
 
-  // 4. Nach Dosierung: NUR wenn Tagesziel bereits erreicht
-  const filterTimer = ld('filter_timer', null);
-  if(filterTimer && new Date(filterTimer.until) <= now && !sonder && _shellyState.output === true && targetOk){
-    const lastDoseShutdown = ld('shelly_dose_shutdown','');
-    if(lastDoseShutdown !== filterTimer.startedAt){
-      sd('shelly_dose_shutdown', filterTimer.startedAt);
-      const ok = await shellyCommand(false);
-      if(ok){
-        const namen = {chlorplus:'Chlor Plus', poolklar:'Poolklar', flockmittel:'Flockmittel'};
-        const pName = namen[filterTimer.product]||filterTimer.product;
-        if(typeof logHistory==='function')
-          logHistory({type:'wartung', time:now.toISOString(),
-            note:'⚗️ Shelly: Nach '+pName+'-Timer – Tagesziel erreicht – abgeschaltet'});
-        if(typeof toast==='function')
-          toast('⚗️ Dosier-Timer abgelaufen – Tagesziel erreicht: Filter abgeschaltet','success',5000);
-      }
-    }
+  const sonder = s.sondermodus24h;
+  const errors = [];
+
+  // 2. Nachtruhe-Schedule
+  const nightRes = await shellyRPC('Schedule.Create',{
+    enable: !sonder,
+    timespec: _shellyTimespecFromHHMM(s.nightCutoff),
+    calls:[{method:'Switch.Set',params:{id:0,on:false}}]
+  });
+  if(!nightRes || nightRes._err)
+    errors.push('Nachtruhe: '+(nightRes?._err||'Fehler'));
+
+  // 3. Morgenwecker-Schedule
+  const mornRes = await shellyRPC('Schedule.Create',{
+    enable: !sonder,
+    timespec: _shellyTimespecFromHHMM(s.morningWakeup),
+    calls:[{method:'Switch.Set',params:{id:0,on:true}}]
+  });
+  if(!mornRes || mornRes._err)
+    errors.push('Morgenwecker: '+(mornRes?._err||'Fehler'));
+
+  if(errors.length){
+    setEl('<span style="color:#dc2626">❌ '+errors.join(' | ')+'</span>');
+    if(typeof toast==='function') toast('❌ Zeitplan-Übertragung fehlgeschlagen','error',5000);
+  } else {
+    const note = sonder ? ' (deaktiviert – 24h-Modus)' : '';
+    setEl('<span style="color:#16a34a">✅ Zeitpläne gesetzt'+note+' – Shelly schaltet jetzt eigenständig!</span>');
+    if(typeof logHistory==='function')
+      logHistory({type:'wartung',time:new Date().toISOString(),
+        note:'📅 Shelly-Zeitpläne übertragen: Nachtruhe '+s.nightCutoff+', Wecker '+s.morningWakeup+(sonder?' (Sondermodus – deaktiviert)':'')});
+    if(typeof toast==='function') toast('✅ Zeitpläne auf Shelly übertragen – läuft jetzt eigenständig!','success',5000);
+  }
+}
+
+// Nach Dosierung: einmaligen Timer auf Shelly pushen
+async function shellyPushDoseTimer(productKey){
+  if(!shellySettings.enabled||!shellySettings.ip&&!shellySettings.cloudDeviceId) return;
+  const minMap = {chlorplus:8*60, poolklar:2*60, flockmittel:15};
+  const min = minMap[productKey];
+  if(!min) return;
+  // Berechne Uhrzeit in X Minuten → einmaliger Schedule
+  const fireAt = new Date(Date.now() + min*60000);
+  const h = String(fireAt.getHours()).padStart(2,'0');
+  const m = String(fireAt.getMinutes()).padStart(2,'0');
+  const d = fireAt.getDate();
+  const mo = fireAt.getMonth()+1;
+  // Einmaliger Cron: sec min hour day month * (spez. Datum)
+  const timespec = '0 '+fireAt.getMinutes()+' '+fireAt.getHours()+' '+d+' '+mo+' *';
+  const namen = {chlorplus:'Chlor Plus',poolklar:'Poolklar',flockmittel:'Flockmittel'};
+  const res = await shellyRPC('Schedule.Create',{
+    enable:true, timespec:timespec,
+    calls:[{method:'Switch.Set',params:{id:0,on:false}}]
+  });
+  if(res && !res._err){
+    if(typeof logHistory==='function')
+      logHistory({type:'wartung',time:new Date().toISOString(),
+        note:'⚗️ Shelly: Einmal-Timer nach '+namen[productKey]+' – Abschaltung um '+h+':'+m+' Uhr auf Gerät hinterlegt'});
+    if(typeof toast==='function') toast('⚗️ Shelly schaltet nach '+namen[productKey]+' um '+h+':'+m+' Uhr ab','info',5000);
   }
 }
 
@@ -10080,7 +10139,8 @@ function renderShellyCard(){
             '<div style="height:100%;width:'+pct+'%;background:'+barCol+';border-radius:6px;transition:width 0.5s"></div>'+
           '</div>'+
           '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">'+
-            '🌙 '+shellySettings.nightCutoff+' Uhr &nbsp;·&nbsp; ⏰ '+shellySettings.morningWakeup+' Uhr'+
+            '📅 Zeitpläne auf Shelly: 🌙 '+shellySettings.nightCutoff+' · ⏰ '+shellySettings.morningWakeup+
+            ' <span style="color:#94a3b8">(läuft eigenständig)</span>'+
           '</div>'+
         '</div>'+
         (_shellyState.online
@@ -10126,11 +10186,14 @@ async function shellyManualOff(){
   renderShellyCard();
 }
 
-function shellySondermodus(){
+async function shellySondermodus(){
   shellySettings.sondermodus24h = !shellySettings.sondermodus24h;
   sd('shelly_settings', shellySettings);
+  const an = shellySettings.sondermodus24h;
   if(typeof toast==='function')
-    toast(shellySettings.sondermodus24h ? '🔴 24h-Betrieb aktiviert' : '✅ 24h-Betrieb deaktiviert','info',3000);
+    toast(an ? '🔴 24h-Betrieb aktiviert – übertrage auf Shelly…' : '✅ 24h-Betrieb deaktiviert – übertrage auf Shelly…','info',3000);
+  // Zeitpläne entsprechend aktivieren/deaktivieren
+  await shellyPushSchedules();
   renderShellyCard();
   renderShellySettings();
 }
@@ -10216,8 +10279,10 @@ function renderShellySettings(){
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="btn btn-primary btn-sm" onclick="saveShellySettings()">💾 Speichern</button>'+
       '<button class="btn btn-outline btn-sm" onclick="shellySaveAndTest()">🔌 Verbindung testen</button>'+
+      '<button class="btn btn-outline btn-sm" style="background:#f0fdf4;border-color:#16a34a;color:#15803d" onclick="shellyPushSchedules()">📅 Zeitpläne übertragen</button>'+
     '</div>'+
     '<div id="sh-test-result" style="font-size:0.8rem;min-height:18px"></div>'+
+    '<div id="sh-sched-result" style="font-size:0.8rem;min-height:18px"></div>'+
     '</div>';
 }
 
