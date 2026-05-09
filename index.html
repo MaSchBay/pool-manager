@@ -9842,7 +9842,8 @@ async function _shellyFetchTimeout(url, opts, ms){
 
 async function shellyCloudRPC(method, params){
   const s = shellySettings;
-  if(!s.cloudServer||!s.cloudAuthKey||!s.cloudDeviceId) return null;
+  if(!s.cloudServer||!s.cloudAuthKey||!s.cloudDeviceId)
+    return {_err:'Konfiguration unvollständig (Server, Key oder Gerät fehlt)'};
   try{
     const body = new URLSearchParams({
       auth_key: s.cloudAuthKey,
@@ -9855,28 +9856,42 @@ async function shellyCloudRPC(method, params){
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body: body.toString()
     }, 8000);
-    if(!r.ok) return null;
-    const d = await r.json();
-    if(!d.isok) return null;
+    const txt = await r.text();
+    let d; try{ d = JSON.parse(txt); }catch(_){ return {_err:'Antwort kein JSON: '+txt.slice(0,80)}; }
+    if(!r.ok) return {_err:'HTTP '+r.status+' – '+(d.errors||txt).toString().slice(0,120)};
+    if(!d.isok) return {_err:'Cloud: isok=false – '+(d.errors||JSON.stringify(d)).toString().slice(0,120)};
     return d.data;
-  }catch(e){ return null; }
+  }catch(e){
+    const msg = e.message||String(e);
+    if(msg.includes('Failed to fetch')||msg.includes('NetworkError'))
+      return {_err:'CORS oder Netzwerkfehler – Shelly Cloud erlaubt evtl. keine Browser-Anfragen von GitHub Pages. Fehler: '+msg};
+    return {_err:'Fehler: '+msg};
+  }
 }
 
-async function shellyCloudListDevices(){
+async function shellyCloudListDevices(tmpKey, tmpServer){
   const s = shellySettings;
-  if(!s.cloudServer||!s.cloudAuthKey) return null;
+  const key    = tmpKey    || s.cloudAuthKey;
+  const server = tmpServer || s.cloudServer;
+  if(!server||!key) return {_err:'Server-URL oder Auth-Key fehlt'};
   try{
-    const body = new URLSearchParams({auth_key: s.cloudAuthKey});
-    const r = await _shellyFetchTimeout(s.cloudServer+'/interface/device/get_status_all',{
+    const body = new URLSearchParams({auth_key: key});
+    const r = await _shellyFetchTimeout(server+'/interface/device/get_status_all',{
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body: body.toString()
     }, 10000);
-    if(!r.ok) return null;
-    const d = await r.json();
-    if(!d.isok||!d.data) return null;
+    const txt = await r.text();
+    let d; try{ d = JSON.parse(txt); }catch(_){ return {_err:'Antwort kein JSON: '+txt.slice(0,80)}; }
+    if(!r.ok) return {_err:'HTTP '+r.status+' – '+txt.slice(0,100)};
+    if(!d.isok||!d.data) return {_err:'Cloud: isok=false – '+(d.errors||'').toString()};
     return d.data;
-  }catch(e){ return null; }
+  }catch(e){
+    const msg = e.message||String(e);
+    if(msg.includes('Failed to fetch')||msg.includes('NetworkError'))
+      return {_err:'CORS-Fehler – der Browser blockiert die Anfrage. Fehlermeldung: '+msg};
+    return {_err:'Fehler: '+msg};
+  }
 }
 
 // ── Lokale API ───────────────────────────────────────────────
@@ -9894,17 +9909,17 @@ async function shellyLocalRPC(method, params){
 
 // ── Einheitliche API (mode-abhängig) ────────────────────────
 async function shellyGetStatus(){
-  if(shellySettings.mode==='cloud')
-    return await shellyCloudRPC('Switch.GetStatus',{id:0});
-  else
-    return await shellyLocalRPC('Switch.GetStatus',{id:0});
+  const r = shellySettings.mode==='cloud'
+    ? await shellyCloudRPC('Switch.GetStatus',{id:0})
+    : await shellyLocalRPC('Switch.GetStatus',{id:0});
+  return (r && !r._err) ? r : null;
 }
 
 async function shellySet(on){
-  if(shellySettings.mode==='cloud')
-    return await shellyCloudRPC('Switch.Set',{id:0, on:on});
-  else
-    return await shellyLocalRPC('Switch.Set',{id:0, on:on});
+  const r = shellySettings.mode==='cloud'
+    ? await shellyCloudRPC('Switch.Set',{id:0, on:on})
+    : await shellyLocalRPC('Switch.Set',{id:0, on:on});
+  return (r && !r._err) ? r : null;
 }
 
 async function shellyCommand(on){
@@ -10234,12 +10249,12 @@ async function shellyLoadDevices(){
   shellySettings.cloudAuthKey = tmpKey;
   shellySettings.cloudServer = tmpServer;
 
-  const data = await shellyCloudListDevices();
+  const data = await shellyCloudListDevices(tmpKey, tmpServer);
 
   shellySettings.cloudAuthKey = savedKey;
   shellySettings.cloudServer = savedServer;
 
-  if(!data){ el.innerHTML='<span style="color:#dc2626;font-size:0.8rem">❌ Keine Verbindung – Server-URL und Auth-Key prüfen.</span>'; return; }
+  if(!data||data._err){ el.innerHTML='<span style="color:#dc2626;font-size:0.8rem">❌ '+(data?._err||'Keine Verbindung – Server-URL und Auth-Key prüfen.')+'</span>'; return; }
 
   const devices = Object.entries(data);
   if(!devices.length){ el.innerHTML='<span style="color:#64748b;font-size:0.8rem">Keine Geräte gefunden.</span>'; return; }
@@ -10293,22 +10308,42 @@ function saveShellySettings(){
 async function shellySaveAndTest(){
   saveShellySettings();
   const el = document.getElementById('sh-test-result');
-  if(el) el.innerHTML='<span style="color:#64748b">⏳ Verbinde…</span>';
-  const status = await shellyGetStatus();
-  if(status){
-    const sw  = status.output ? 'EIN' : 'AUS';
-    const pwr = status.apower != null ? ' · '+Math.round(status.apower)+' W' : '';
-    const tmp = status.temperature?.tC != null ? ' · '+Math.round(status.temperature.tC)+' °C' : '';
-    if(el) el.innerHTML='<span style="color:#16a34a">✅ Verbunden – Schalter: '+sw+pwr+tmp+'</span>';
-    _shellyState.online = true;
-    _shellyState.output = status.output;
-    _shellyState.power  = status.apower ?? null;
-    renderShellyCard();
+  if(!el) return;
+  el.innerHTML='<span style="color:#64748b">⏳ Verbinde mit Shelly Cloud…</span>';
+
+  if(shellySettings.mode==='cloud'){
+    // Schritt 1: Gerätliste abrufen (kein Device-ID nötig)
+    const listResult = await shellyCloudListDevices();
+    if(listResult && !listResult._err){
+      const devCount = Object.keys(listResult).length;
+      if(!shellySettings.cloudDeviceId){
+        el.innerHTML='<span style="color:#16a34a">✅ Cloud verbunden – '+devCount+' Gerät(e) gefunden. Bitte oben "Geräte laden" und ein Gerät auswählen.</span>';
+        return;
+      }
+      // Schritt 2: Gerätestatus abrufen
+      const rawStatus = await shellyCloudRPC('Switch.GetStatus',{id:0});
+      if(rawStatus && !rawStatus._err){
+        const sw  = rawStatus.output ? 'EIN' : 'AUS';
+        const pwr = rawStatus.apower != null ? ' · '+Math.round(rawStatus.apower)+' W' : '';
+        el.innerHTML='<span style="color:#16a34a">✅ Verbunden – Filter: '+sw+pwr+'</span>';
+        _shellyState.online=true; _shellyState.output=rawStatus.output; _shellyState.power=rawStatus.apower??null;
+        renderShellyCard();
+      } else {
+        el.innerHTML='<span style="color:#dc2626">❌ Cloud erreichbar, aber Gerätestatus fehlgeschlagen: '+(rawStatus?._err||'unbekannt')+'</span>';
+      }
+    } else {
+      const errMsg = listResult?._err||'Keine Antwort';
+      const isCors = errMsg.includes('CORS')||errMsg.includes('Failed to fetch')||errMsg.includes('NetworkError');
+      el.innerHTML='<span style="color:#dc2626">❌ '+errMsg+'</span>'
+        +(isCors ? '<br><span style="color:#92400e;font-size:0.75rem">💡 GitHub Pages blockiert möglicherweise Anfragen an die Shelly Cloud (CORS). Öffne die App kurz über <b>file://</b> oder prüfe die Browser-Konsole (F12).</span>' : '');
+    }
   } else {
-    const hint = shellySettings.mode==='cloud'
-      ? 'Server-URL, Auth-Key und Gerät prüfen. Ist die Shelly Cloud in der App aktiviert?'
-      : 'IP prüfen – App muss über http:// oder file:// geöffnet sein.';
-    if(el) el.innerHTML='<span style="color:#dc2626">❌ Keine Verbindung – '+hint+'</span>';
+    const status = await shellyGetStatus();
+    if(status){
+      el.innerHTML='<span style="color:#16a34a">✅ Lokal verbunden – '+(status.output?'EIN':'AUS')+'</span>';
+    } else {
+      el.innerHTML='<span style="color:#dc2626">❌ Lokal nicht erreichbar – IP prüfen, App muss über http:// oder file:// geöffnet sein.</span>';
+    }
   }
 }
 
