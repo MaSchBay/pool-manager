@@ -204,7 +204,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pool-blu
 .fab-items{display:none;flex-direction:column;align-items:flex-end;gap:7px}
 .fab-items.open{display:flex}
 /* ===== CHEMIKALIEN-VORRAT ===== */
-.stock-item{display:flex;flex-direction:row;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);overflow:hidden;min-width:0}
+.stock-item{display:flex;flex-direction:row;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);overflow:hidden;min-width:0;max-width:100%}
 .stock-item:last-child{border-bottom:none}
 .stock-bar-wrap{flex:1;height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden}
 .stock-bar-fill{height:100%;border-radius:5px;transition:width 0.4s}
@@ -579,6 +579,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   #stock-dashboard, .stock-item{
     overflow:hidden;
     min-width:0;
+    max-width:100%;
     word-break:break-word;
   }
   /* Allgemeine flex-rows */
@@ -606,8 +607,8 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 }
 
 @media(max-width:480px){
-  .stock-item{flex-wrap:nowrap;overflow:hidden}
-  .stock-item > *{min-width:0;overflow:hidden}
+  .stock-item{flex-wrap:nowrap;overflow:hidden;max-width:100%}
+  .stock-item > *{min-width:0;overflow:hidden;max-width:100%}
   .stock-bar-wrap{min-width:40px;max-width:120px;flex-shrink:1}
   .task-name,.task-hint{max-width:calc(100vw - 100px)}
 }
@@ -2541,31 +2542,16 @@ function renderEmpfehlungen(id){
     const drain=Math.round(10520*(last.tds-800)/last.tds);
     tips.push({type:'warn',msg:`Wasserbelastung (TDS) zu hoch (${last.tds} ppm) → ${drain} Liter ablassen und mit Frischwasser auffüllen`});
   }
-  // pH instability: detect jumps >0.3 in 48h without pH dosing
-  (function(){
-    var now=new Date();
-    var last48=measurements.filter(function(m){return m.ph&&m.time&&(now-new Date(m.time))<172800000;});
-    if(last48.length>=2){
-      var hasPhDosing=historyLog.some(function(e){
-        var note=(e.note||'').toLowerCase();
-        var age=e.time?(now-new Date(e.time))/3600000:999;
-        return age<=48&&(note.includes('ph-minus')||note.includes('ph-plus'));
+  // Alca-Plus Monitoring – alle 4 Trigger (pH-Sprung, pH-Minus-Dosi, TDS-Abfall, 30-Tage)
+  {
+    const alcaCheck=checkAlcaPlusNeeded();
+    if(alcaCheck){
+      const alcaMsg=alcaCheck.msg+'\n'+alcaCheck.dose+'\n'+alcaCheck.disclaimer;
+      tips.push({type:'warn',msg:alcaMsg,
+        extraBtn:`<button onclick="logAlcaDosierung(${Math.round(190*POOL_VOLUME/10)})" style="margin-top:4px;font-size:0.75rem;padding:4px 10px;border-radius:6px;background:#16a34a;color:white;border:none;cursor:pointer">✅ ${Math.round(190*POOL_VOLUME/10)}g Alca-Plus dosiert</button>`
       });
-      if(!hasPhDosing){
-        var phVals=last48.map(function(m){return m.ph;});
-        var phMin=Math.min.apply(null,phVals),phMax=Math.max.apply(null,phVals);
-        if(phMax-phMin>0.3){
-          const alcaCheck=checkAlcaPlusNeeded();
-        if(alcaCheck){
-          const alcaMsg=alcaCheck.msg+'\n'+alcaCheck.dose+'\n'+alcaCheck.disclaimer;
-          tips.push({type:'warn',msg:alcaMsg,
-            extraBtn:`<button onclick="logAlcaDosierung(${Math.round(190*POOL_VOLUME/10)})" style="margin-top:4px;font-size:0.75rem;padding:4px 10px;border-radius:6px;background:#16a34a;color:white;border:none;cursor:pointer">✅ ${Math.round(190*POOL_VOLUME/10)}g Alca-Plus dosiert</button>`
-          });
-        }
-        }
-      }
     }
-  })();
+  }
   maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`});}}); 
   el.innerHTML=tips.map(t=>`
     <div class="empfehlung ${t.type}" style="cursor:${t.helpIdx!==undefined?'pointer':'default'};justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" ${t.helpIdx!==undefined?`onclick="showBoard('hilfe');setTimeout(()=>startTodo(${t.helpIdx}),100)"`:''}>
@@ -3762,12 +3748,15 @@ function selectProduct(key,card){
   document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');selProduct=key;
   const p=PRODUCTS[key];document.getElementById('dosi-title').textContent=`📊 ${p.name}`;
   const banH=BAN_H[key];
+  // Preserve current select values before re-render
+  const _prevVals={};
+  p.fields.forEach(f=>{const _el=document.getElementById('dosi-'+f.id);if(_el)_prevVals[f.id]=_el.value;});
   let fHtml=banH>0?`<div style="background:#fff1f2;padding:9px;border-radius:8px;margin-bottom:10px;font-size:0.83rem;font-weight:700;color:#b91c1c">⚠️ Badeverbot ${banH<1?(banH*60)+' Min':(banH+'h')} nach Anwendung</div>`:'';
   p.fields.forEach(f=>{
     fHtml+=`<div class="form-group"><label class="form-label">${f.label}`;
     if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)fHtml+=` <span style="font-size:0.72rem;color:#16a34a;font-weight:700">(aus Verlauf: ${ad}d)</span>`;}
     fHtml+=`</label>`;
-    if(f.type==='select'){fHtml+=`<select id="dosi-${f.id}">${f.opts.map(o=>`<option>${o}</option>`).join('')}</select>`;}
+    if(f.type==='select'){const _prev=_prevVals[f.id]||'';fHtml+=`<select id="dosi-${f.id}">${f.opts.map(o=>`<option${o===_prev?' selected':''}>` +o+`</option>`).join('')}</select>`;}
     else{
       let initVal='';
       if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)initVal=ad;}
@@ -5026,7 +5015,8 @@ function renderBadeplaner(weatherData){
     if(!isDay)                          {status='night'; icon='🌙';bg='#f1f5f9';txt='#64748b';}
     else if(slotHasBan)                 {status='ban';   icon='🚫';bg='#fee2e2';txt='#b91c1c';}
     else if(code>=95)                   {status='unwetter'; icon='⚡';bg='#fef3c7';txt='#92400e';}
-    else if(code>=80)                   {status='warn';  icon='🌧️';bg='#fffbeb';txt='#92400e';}
+    else if(code>=80&&code<=86)         {status='unwetter'; icon='⚡';bg='#fef3c7';txt='#92400e';}
+    else if(code>86&&code<95)           {status='warn';  icon='🌧️';bg='#fffbeb';txt='#92400e';}
     else if(code>=61)                   {status='warn';  icon='🌦️';bg='#fffbeb';txt='#92400e';}
     else if(temp<16)                    {status='warn';  icon='🥶';bg='#eff6ff';txt='#1e40af';}
     else if(!waterOk&&last)             {status='warn';  icon='⚠️';bg='#fffbeb';txt='#92400e';}
@@ -9379,16 +9369,13 @@ function openProduktDetail(poolId){
       <textarea id="pd-notes-${p.poolId}" rows="2" placeholder="Dosierhinweise, Notizen..." style="width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:0.82rem;resize:vertical;box-sizing:border-box">${p.notes||''}</textarea>
     </div>
     <div class="card" style="margin-bottom:8px;background:var(--pool-surface)">
-      <div class="card-title" style="font-size:0.78rem">⚗️ Dosierungen & Badeverbote</div>
-      ${p.dosierungen&&p.dosierungen.length?p.dosierungen.map(function(d,i){
-        return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:white">'
-          +'<div style="display:flex;justify-content:space-between;align-items:center">'
-          +'<span style="font-weight:700;font-size:0.83rem">'+d.name+'</span>'
-          +'<span style="font-size:0.78rem;color:var(--text-muted)">'+d.amount+' '+d.unit+(d.banHours?(' · 🚫 '+(d.banHours<1?(d.banHours*60)+' min':d.banHours+'h')):'')+'</span>'
-          +'</div>'
-          +(d.note?'<div style="font-size:0.73rem;color:var(--text-muted);margin-top:3px">'+d.note+'</div>':'')
-          +'</div>';
-      }).join(''):'<p style="font-size:0.82rem;color:var(--text-muted)">Keine Dosierungen hinterlegt.</p>'}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="card-title" style="font-size:0.78rem;margin:0">⚗️ Dosierungen & Badeverbote</div>
+        <button onclick="addDosierung('${p.poolId}')" style="font-size:0.72rem;padding:3px 10px;border-radius:6px;background:var(--pool-blue);color:white;border:none;cursor:pointer">+ Hinzufügen</button>
+      </div>
+      <div id="pd-dosi-container-${p.poolId}">
+        ${dosiRows||'<p style="font-size:0.82rem;color:var(--text-muted)">Keine Dosierungen hinterlegt.</p>'}
+      </div>
     </div>
     <div class="card" style="margin-bottom:8px">
       <div class="card-title" style="font-size:0.78rem">📄 Datenblatt & Shop</div>
