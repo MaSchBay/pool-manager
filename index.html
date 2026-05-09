@@ -3043,7 +3043,7 @@ async function renderIphone(){
           <span style="font-size:0.85rem;font-weight:700">${t.name}</span>
           <div style="display:flex;gap:5px;align-items:center">
             ${isDruck?`<button class="btn btn-warn btn-sm" onclick="openDruckModal()" style="padding:4px 8px;font-size:0.72rem">📊</button>`:''}
-            <span style="font-size:0.75rem;font-weight:700;color:${over>0?'#dc2626':du===0?'#d97706':'#16a34a'};white-space:nowrap">${over>0?over+'d über':du===0?'Heute':'in '+du+'d'}</span>
+            <span style="font-size:0.75rem;font-weight:700;color:${over>0?'#dc2626':du===0?'#d97706':'#16a34a'};white-space:nowrap">${over>0?hoursOverdue(t)+'h überfällig':du===0?'Heute':'in '+du+'d'}</span>
           </div>
         </div>
         ${hint?`<div style="font-size:0.73rem;color:var(--pool-mid);margin-top:2px">${hint}</div>`:''}
@@ -3280,7 +3280,7 @@ async function renderIpad(){
           +'<span style="font-size:0.88rem;font-weight:700">'+t.name+'</span>'
           +'<div style="display:flex;gap:6px;align-items:center">'
           +(isDruck?'<button class="btn btn-warn btn-sm" onclick="openDruckModal()" style="font-size:0.72rem;padding:4px 8px">📊</button>':'')
-          +'<span style="font-size:0.78rem;font-weight:700;color:'+(over>0?'#dc2626':du===0?'#d97706':'#16a34a')+';white-space:nowrap">'+(over>0?over+'d über':du===0?'Heute':'in '+du+'d')+'</span>'
+          +'<span style="font-size:0.78rem;font-weight:700;color:'+(over>0?'#dc2626':du===0?'#d97706':'#16a34a')+';white-space:nowrap">'+(over>0?hoursOverdue(t)+'h überfällig':du===0?'Heute':'in '+du+'d')+'</span>'
           +'</div></div>'
           +(hint?'<div style="font-size:0.75rem;color:var(--pool-mid);margin-top:2px">'+hint+'</div>':'')
           +'</div>';
@@ -3874,7 +3874,7 @@ function logDosierung(productKey,amount){
   }
   if(banH>0){addTimerTodo(`Nach ${p.name}: Wasser messen`,banH);}
   // Filter-Laufzeit-Timer nach Dosierung
-  const _filterMap={'Chlor Plus':2,'Poolklar':2,'Flockmittel':0.25};
+  const _filterMap={'Chlor Plus':8,'Poolklar':2,'Flockmittel':0.25};
   const _filterH=_filterMap[p.name]||0;
   if(_filterH>0)addTimerTodo(`Filter ausschalten – ${p.name} fertig`,_filterH);
   if(typeof toast==='function')toast('Dosierung "'+p.name+' – '+amount+'" dokumentiert'+(banH>0?' – Badeverbot & Timer aktiv':''),'success',3500);
