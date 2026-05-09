@@ -734,13 +734,22 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <div class="modal" style="max-width:400px">
     <div class="modal-title" id="task-confirm-title">✅ Aufgabe bestätigen</div>
     <p id="task-confirm-desc" style="font-size:0.88rem;color:var(--text-secondary);margin-bottom:14px"></p>
-    <div id="task-confirm-qty-row" style="display:none;margin-bottom:14px">
+    <div id="task-confirm-qty-row" style="display:none;margin-bottom:10px">
       <label class="form-label" id="task-confirm-qty-label">Verwendete Menge</label>
       <div style="display:flex;align-items:center;gap:8px">
         <button class="qmess-btn" onclick="adjustTaskQty(-1)">−</button>
         <input type="number" id="task-confirm-qty" style="text-align:center;width:100px;font-weight:800;font-size:1.1rem" min="0">
         <button class="qmess-btn" onclick="adjustTaskQty(1)">+</button>
         <span id="task-confirm-unit" style="font-weight:700;color:var(--text-muted)"></span>
+      </div>
+    </div>
+    <div id="task-confirm-qty2-row" style="display:none;margin-bottom:14px">
+      <label class="form-label" id="task-confirm-qty2-label">⚡ Schnell-Chlortabs</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="qmess-btn" onclick="adjustTaskQty2(-1)">−</button>
+        <input type="number" id="task-confirm-qty2" style="text-align:center;width:100px;font-weight:800;font-size:1.1rem" min="0">
+        <button class="qmess-btn" onclick="adjustTaskQty2(1)">+</button>
+        <span style="font-weight:700;color:var(--text-muted)">Stk</span>
       </div>
     </div>
     <div class="form-group">
@@ -2647,7 +2656,7 @@ function quickLogTask(){
 }
 // Task-Bestätigungs-Modal
 const TASK_STOCK_MAP={
-  chlor_tabs:'Schnell-Chlortabs', algischutz:'Algenschutz', poolklar:'Poolklar',
+  chlor_tabs:'Langzeit-Chlortabs', algischutz:'Algenschutz', poolklar:'Poolklar',
   flockmittel:'Flockmittel', test:'Teststreifen'
 };
 
@@ -2665,19 +2674,48 @@ function quickCompleteTask(id){
   document.getElementById('task-confirm-desc').textContent=hint||'Aufgabe als erledigt markieren?';
   document.getElementById('task-confirm-note').value='';
   const qtyRow=document.getElementById('task-confirm-qty-row');
-  if(p){
+  const qty2Row=document.getElementById('task-confirm-qty2-row');
+  // chlor_tabs: zwei Zeilen – Langzeit + Schnell getrennt
+  if(id==='chlor_tabs'){
+    const lzProd=STOCK_PRODUCTS['Langzeit-Chlortabs'];
+    const scProd=STOCK_PRODUCTS['Schnell-Chlortabs'];
+    const s=settings.chlor||DEFAULT_SETTINGS.chlor;
+    const last=getLastMeasurement();
+    // Langzeit-Tabs: immer 4 Tabs Standard
     qtyRow.style.display='block';
-    document.getElementById('task-confirm-qty').value=p.perUse;
-    document.getElementById('task-confirm-qty-label').textContent=`Verwendete Menge (Standard: ${p.perUse} ${p.unit})`;
-    document.getElementById('task-confirm-unit').textContent=p.unit;
+    document.getElementById('task-confirm-qty').value=lzProd.perUse;
+    document.getElementById('task-confirm-qty-label').textContent=`🕐 Langzeit-Chlortabs (Standard: ${lzProd.perUse} Stk)`;
+    document.getElementById('task-confirm-unit').textContent=lzProd.unit;
+    // Schnell-Tabs: Vorschlag anhand Chlor-Messwert
+    let scDefault=0;
+    if(last&&last.chlor!==undefined){
+      if(last.chlor<s.min)scDefault=scProd.perUse; // deutlich zu niedrig → volle Dosis
+      else if(last.chlor<s.target-0.2)scDefault=Math.max(1,Math.round(scProd.perUse/2)); // leicht niedrig → halbe Dosis
+    }
+    qty2Row.style.display='block';
+    document.getElementById('task-confirm-qty2-label').textContent=
+      `⚡ Schnell-Chlortabs${scDefault>0?' (Vorschlag: '+scDefault+' Stk – Chlor niedrig)':' (nur bei Bedarf)'}`;
+    document.getElementById('task-confirm-qty2').value=scDefault;
   } else {
-    qtyRow.style.display='none';
+    qty2Row.style.display='none';
+    if(p){
+      qtyRow.style.display='block';
+      document.getElementById('task-confirm-qty').value=p.perUse;
+      document.getElementById('task-confirm-qty-label').textContent=`Verwendete Menge (Standard: ${p.perUse} ${p.unit})`;
+      document.getElementById('task-confirm-unit').textContent=p.unit;
+    } else {
+      qtyRow.style.display='none';
+    }
   }
   document.getElementById('modal-task-confirm').classList.add('open');
 }
 
 function adjustTaskQty(d){
   const el=document.getElementById('task-confirm-qty');
+  el.value=Math.max(0,(parseInt(el.value)||0)+d);
+}
+function adjustTaskQty2(d){
+  const el=document.getElementById('task-confirm-qty2');
   el.value=Math.max(0,(parseInt(el.value)||0)+d);
 }
 
@@ -2711,12 +2749,42 @@ function confirmTask(){
   const stockName=TASK_STOCK_MAP[id];
   const p=stockName?STOCK_PRODUCTS[stockName]:null;
   let histNote=`Erledigt: ${task.name}`;
-  if(p&&qty>0)histNote+=` (${qty} ${p.unit} verwendet)`;
+  if(p&&qty>0)histNote+=` (${qty} ${p.unit} ${p===STOCK_PRODUCTS['Langzeit-Chlortabs']?'Langzeit-Tabs':'verwendet'})`;
+  // Für chlor_tabs: zweite Menge (Schnell-Tabs) auslesen
+  const qty2Row=document.getElementById('task-confirm-qty2-row');
+  const qty2=(id==='chlor_tabs'&&qty2Row&&qty2Row.style.display!=='none')
+    ?(parseInt(document.getElementById('task-confirm-qty2').value)||0):0;
+  if(id==='chlor_tabs'&&qty2>0)histNote+=` + ${qty2} Stk Schnell-Tabs`;
   if(note)histNote+=` – ${note}`;
   logHistory({type:'wartung',time:task.lastDone,note:histNote});
   // Bestand abziehen
   if(stockName&&chemStock[stockName]&&qty>0){
-    chemStock[stockName].qty=Math.max(0,chemStock[stockName].qty-qty);
+    const gebinde=chemStock[stockName].gebinde;
+    if(Array.isArray(gebinde)){
+      let rem=qty;
+      gebinde.filter(g=>g.status!=='verbraucht').sort((a,b)=>a.status==='angebrochen'?-1:1).forEach(g=>{
+        if(rem<=0)return;const take=Math.min(rem,g.qty);g.qty-=take;rem-=take;if(g.qty<=0)g.status='verbraucht';
+      });
+      chemStock[stockName].qty=Math.max(0,chemStock[stockName].qty-qty);
+    } else {
+      chemStock[stockName].qty=Math.max(0,chemStock[stockName].qty-qty);
+    }
+    sd('chem_stock_v2',chemStock);
+    renderStockDashboard();
+  }
+  // Schnell-Tabs Bestand abziehen
+  if(qty2>0&&chemStock['Schnell-Chlortabs']){
+    const sc=chemStock['Schnell-Chlortabs'];
+    const gebinde=sc.gebinde;
+    if(Array.isArray(gebinde)){
+      let rem=qty2;
+      gebinde.filter(g=>g.status!=='verbraucht').sort((a,b)=>a.status==='angebrochen'?-1:1).forEach(g=>{
+        if(rem<=0)return;const take=Math.min(rem,g.qty);g.qty-=take;rem-=take;if(g.qty<=0)g.status='verbraucht';
+      });
+      sc.qty=Math.max(0,sc.qty-qty2);
+    } else {
+      sc.qty=Math.max(0,sc.qty-qty2);
+    }
     sd('chem_stock_v2',chemStock);
     renderStockDashboard();
   }
@@ -3745,19 +3813,26 @@ const PRODUCTS={
     instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Chlor zu niedrig: erst Chlor Plus Granulat (158g), dann LZ-Tabs</li><li>Chlor ok: 4 LZ-Tabs/Woche reichen</li><li>Sehr niedrig: Schockchlorung (158g) + 30 Min Badeverbot</li><li>🔬 Nach 30 Min–4h: FAC, ORP, pH messen</li></ol>`}
 };
 function selectProduct(key,card){
-  document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');selProduct=key;
+  document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');
+  // Auswahl nur beibehalten wenn gleiche Produktkarte nochmal geklickt wird
+  const _sameProduct=(selProduct===key);
+  const _prevVals={};
+  if(_sameProduct){
+    // Selects des gleichen Produkts sichern (Wechsel innerhalb desselben Formulars)
+    PRODUCTS[key].fields.forEach(function(f){if(f.type==='select'){var _el=document.getElementById('dosi-'+f.id);if(_el)_prevVals[f.id]=_el.value;}});
+  }
+  selProduct=key;
   const p=PRODUCTS[key];document.getElementById('dosi-title').textContent=`📊 ${p.name}`;
   const banH=BAN_H[key];
-  // Preserve current select values before re-render
-  const _prevVals={};
-  p.fields.forEach(f=>{const _el=document.getElementById('dosi-'+f.id);if(_el)_prevVals[f.id]=_el.value;});
   let fHtml=banH>0?`<div style="background:#fff1f2;padding:9px;border-radius:8px;margin-bottom:10px;font-size:0.83rem;font-weight:700;color:#b91c1c">⚠️ Badeverbot ${banH<1?(banH*60)+' Min':(banH+'h')} nach Anwendung</div>`:'';
   p.fields.forEach(f=>{
     fHtml+=`<div class="form-group"><label class="form-label">${f.label}`;
     if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)fHtml+=` <span style="font-size:0.72rem;color:#16a34a;font-weight:700">(aus Verlauf: ${ad}d)</span>`;}
     fHtml+=`</label>`;
-    if(f.type==='select'){const _prev=_prevVals[f.id]||'';fHtml+=`<select id="dosi-${f.id}">${f.opts.map(o=>`<option${o===_prev?' selected':''}>` +o+`</option>`).join('')}</select>`;}
-    else{
+    if(f.type==='select'){
+      const _prev=(_sameProduct&&_prevVals[f.id])||'';
+      fHtml+=`<select id="dosi-${f.id}">${f.opts.map(o=>`<option${o===_prev?' selected':''}>` +o+`</option>`).join('')}</select>`;
+    } else {
       let initVal='';
       if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)initVal=ad;}
       if(f.id==='current_ph'){const last=getLastMeasurement();if(last&&last.ph!==undefined)initVal=last.ph;}
@@ -3769,8 +3844,8 @@ function selectProduct(key,card){
   document.getElementById('dosi-content').innerHTML=`${fHtml}<button class="btn btn-primary btn-sm" onclick="calcDosage()">🧮 Berechnen</button><div id="dosi-result" style="margin-top:12px"></div>`;
   document.getElementById('dosi-instructions-card').style.display='block';
   document.getElementById('dosi-instructions').innerHTML=p.instr;
-  // Auto-calculate after fields are rendered (uses auto-filled pH values)
-  setTimeout(calcDosage,15);
+  // Direkt berechnen (synchron nach DOM-Update, kein setTimeout-Race mehr)
+  calcDosage();
 }
 
 function calcDosage(){
