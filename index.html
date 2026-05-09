@@ -8352,6 +8352,25 @@ function toggleCover(){
   renderChlorDecayCard();
   if(typeof toast==='function')toast(action+' dokumentiert','success',2000);
   if(navigator.vibrate)navigator.vibrate(30);
+  // Wenn Plane drauf: Shelly-Nachlauffrist anbieten
+  if(coverState.covered && typeof shellySettings!=='undefined' && shellySettings.enabled){
+    if(shellySettings.mode==='cloud'&&shellySettings.cloudDeviceId ||
+       shellySettings.mode==='local'&&shellySettings.ip){
+      const now2=new Date();
+      const fireAt2=new Date(now2.getTime()+2*3600000);
+      const timeStr2=fireAt2.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      const [nh,nm]=(shellySettings.nightCutoff||'22:00').split(':').map(Number);
+      const nightMin=nh*60+nm;
+      const fireMin2=fireAt2.getHours()*60+fireAt2.getMinutes();
+      const overtime=fireMin2>nightMin;
+      const overNote=overtime?' (läuft über Nachtruhe '+shellySettings.nightCutoff+' hinaus bis '+timeStr2+')':'';
+      setTimeout(()=>{
+        if(confirm('🏊 Plane drauf – Filter noch 2h laufen lassen?\nAbschaltung um '+timeStr2+' Uhr'+overNote+'\n\nBestätigen = Shelly-Timer setzen')){
+          shellyBadeschlussTimer();
+        }
+      },400);
+    }
+  }
 }
 
 function renderCoverStatusCard(){
@@ -9987,101 +10006,107 @@ async function shellyTick(){
 
 // ── Zeitplan-Logik ───────────────────────────────────────────
 // ── Zeitpläne auf Shelly pushen ─────────────────────────────
-// IDs die wir verwalten (fest, damit wir sie gezielt löschen können)
-const SHELLY_SCHED_NIGHT   = 'pool_night';
-const SHELLY_SCHED_MORNING = 'pool_morning';
-
 function _shellyTimespecFromHHMM(hhmm){
   const [h,m] = hhmm.split(':').map(Number);
-  return '0 '+m+' '+h+' * * *';  // Shelly cron: sec min hour day mon dow
+  return '0 '+m+' '+h+' * * *';  // Shelly Gen2 cron: sec min hour day mon dow
+}
+
+function _shellyManualScheduleGuide(s){
+  return '<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;font-size:0.78rem;color:#92400e">'+
+    '<b>📱 Manuell in der Shelly App einrichten:</b><br>'+
+    'Shelly App → Gerät auswählen → Zeitpläne → Neu:<br>'+
+    '🌙 Täglich '+s.nightCutoff+' Uhr → <b>Ausschalten</b><br>'+
+    '⏰ Täglich '+s.morningWakeup+' Uhr → <b>Einschalten</b>'+
+  '</div>';
 }
 
 async function shellyPushSchedules(){
+  saveShellySettings();  // Immer zuerst speichern
   const s = shellySettings;
   const el = document.getElementById('sh-sched-result');
   const setEl = t => { if(el) el.innerHTML=t; };
-
   setEl('<span style="color:#64748b">⏳ Zeitpläne werden übertragen…</span>');
-
-  // 1. Bestehende Pool-Zeitpläne löschen (anhand Tag im names-Feld)
-  const listRes = await shellyRPC('Schedule.List',{});
-  if(listRes && !listRes._err && listRes.jobs){
-    for(const job of listRes.jobs){
-      if(job.id && (job.timespec===_shellyTimespecFromHHMM(s.nightCutoff)
-                  ||job.timespec===_shellyTimespecFromHHMM(s.morningWakeup)
-                  ||(job.calls&&JSON.stringify(job.calls).includes('pool_')))){
-        await shellyRPC('Schedule.Delete',{id:job.id});
-      }
-    }
-    // Alle pool_* Jobs weg: Suche nach enableStatus
-    const list2 = await shellyRPC('Schedule.List',{});
-    if(list2&&list2.jobs){
-      for(const j of list2.jobs){
-        const c=JSON.stringify(j);
-        if(c.includes(SHELLY_SCHED_NIGHT)||c.includes(SHELLY_SCHED_MORNING))
-          await shellyRPC('Schedule.Delete',{id:j.id});
-      }
-    }
-  }
 
   const sonder = s.sondermodus24h;
   const errors = [];
 
-  // 2. Nachtruhe-Schedule
+  // Nachtruhe (ohne vorheriges Löschen – weniger API-Calls → kein Rate-Limit)
   const nightRes = await shellyRPC('Schedule.Create',{
     enable: !sonder,
     timespec: _shellyTimespecFromHHMM(s.nightCutoff),
     calls:[{method:'Switch.Set',params:{id:0,on:false}}]
   });
-  if(!nightRes || nightRes._err)
-    errors.push('Nachtruhe: '+(nightRes?._err||'Fehler'));
+  if(!nightRes||nightRes._err) errors.push('Nachtruhe: '+(nightRes?._err||'Fehler'));
+  else await new Promise(r=>setTimeout(r,800));  // kurze Pause zwischen Calls
 
-  // 3. Morgenwecker-Schedule
   const mornRes = await shellyRPC('Schedule.Create',{
     enable: !sonder,
     timespec: _shellyTimespecFromHHMM(s.morningWakeup),
     calls:[{method:'Switch.Set',params:{id:0,on:true}}]
   });
-  if(!mornRes || mornRes._err)
-    errors.push('Morgenwecker: '+(mornRes?._err||'Fehler'));
+  if(!mornRes||mornRes._err) errors.push('Morgenwecker: '+(mornRes?._err||'Fehler'));
 
   if(errors.length){
-    setEl('<span style="color:#dc2626">❌ '+errors.join(' | ')+'</span>');
-    if(typeof toast==='function') toast('❌ Zeitplan-Übertragung fehlgeschlagen','error',5000);
+    const isRateLimit = errors.join('').includes('max_req')||errors.join('').includes('401');
+    setEl('<span style="color:#dc2626">❌ '+errors.join(' | ')+'</span>'+
+      (isRateLimit
+        ? '<div style="margin-top:6px;font-size:0.78rem;color:#92400e">⏳ <b>Shelly Cloud limitiert direkte RPC-Aufrufe.</b> Bitte Zeitpläne einmalig direkt in der Shelly App einrichten:</div>'+
+          _shellyManualScheduleGuide(s)
+        : ''));
+    if(typeof toast==='function') toast('❌ Zeitpläne nicht übertragen – bitte Shelly App nutzen','warn',6000);
   } else {
-    const note = sonder ? ' (deaktiviert – 24h-Modus)' : '';
-    setEl('<span style="color:#16a34a">✅ Zeitpläne gesetzt'+note+' – Shelly schaltet jetzt eigenständig!</span>');
+    const note = sonder ? ' (deaktiviert – 24h-Modus aktiv)' : '';
+    setEl('<span style="color:#16a34a">✅ Zeitpläne auf Shelly gesetzt'+note+' – läuft jetzt eigenständig!</span>');
     if(typeof logHistory==='function')
       logHistory({type:'wartung',time:new Date().toISOString(),
-        note:'📅 Shelly-Zeitpläne übertragen: Nachtruhe '+s.nightCutoff+', Wecker '+s.morningWakeup+(sonder?' (Sondermodus – deaktiviert)':'')});
-    if(typeof toast==='function') toast('✅ Zeitpläne auf Shelly übertragen – läuft jetzt eigenständig!','success',5000);
+        note:'📅 Shelly-Zeitpläne: Nachtruhe '+s.nightCutoff+', Wecker '+s.morningWakeup+(sonder?' (deaktiviert)':'')});
+    if(typeof toast==='function') toast('✅ Zeitpläne übertragen – Shelly läuft eigenständig!','success',5000);
   }
 }
 
-// Nach Dosierung: einmaligen Timer auf Shelly pushen
+// Nach Dosierung: Shelly schaltet nach X Minuten ab (toggle_after)
 async function shellyPushDoseTimer(productKey){
-  if(!shellySettings.enabled||!shellySettings.ip&&!shellySettings.cloudDeviceId) return;
+  if(!shellySettings.enabled) return;
+  if(shellySettings.mode==='cloud'&&!shellySettings.cloudDeviceId) return;
+  if(shellySettings.mode==='local'&&!shellySettings.ip) return;
   const minMap = {chlorplus:8*60, poolklar:2*60, flockmittel:15};
   const min = minMap[productKey];
   if(!min) return;
-  // Berechne Uhrzeit in X Minuten → einmaliger Schedule
-  const fireAt = new Date(Date.now() + min*60000);
-  const h = String(fireAt.getHours()).padStart(2,'0');
-  const m = String(fireAt.getMinutes()).padStart(2,'0');
-  const d = fireAt.getDate();
-  const mo = fireAt.getMonth()+1;
-  // Einmaliger Cron: sec min hour day month * (spez. Datum)
-  const timespec = '0 '+fireAt.getMinutes()+' '+fireAt.getHours()+' '+d+' '+mo+' *';
+  const sek = min * 60;
+  const fireAt = new Date(Date.now() + sek*1000);
+  const timeStr = fireAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
   const namen = {chlorplus:'Chlor Plus',poolklar:'Poolklar',flockmittel:'Flockmittel'};
-  const res = await shellyRPC('Schedule.Create',{
-    enable:true, timespec:timespec,
-    calls:[{method:'Switch.Set',params:{id:0,on:false}}]
-  });
+  // Switch.Set mit toggle_after = in X Sekunden ausschalten
+  const res = await shellyRPC('Switch.Set',{id:0, on:true, toggle_after:sek});
   if(res && !res._err){
     if(typeof logHistory==='function')
       logHistory({type:'wartung',time:new Date().toISOString(),
-        note:'⚗️ Shelly: Einmal-Timer nach '+namen[productKey]+' – Abschaltung um '+h+':'+m+' Uhr auf Gerät hinterlegt'});
-    if(typeof toast==='function') toast('⚗️ Shelly schaltet nach '+namen[productKey]+' um '+h+':'+m+' Uhr ab','info',5000);
+        note:'⚗️ Shelly: Nach '+namen[productKey]+' – Abschaltung um '+timeStr+' Uhr (Timer auf Gerät)'});
+    if(typeof toast==='function')
+      toast('⚗️ Shelly: Abschaltung nach '+namen[productKey]+' um '+timeStr+' Uhr','info',5000);
+  }
+}
+
+// Nach Badeschluss (Plane drauf): Filter 2h laufen lassen – auch über Nachtruhe hinaus
+async function shellyBadeschlussTimer(){
+  if(!shellySettings.enabled) return;
+  if(shellySettings.mode==='cloud'&&!shellySettings.cloudDeviceId) return;
+  if(shellySettings.mode==='local'&&!shellySettings.ip) return;
+  const sek = 2 * 3600;  // 2 Stunden
+  const fireAt = new Date(Date.now() + sek*1000);
+  const timeStr = fireAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  // Filter einschalten (falls aus) mit toggle_after 2h
+  const res = await shellyRPC('Switch.Set',{id:0, on:true, toggle_after:sek});
+  if(res && !res._err){
+    if(typeof logHistory==='function')
+      logHistory({type:'wartung',time:new Date().toISOString(),
+        note:'🏊 Shelly: 2h Nachlauffrist nach Badeschluss – Abschaltung um '+timeStr+' Uhr'});
+    if(typeof toast==='function')
+      toast('🏊 Filter läuft 2h nach Badeschluss – schaltet um '+timeStr+' Uhr ab','success',6000);
+    // Nachtruhe-Schedule kurz neu setzen (Datum-Zeitspec) damit er nicht dazwischenfunkt
+    // Da toggle_after den Shelly sicher um timeStr ausschaltet, ist keine weitere Aktion nötig
+  } else {
+    if(typeof toast==='function') toast('❌ Shelly-Timer konnte nicht gesetzt werden','error',4000);
   }
 }
 
