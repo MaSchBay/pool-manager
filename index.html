@@ -1184,8 +1184,8 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="product-card product-flockmittel" onclick="selectProduct('flockmittel',this)"><div class="product-name">Flockmittel Flüssig</div><div class="product-sub">medi pool – Blau/Pink | kein Badeverbot</div><div class="product-dose">5–20 ml/10m³ laufend | 30–60 ml einmalig</div></div>
       <div class="product-card product-poolklar" onclick="selectProduct('poolklar',this)"><div class="product-name">Poolklar</div><div class="product-sub" style="color:#c4b5fd">medi pool – Dunkel/Lila | ⚠️ Badeverbot 2h</div><div class="product-dose" style="color:#ddd6fe">50 ml/10m³ wöchentlich</div></div>
       <div class="product-card product-algenschutz" onclick="selectProduct('algenschutz',this)"><div class="product-name">Algenschutz</div><div class="product-sub">medi pool – Blau/Grün | ⚠️ Badeverbot 2h</div><div class="product-dose">100 ml/10m³, alle 14 Tage</div></div>
-      <div class="product-card product-phminus" onclick="selectProduct('phminus',this)"><div class="product-name">pH-Minus Granulat</div><div class="product-sub">medi pool – Blau/Orange | ⚠️ Badeverbot 4h</div><div class="product-dose">150 g/10m³ senkt pH um 0,2</div></div>
-      <div class="product-card product-phplus" onclick="selectProduct('phplus',this)"><div class="product-name">pH-Plus Granulat</div><div class="product-sub">medi pool – Blau/Gelb | ⚠️ Badeverbot 4h</div><div class="product-dose">100 g/10m³ hebt pH um 0,2</div></div>
+      <div class="product-card product-phminus" onclick="selectProduct('phminus',this)"><div class="product-name">pH-Minus Granulat</div><div class="product-sub">medi pool – Blau/Orange | kein Badeverbot</div><div class="product-dose">150 g/10m³ senkt pH um 0,2</div></div>
+      <div class="product-card product-phplus" onclick="selectProduct('phplus',this)"><div class="product-name">pH-Plus Granulat</div><div class="product-sub">medi pool – Blau/Gelb | kein Badeverbot</div><div class="product-dose">100 g/10m³ hebt pH um 0,2</div></div>
       <div class="product-card product-alcaplus" onclick="selectProduct('alcaplus',this)"><div class="product-name">Alca-Plus</div><div class="product-sub">Bayrol – kein Badeverbot</div><div class="product-dose">190 g/10m³ · TA um ~10 ppm</div></div>
     </div>
     <div>
@@ -2514,17 +2514,24 @@ function checkAlcaPlusNeeded(){
 function logAlcaDosierung(amountG){
   sd('alca_plus_last_dosi',new Date().toISOString());
   sd('alca_plus_lockout',new Date().toISOString());
-  // Deduct from stock
-  if(chemStock['Alca-Plus']){
-    initGebinde('Alca-Plus');
-    const ank=chemStock['Alca-Plus'].gebinde.find(function(g){return g.status==='angebrochen';});
-    if(ank){ank.qty=Math.max(0,ank.qty-amountG);}
-    chemStock['Alca-Plus'].qty=chemStock['Alca-Plus'].gebinde
-      .filter(function(g){return g.status!=='verbraucht';})
-      .reduce(function(a,g){return a+g.qty;},0);
-    sd('chem_stock_v2',chemStock);
-    renderStockDashboard&&renderStockDashboard();
+  // Deduct from stock (auto-create if missing, auto-open if all verschlossen)
+  if(!chemStock['Alca-Plus']){
+    const sp=STOCK_PRODUCTS['Alca-Plus'];
+    chemStock['Alca-Plus']={qty:0,pkgSize:sp?sp.pkgDefault:1000,gebinde:[]};
   }
+  initGebinde('Alca-Plus');
+  const _alcaS=chemStock['Alca-Plus'];
+  let _alcaAnk=_alcaS.gebinde.find(function(g){return g.status==='angebrochen';});
+  if(!_alcaAnk){
+    // kein angebrochenes → erstes verschlossenes öffnen
+    const _versch=_alcaS.gebinde.find(function(g){return g.status==='verschlossen';});
+    if(_versch){ _versch.status='angebrochen'; _alcaAnk=_versch; }
+  }
+  if(_alcaAnk){ _alcaAnk.qty=Math.max(0,_alcaAnk.qty-amountG); }
+  else { _alcaS.qty=Math.max(0,_alcaS.qty-amountG); }
+  _alcaS.qty=_alcaS.gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);
+  sd('chem_stock_v2',chemStock);
+  renderStockDashboard&&renderStockDashboard();
   logHistory({type:'dosierung',time:new Date().toISOString(),note:'🧱 Alca-Plus: '+amountG+'g dosiert (Alkalinität)'});
   if(typeof toast==='function')toast('🧱 '+amountG+'g Alca-Plus dosiert – nächste Empfehlung frühestens in 8h','success',4000);
 }
@@ -3677,7 +3684,7 @@ function poolTempEstimate(idx,airMax,airMin,wmoCode){
 // ============================================================
 // DOSIERUNG
 // ============================================================
-const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0.5,chlorplus:0.5,flockmittel:0,poolklar:0,algenschutz:0,phminus:0,phplus:0,alcaplus:0};
+const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0.5,chlorplus:0.5,flockmittel:0,poolklar:2,algenschutz:2,phminus:0,phplus:0,alcaplus:0};
 const PRODUCTS={
   schnellchlor:{name:'Schnell-Chlortabs 20g',
     fields:[{id:'mode',label:'Modus',type:'select',opts:['Regelbetrieb (alle 3 Tage)','Stoßbehandlung']}],
@@ -5191,11 +5198,17 @@ function stockDeductDosierung(productKey, amount){
   let num=p?p.perUse:0;
   const numMatch=amount.match(/(\d+(?:\.\d+)?)/);
   if(numMatch)num=parseFloat(numMatch[1]);
-  // Deduct from angebrochenes Gebinde first
+  // Deduct from angebrochenes Gebinde; auto-open first verschlossenes if needed
+  initGebinde(name);
   if(Array.isArray(chemStock[name].gebinde)&&chemStock[name].gebinde.length>0){
-    const ank=chemStock[name].gebinde.find(function(g){return g.status==='angebrochen';});
-    if(ank){ank.qty=Math.max(0,ank.qty-num);chemStock[name].qty=chemStock[name].gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);}
+    let ank=chemStock[name].gebinde.find(function(g){return g.status==='angebrochen';});
+    if(!ank){
+      const versch=chemStock[name].gebinde.find(function(g){return g.status==='verschlossen';});
+      if(versch){versch.status='angebrochen';ank=versch;}
+    }
+    if(ank){ank.qty=Math.max(0,ank.qty-num);}
     else{chemStock[name].qty=Math.max(0,chemStock[name].qty-num);}
+    chemStock[name].qty=chemStock[name].gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);
   } else {
     chemStock[name].qty=Math.max(0, chemStock[name].qty - num);
   }
@@ -9637,7 +9650,7 @@ function lieferungBestaetigen(poolId){
   }
   // Clear bestellt flag
   const noteName = p.name; // save before clearing
-  p.bestellt = false; p.bestelltMenge = ''; p.bestelltAm = null; p.lieferDatum = null;
+  p.bestellt = false; p.bestelltMenge = ''; p.bestelltAm = new Date().toISOString(); p.lieferDatum = null;  // Timestamp bleibt: Drive-Sync erkennt lokale Version als neuer
   saveProdukte();
   renderProduktBoard();
   logHistory({type:'wartung', time:new Date().toISOString(), note:'📦 Lieferung erhalten: '+noteName+bestelltNote});
@@ -9997,6 +10010,11 @@ async function shellyTick(){
     const running = _shellyState.output &&
       (_shellyState.power === null || _shellyState.power > shellySettings.powerThreshold);
     if(running) addShellyRuntime(1);
+    // FI-Warnung auto-ausblenden wenn Filter nachweislich läuft
+    if(running && _shellyState.gfciWarning){
+      _shellyState.gfciWarning = false;
+      sd('shelly_gfci_warning', false);
+    }
   } else {
     _shellyState.online = false;
   }
