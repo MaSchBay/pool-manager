@@ -760,6 +760,9 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <button class="btn btn-ok" style="flex:1" onclick="confirmTask()">✅ Erledigt</button>
       <button class="btn btn-outline" onclick="closeModal('modal-task-confirm')">Abbrechen</button>
     </div>
+    <button onclick="addAppleReminderFromTask()" style="width:100%;margin-top:8px;padding:8px;border-radius:10px;border:1.5px solid #e2e8f0;background:white;cursor:pointer;font-family:Nunito,sans-serif;font-size:0.8rem;font-weight:700;color:#475569;display:flex;align-items:center;justify-content:center;gap:6px">
+      <span style="font-size:1rem">📱</span> Als Erinnerung zu Apple Reminders hinzufügen
+    </button>
     <input type="hidden" id="task-confirm-id">
   </div>
 </div>
@@ -3869,7 +3872,10 @@ function calcDosage(){
   const until=new Date(Date.now()+banH*3600000);
   let html=`<div style="background:var(--pool-surface);padding:14px;border-radius:12px;border:2px solid var(--pool-blue)"><div style="font-size:1.05rem;font-weight:900;color:var(--pool-dark)">💊 ${r.amount}</div>${r.note?`<div style="margin-top:7px;color:var(--text-secondary);font-size:0.88rem">${r.note}</div>`:''}</div>`;
   if(banH>0)html+=`<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger btn-sm" onclick="setBanProduct('${selProduct}','${until.toISOString().slice(0,16)}')">🚫 Badeverbot setzen (${banH}h)</button></div>`;
-  html+=`<div style="margin-top:10px"><button class="btn btn-ok btn-sm" onclick="logDosierung('${selProduct}','${r.amount.replace(/'/g,'&apos;')}')">📝 Dosierung dokumentieren</button></div>`;
+  html+=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">` +
+    `<button class="btn btn-ok btn-sm" onclick="logDosierung('${selProduct}','${r.amount.replace(/'/g,'&apos;')}')">📝 Dosierung dokumentieren</button>` +
+    `<button onclick="addAppleReminder('${(PRODUCTS[selProduct]?.name||'Dosierung').replace(/'/g,"\'")} – ${r.amount.replace(/'/g,"\'").replace(/`/g,'').slice(0,40)}','${r.note?r.note.replace(/'/g,"\'").slice(0,80):''}')" style="padding:6px 12px;border-radius:8px;border:1.5px solid #e2e8f0;background:white;cursor:pointer;font-family:Nunito,sans-serif;font-size:0.78rem;font-weight:700;color:#475569;display:flex;align-items:center;gap:5px"><span>📱</span>Erinnerung</button>` +
+    `</div>`;
   document.getElementById('dosi-result').innerHTML=html;
 }
 
@@ -8444,13 +8450,12 @@ function renderCoverStatusCard(){
 
   const swimDays=Object.values(dayMap).filter(v=>v==='swim').length;
 
-  // Tagespunkte: SVG-basiert (maximale Safari-Kompatibilität)
+  // Tagenpunkte: SVG-basiert mit viewBox für responsives Scaling auf iPhone/iPad
   const todayStart=new Date();todayStart.setHours(0,0,0,0);
   const totalDisplayDays=Math.max(1,Math.round((todayStart.getTime()-displayStart)/86400000)+1);
   const todayKey=new Date().toISOString().slice(0,10);
-  // SVG zeichnen – funktioniert in allen Browsern ohne Canvas/roundRect
-  const DOT=12,GAP=3;
-  const COLS=Math.min(totalDisplayDays,28); // max 28 pro Zeile
+  const DOT=10,GAP=3;  // kleinere Punkte → mehr passen auf schmale Screens
+  const COLS=Math.min(totalDisplayDays,35); // max 35 pro Zeile
   const ROWS=Math.ceil(totalDisplayDays/COLS);
   const svgW=COLS*(DOT+GAP)-GAP;
   const svgH=ROWS*(DOT+GAP)-GAP;
@@ -8463,11 +8468,12 @@ function renderCoverStatusCard(){
     const col=i%COLS,row=Math.floor(i/COLS);
     const x=col*(DOT+GAP),y=row*(DOT+GAP);
     const fill=isSwim?'#0ea5e9':'#e2e8f0';
-    const stroke=isToday?' stroke="#0369a1" stroke-width="2"':'';
-    const lbl=d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})+(isSwim?' 🏊':' 🟢');
-    rects+=`<rect x="${x}" y="${y}" width="${DOT}" height="${DOT}" rx="3" fill="${fill}"${stroke}><title>${lbl}</title></rect>`;
+    const stroke=isToday?' stroke="#0369a1" stroke-width="1.5"':'';
+    const lbl=d.toLocaleDateString('de-DE',{day:'numeric',month:'short'})+(isSwim?' 🏊':' abgedeckt');
+    rects+=`<rect x="${x}" y="${y}" width="${DOT}" height="${DOT}" rx="2" fill="${fill}"${stroke}><title>${lbl}</title></rect>`;
   }
-  const daysHtml=`<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" style="display:block;max-width:100%">${rects}</svg>`;
+  // viewBox + width:100% → skaliert auf jedem Gerät korrekt runter
+  const daysHtml=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" style="display:block;width:100%;max-width:${svgW}px;height:auto">${rects}</svg>`;
 
   const open=!coverState.covered;
   el.innerHTML=
@@ -10410,6 +10416,49 @@ function initShelly(){
   renderShellyCard();
   shellyTick();
   setInterval(shellyTick, 60000);
+}
+
+// ── Apple Reminders via ICS VTODO ───────────────────────────
+function addAppleReminder(title, notes) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const fmt = d => d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'T'+pad(d.getHours())+pad(d.getMinutes())+'00';
+  const eod = new Date(now); eod.setHours(23,59,0,0);
+  const uid = 'pool-' + Date.now() + '@poolmanager';
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Pool Manager//DE',
+    'BEGIN:VTODO',
+    'UID:' + uid,
+    'DTSTAMP:' + fmt(now),
+    'DTSTART:' + fmt(now),
+    'DUE:' + fmt(eod),
+    'SUMMARY:🏊 ' + title.replace(/,/g,'\,'),
+    'DESCRIPTION:' + (notes||'').replace(/,/g,'\,').replace(/\n/g,'\n'),
+    'PRIORITY:1',
+    'STATUS:NEEDS-ACTION',
+    'END:VTODO',
+    'END:VCALENDAR'
+  ].join('\r\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+  a.download = 'pool-erinnerung.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  if(typeof toast==='function') toast('📱 Erinnerung wird geöffnet – in Apple Reminders bestätigen','info',4000);
+}
+
+function addAppleReminderFromTask() {
+  const title = (document.getElementById('task-confirm-title')?.textContent||'Pool-Aufgabe')
+    .replace(/^[✅🔧⚗️📝🔌⏰🌙🏊]\s*/,'');
+  const desc  = document.getElementById('task-confirm-desc')?.textContent||'';
+  const qty   = document.getElementById('task-confirm-qty')?.value||'';
+  const unit  = document.getElementById('task-confirm-unit')?.textContent||'';
+  const note  = document.getElementById('task-confirm-note')?.value||'';
+  const parts = [desc, qty&&unit ? qty+' '+unit : '', note].filter(Boolean);
+  addAppleReminder(title, parts.join(' | '));
 }
 
 
