@@ -5373,10 +5373,21 @@ function renderStockDashboard(){
       sd('chem_stock_v2',chemStock);
     }
   });
+  // peakQty: merkt sich den höchsten je gesehenen Bestand → Basis für Balkenberechnung
+  const _peakMap = ld('stock_peak_qty', {});
+  let _peakDirty = false;
+  Object.entries(chemStock).forEach(([n,s])=>{
+    if(s.qty > (_peakMap[n]||0)){ _peakMap[n]=s.qty; _peakDirty=true; }
+  });
+  if(_peakDirty) sd('stock_peak_qty', _peakMap);
+
   el.innerHTML=Object.entries(chemStock).map(([name,s])=>{
     const p=STOCK_PRODUCTS[name];if(!p)return'';
-    const pct=s.pkgSize>0?Math.round((s.qty/s.pkgSize)*100):0;
-    const barCls=pct>=50?'stock-bar-ok':pct>=25?'stock-bar-warn':'stock-bar-empty';
+    // Balken: qty / peakQty (wie viel vom Maximalbestand bleibt)
+    // Fallback: pkgDefault wenn noch kein Peak bekannt
+    const peak = _peakMap[name] || Math.max(s.qty, p.pkgDefault);
+    const pct = peak>0 ? Math.round((s.qty/peak)*100) : 0;
+    const barCls=pct>=60?'stock-bar-ok':pct>=30?'stock-bar-warn':'stock-bar-empty';
     const warn=pct<20?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
     const qtyStr=p.unit==='Stk'?`${s.qty} Stk`:(p.unit==='ml'&&s.qty>=1000?`${(s.qty/1000).toFixed(1)} L`:`${s.qty} ${p.unit}`);
     const pid=stockToPoolId[name];
