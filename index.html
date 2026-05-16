@@ -2866,6 +2866,11 @@ function confirmTask(){
   renderDashboard();
   renderMaintenanceList&&renderMaintenanceList();
   checkNachmessTimer&&checkNachmessTimer();
+  // Sofort-Sync nach Aufgabe (nicht auf Debounce warten)
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){
+    clearTimeout(autoSyncTimer);
+    setTimeout(gdriveSyncBoth, 500);
+  }
 }
 
 // Called after ban modal confirm
@@ -4443,6 +4448,11 @@ function logHistory(e){historyLog.push(e);sd('history_log',historyLog)}
 function _onMeasurementSaved(){
   clearDosierungPending();
   renderTasksDashboard&&renderTasksDashboard();
+  // Sofort-Sync nach Messung
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){
+    clearTimeout(autoSyncTimer);
+    setTimeout(gdriveSyncBoth, 500);
+  }
 }
 
 let historieSelectMode=false;
@@ -6061,6 +6071,20 @@ document.addEventListener('DOMContentLoaded',async()=>{
   renderPartyDashboard();
   updateAnthropicKeyStatus();
   if(typeof initShelly==='function')initShelly();
+
+  // Sync wenn App wieder sichtbar wird (z.B. Tab-Wechsel oder iPhone Lock)
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible'&&typeof gdriveSyncBoth==='function'
+       &&gdriveFileId&&autoSyncEnabled&&!_syncInProgress){
+      setTimeout(gdriveSyncBoth,800);
+    }
+  });
+  // Sync beim Fokus (Desktop)
+  window.addEventListener('focus',function(){
+    if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled&&!_syncInProgress){
+      setTimeout(gdriveSyncBoth,800);
+    }
+  });
 });
 
 // ============================================================
@@ -6531,7 +6555,7 @@ async function gdriveSyncBoth(){
 function queueAutoSync(){
   if(!autoSyncEnabled||!gdriveFileId||_syncInProgress)return;
   clearTimeout(autoSyncTimer);
-  autoSyncTimer=setTimeout(function(){gdriveSyncBoth();},15000); // 15s Debounce
+  autoSyncTimer=setTimeout(function(){gdriveSyncBoth();},4000); // 4s Debounce
 }
 
 function toggleAutoSync(on){
@@ -6660,7 +6684,16 @@ function applyImportedData(d,mergeMode){
   // Einzelwerte: Remote gewinnt (neueste Daten aus Drive)
   if(d.season){season=d.season;sdRaw('season',season);}
   if(d.settings){settings=d.settings;sdRaw('settings',settings);}
-  if(d.chemStock){chemStock=d.chemStock;sdRaw('chem_stock_v2',chemStock);}
+  if(d.chemStock){
+    const localTs=(chemStock&&chemStock._lastChange)||0;
+    const remoteTs=(d.chemStock._lastChange)||0;
+    if(remoteTs>localTs){
+      // Remote ist neuer → übernehmen
+      chemStock=d.chemStock;
+      sdRaw('chem_stock_v2',chemStock);
+    }
+    // else: lokal ist neuer → behalten (wird beim Upload zu Drive hochgeladen)
+  }
   if(d.poolProdukte&&Array.isArray(d.poolProdukte)){
     if(mergeMode){
       // Merge: update bestellt/bestelltMenge/lieferDatum/preis from remote per poolId
@@ -6815,6 +6848,8 @@ async function initCloudSync(){
 const sdRaw=sd;
 const AUTOSYNC_KEYS=['measurements','ban','maintenance','active_todos','history_log','season','settings','timer_todos','chem_stock_v2','pool_produkte_v1','wuensche','cover_state','cover_history','kinder_ban','pool_parties'];
 sd=function(k,v){
+  // ChemStock: _lastChange Timestamp für Merge-Logik
+  if(k==='chem_stock_v2'&&v&&typeof v==='object') v._lastChange=Date.now();
   sdRaw(k,v);
   if(AUTOSYNC_KEYS.indexOf(k)>-1&&typeof queueAutoSync==='function'&&!_syncInProgress){
     queueAutoSync();
