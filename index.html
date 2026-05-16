@@ -10542,7 +10542,7 @@ function initShelly(){
 }
 
 // ── Apple Reminders via ICS VTODO ───────────────────────────
-function addAppleReminder(title, notes) {
+async function addAppleReminder(title, notes) {
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const fmt = d => d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'T'+pad(d.getHours())+pad(d.getMinutes())+'00';
@@ -10557,20 +10557,38 @@ function addAppleReminder(title, notes) {
     'DTSTAMP:' + fmt(now),
     'DTSTART:' + fmt(now),
     'DUE:' + fmt(eod),
-    'SUMMARY:🏊 ' + title.replace(/,/g,'\,'),
-    'DESCRIPTION:' + (notes||'').replace(/,/g,'\,').replace(/\n/g,'\n'),
+    'SUMMARY:\u{1F3CA} ' + title.replace(/[,;\\]/g, function(c){return'\\'+c;}),
+    'DESCRIPTION:' + (notes||'').replace(/[,;\\]/g, function(c){return'\\'+c;}),
     'PRIORITY:1',
     'STATUS:NEEDS-ACTION',
     'END:VTODO',
     'END:VCALENDAR'
   ].join('\r\n');
+
+  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
+  const file = new File([blob], 'pool-erinnerung.ics', {type:'text/calendar'});
+
+  // iOS Safari: Web Share API → zeigt Teilen-Menü mit "Erinnerungen" Option
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file], title:'Pool Erinnerung'});
+      if(typeof toast==='function') toast('📱 Datei geteilt – in Erinnerungen öffnen','success',3500);
+      return;
+    }catch(e){
+      if(e.name==='AbortError') return; // User hat abgebrochen → kein Fehler
+    }
+  }
+
+  // Fallback Desktop: Object-URL (kein Data-URI, vermeidet Safari-Fehler)
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+  a.href = url;
   a.download = 'pool-erinnerung.ics';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  if(typeof toast==='function') toast('📱 Erinnerung wird geöffnet – in Apple Reminders bestätigen','info',4000);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
+  if(typeof toast==='function') toast('📱 Erinnerung heruntergeladen – in Apple Reminders öffnen','info',4000);
 }
 
 function addAppleReminderFromTask() {
