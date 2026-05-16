@@ -5500,7 +5500,7 @@ function renderStockDashboard(){
     const _totalCap=(_activeGeb.length>0?_activeGeb.length:1)*p.pkgDefault;
     const pct=_totalCap>0?Math.round(s.qty/_totalCap*100):0;
     const barCls=pct>=60?'stock-bar-ok':pct>=30?'stock-bar-warn':'stock-bar-empty';
-    const warn=pct<20?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
+    const warn=(pct<20&&!(prod&&prod.active===false))?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
     // Menge anzeigen: bei Tabs auch Gewicht
     let qtyStr=p.unit==='Stk'?s.qty+' Stk':(p.unit==='ml'&&s.qty>=1000?(s.qty/1000).toFixed(1)+' L':s.qty+' '+p.unit);
     if(p.type==='tabs'&&p.tabWeightG){
@@ -5510,6 +5510,8 @@ function renderStockDashboard(){
     const typeBadge=getStockTypeBadge(p.type||'');
     const pid=stockToPoolId[name];
     const prod=pid&&typeof poolProdukte!=='undefined'?poolProdukte.find(x=>x.poolId===pid):null;
+    // Inaktive Produkte im Dashboard ausblenden
+    if(prod&&prod.active===false) return '';
     const imgHtml=prod&&prod.img?`<img class="stock-item-img" src="${prod.img}" alt="${name}">`:`<div class="stock-item-img-placeholder">🧪</div>`;
     const buyBtn=prod&&prod.amazon&&pct<50?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
     const wkUsage=estimateWeeklyUsage(name);
@@ -8175,11 +8177,18 @@ function resetChecklist(type){
 // CHEMIKALIEN → iPhone REMINDERS
 // ============================================================
 function exportChemikalienReminders(){
+  const _spid={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Langzeit-Chlortabs':'langzeit_chlortabs','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen','Alca-Plus':'alca_plus'};
   const lowStock=Object.entries(chemStock).filter(function(e){
     const s=e[1];const p=STOCK_PRODUCTS[e[0]];
     if(!p||!s)return false;
-    const pct=s.pkgSize>0?s.qty/s.pkgSize:0;
-    return pct<0.2; // unter 20%
+    // Inaktive Produkte überspringen
+    const pid=_spid[e[0]];
+    const prod=pid&&typeof poolProdukte!=='undefined'?poolProdukte.find(function(x){return x.poolId===pid;}):null;
+    if(prod&&prod.active===false)return false;
+    initGebinde(e[0]);
+    const ag=s.gebinde.filter(function(g){return g.status!=='verbraucht';});
+    const cap=(ag.length>0?ag.length:1)*p.pkgDefault;
+    return cap>0&&s.qty/cap<0.2;
   });
   
   if(!lowStock.length){
