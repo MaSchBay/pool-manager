@@ -10723,8 +10723,45 @@ function renderInventurStep(){
   nextBtn.textContent = isLast ? '✅ Inventur abschließen' : 'Weiter →';
   nextBtn.style.background = isLast ? '#16a34a' : '';
 
+  // Tara-Waagen-Sektion (nur für Granulat + Flüssigkeit, nicht Tabs/Streifen)
+  const _taraMap = ld('product_tara', {});
+  const _tara = _taraMap[name] || 0;
+  let waageHtml = '';
+  if(p.type==='granulat'||p.type==='fluessigkeit'||p.type==='tabs'){
+    waageHtml =
+      '<div style="margin-top:12px;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden">'+
+      '<button onclick="invToggleWaage()" style="width:100%;padding:9px 12px;background:#f8fafc;border:none;cursor:pointer;font-family:Nunito,sans-serif;font-size:0.82rem;font-weight:700;color:#475569;text-align:left;display:flex;align-items:center;justify-content:space-between">'+
+        '<span>⚖️ Mit Waage wiegen (inkl. Verpackung)</span>'+
+        '<span id="inv-waage-arrow">▼</span>'+
+      '</button>'+
+      '<div id="inv-waage-box" style="display:none;padding:12px;background:white">'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+          '<div>'+
+            '<div style="font-size:0.72rem;font-weight:700;color:#64748b;margin-bottom:4px">Gesamtgewicht (g)</div>'+
+            '<input type="number" id="inv-total-weight" placeholder="z.B. 1680" min="0" '+
+            'style="width:100%;box-sizing:border-box;border:1.5px solid var(--pool-blue);border-radius:8px;padding:8px;font-size:0.95rem;font-weight:700;font-family:Nunito,sans-serif;text-align:center" '+
+            'oninput="invCalcFromScale()">'+
+          '</div>'+
+          '<div>'+
+            '<div style="font-size:0.72rem;font-weight:700;color:#64748b;margin-bottom:4px">Leergewicht Verpackung (g)</div>'+
+            '<input type="number" id="inv-tara-weight" value="'+_tara+'" placeholder="z.B. 180" min="0" '+
+            'style="width:100%;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px;font-size:0.95rem;font-weight:700;font-family:Nunito,sans-serif;text-align:center" '+
+            'oninput="invCalcFromScale();invSaveTara()">'+
+          '</div>'+
+        '</div>'+
+        '<div id="inv-scale-result" style="font-size:0.78rem;color:#64748b;text-align:center;min-height:18px"></div>'+
+        (_tara>0?'<div style="font-size:0.7rem;color:#16a34a;margin-top:4px">✅ Leergewicht gespeichert: '+_tara+'g</div>':
+          '<div style="font-size:0.7rem;color:#94a3b8;margin-top:4px">ℹ️ Leergewicht wird für nächste Inventur gespeichert</div>')+
+      '</div>'+
+      '</div>';
+  }
+
+  // Append Tara section to content
+  const contentEl = document.getElementById('inv-content');
+  if(contentEl && waageHtml) contentEl.innerHTML += waageHtml;
+
   // Focus input
-  setTimeout(function(){ const el=document.getElementById('inv-qty'); if(el){el.focus();el.select();} }, 100);
+  setTimeout(function(){ const el=document.getElementById('inv-qty'); if(el){el.focus();el.select();} }, 150);
 }
 
 function inventurNext(){
@@ -10759,6 +10796,50 @@ function invKgToStk(){
   const tpk=window._invTabsPerKg||50;
   const el=document.getElementById('inv-qty');
   if(el) el.value=Math.round(kg*tpk);
+}
+function invToggleWaage(){
+  const box=document.getElementById('inv-waage-box');
+  const arr=document.getElementById('inv-waage-arrow');
+  if(!box)return;
+  const open=box.style.display!=='none';
+  box.style.display=open?'none':'block';
+  if(arr) arr.textContent=open?'▼':'▲';
+  if(!open){
+    const tw=document.getElementById('inv-total-weight');
+    if(tw){tw.focus();}
+  }
+}
+function invCalcFromScale(){
+  const total=parseFloat(document.getElementById('inv-total-weight')?.value)||0;
+  const tara =parseFloat(document.getElementById('inv-tara-weight')?.value)||0;
+  const res  =document.getElementById('inv-scale-result');
+  const qty  =document.getElementById('inv-qty');
+  if(total>0){
+    const net=Math.max(0,total-tara);
+    const name=_invProducts[_invIndex];
+    const p=STOCK_PRODUCTS[name]||{};
+    if(p.type==='tabs'&&p.tabWeightG){
+      const stk=Math.round(net/p.tabWeightG);
+      if(res) res.innerHTML='<b style="color:#0369a1;font-size:0.9rem">'+stk+' Stk</b> '+
+        '<span style="color:#64748b">('+Math.round(net)+'g ÷ '+p.tabWeightG+'g/Tab)</span>';
+      if(qty) qty.value=stk;
+    } else {
+      if(res) res.innerHTML='<b style="color:#0369a1;font-size:0.9rem">'+Math.round(net)+' g Inhalt</b> '+
+        '<span style="color:#64748b">('+total+' − '+tara+' g Tara)</span>';
+      if(qty) qty.value=Math.round(net);
+    }
+  } else {
+    if(res) res.textContent='';
+  }
+}
+function invSaveTara(){
+  const name=_invProducts[_invIndex];
+  const tara=parseFloat(document.getElementById('inv-tara-weight')?.value)||0;
+  if(tara>0){
+    const map=ld('product_tara',{});
+    map[name]=tara;
+    sd('product_tara',map);
+  }
 }
 
 function inventurAbschliessen(){
@@ -10815,24 +10896,23 @@ function inventurAbschliessen(){
 </div>
 
 <!-- ===== INVENTUR-MODAL ===== -->
-<div class="modal-overlay" id="modal-inventur" style="z-index:1100">
-  <div class="modal-box" style="max-width:420px;padding:0;overflow:hidden">
+<div class="modal-overlay" id="modal-inventur" style="z-index:1100;align-items:flex-start;padding-top:env(safe-area-inset-top,0px)">
+  <div class="modal" style="max-width:440px;width:100%;padding:0;overflow:hidden;margin-top:60px">
     <!-- Header -->
-    <div id="inv-header" style="background:linear-gradient(135deg,#0369a1,#0ea5e9);padding:16px 20px;color:white">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:1rem;font-weight:900">📋 Inventur</span>
-        <button onclick="closeModal('modal-inventur')" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:0.85rem">✕ Abbrechen</button>
+    <div style="background:linear-gradient(135deg,#0369a1,#0ea5e9);padding:14px 18px;color:white">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:1rem;font-weight:900;letter-spacing:0.3px">📋 Inventur</span>
+        <button onclick="closeModal('modal-inventur')" style="background:rgba(255,255,255,0.25);border:none;color:white;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.82rem;font-weight:700">✕ Abbrechen</button>
       </div>
-      <!-- Fortschrittsbalken -->
       <div style="height:6px;background:rgba(255,255,255,0.3);border-radius:3px;overflow:hidden">
-        <div id="inv-progress-bar" style="height:100%;background:white;border-radius:3px;transition:width 0.3s"></div>
+        <div id="inv-progress-bar" style="height:100%;background:white;border-radius:3px;transition:width 0.4s"></div>
       </div>
-      <div id="inv-progress-text" style="font-size:0.72rem;margin-top:4px;opacity:0.85"></div>
+      <div id="inv-progress-text" style="font-size:0.72rem;margin-top:5px;opacity:0.85"></div>
     </div>
-    <!-- Content -->
-    <div id="inv-content" style="padding:20px"></div>
-    <!-- Footer Buttons -->
-    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px">
+    <!-- Content scrollbar -->
+    <div id="inv-content" style="padding:18px;max-height:60vh;overflow-y:auto"></div>
+    <!-- Footer -->
+    <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;background:white">
       <button id="inv-btn-prev" class="btn btn-outline" style="flex:1" onclick="inventurPrev()">← Zurück</button>
       <button id="inv-btn-next" class="btn btn-primary" style="flex:2" onclick="inventurNext()">Weiter →</button>
     </div>
