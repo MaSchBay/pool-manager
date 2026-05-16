@@ -4061,21 +4061,87 @@ function saveMaintEdit(){
   if(t){const d=document.getElementById('maint-edit-date').value;t.lastDone=d?new Date(d).toISOString():new Date().toISOString();sd('maintenance',maintenanceTasks);logHistory({type:'wartung',time:t.lastDone,note:`Nachgetragen: ${t.name}`});}
   closeModal('modal-maint-edit');renderMaintenanceList();
 }
+const _BUILTIN_IDS=['test','chlor_tabs','algischutz','poolklar','flockmittel','filter_clean','boden_saug','abdeckung','filter_sand','saisonstart','saisonende','chlorplus','alca_plus_check','ph_minus','ph_plus','flocken','druck_check','filter_reinigen'];
+
 function renderIntervalSettings(){
   const el=document.getElementById('interval-settings');if(!el)return;
-  el.innerHTML=maintenanceTasks.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:0.88rem;font-weight:600">${t.name}${t._dynamic?` <span style="font-size:0.7rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:4px">📊 dynamisch</span>`:''}</div><div style="display:flex;align-items:center;gap:6px"><button class="spin-btn" onclick="changeInterval('${t.id}',-1)">−</button><span class="spin-val">alle ${t.interval}d</span><button class="spin-btn" onclick="changeInterval('${t.id}',1)">+</button><button class="spin-btn" style="color:#dc2626;margin-left:4px" title="Aufgabe löschen" onclick="deleteMaintenanceTask('${t.id}')">🗑</button></div></div>`).join('');
+  const taskRows=maintenanceTasks.map(t=>{
+    const isCustom=!_BUILTIN_IDS.includes(t.id);
+    const badge=isCustom
+      ?'<span style="font-size:0.68rem;background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:5px">Eigene</span>'
+      :'<span style="font-size:0.68rem;background:#f1f5f9;color:#64748b;padding:1px 6px;border-radius:4px;margin-left:5px">System</span>';
+    const nameHtml=isCustom
+      ?`<input id="itv-name-${t.id}" value="${t.name.replace(/"/g,'&quot;')}" style="flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:0.85rem;font-weight:600;font-family:Nunito,sans-serif" onblur="renameMaintenanceTask('${t.id}',this.value)">`
+      :`<span style="flex:1;font-size:0.88rem;font-weight:600">${t.name}</span>`;
+    const deleteBtn=isCustom
+      ?`<button class="spin-btn" style="color:#dc2626;margin-left:4px" title="Löschen" onclick="deleteMaintenanceTask('${t.id}')">🗑</button>`
+      :'';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      ${nameHtml}${badge}
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <button class="spin-btn" onclick="changeInterval('${t.id}',-1)">−</button>
+        <span class="spin-val" style="white-space:nowrap">alle ${t.interval}d</span>
+        <button class="spin-btn" onclick="changeInterval('${t.id}',1)">+</button>
+        ${deleteBtn}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Neue Aufgabe erstellen
+  const createForm=`<div style="margin-top:18px;padding:14px;background:var(--pool-surface);border-radius:12px;border:1.5px dashed var(--pool-mid)">
+    <div style="font-size:0.82rem;font-weight:800;color:var(--pool-dark);margin-bottom:10px">➕ Neue Aufgabe erstellen</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:8px">
+      <input id="new-task-name" type="text" placeholder="Name der Aufgabe…" maxlength="60"
+        style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.85rem;font-family:Nunito,sans-serif">
+      <div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+        <span style="font-size:0.8rem;color:var(--text-muted)">alle</span>
+        <input id="new-task-interval" type="number" value="7" min="1" max="365"
+          style="width:56px;border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;font-size:0.85rem;font-family:Nunito,sans-serif;text-align:center">
+        <span style="font-size:0.8rem;color:var(--text-muted)">Tage</span>
+      </div>
+    </div>
+    <button onclick="createCustomTask()" class="btn btn-primary btn-sm" style="width:100%">✅ Aufgabe hinzufügen</button>
+  </div>`;
+
+  el.innerHTML=taskRows+createForm;
 }
 
 function deleteMaintenanceTask(id){
   const t=maintenanceTasks.find(x=>x.id===id);
   if(!t)return;
-  if(!confirm(`Aufgabe "${t.name}" wirklich löschen?`))return;
+  if(!confirm('Aufgabe "'+t.name+'" wirklich löschen?'))return;
   maintenanceTasks=maintenanceTasks.filter(x=>x.id!==id);
   sd('maintenance',maintenanceTasks);
   renderIntervalSettings();
   renderMaintenanceList&&renderMaintenanceList();
   renderTasksDashboard&&renderTasksDashboard();
-  if(typeof toast==='function')toast(`🗑 "${t.name}" gelöscht`,'info',2500);
+  if(typeof toast==='function')toast('🗑 "'+t.name+'" gelöscht','info',2500);
+}
+
+function renameMaintenanceTask(id, newName){
+  const t=maintenanceTasks.find(x=>x.id===id);
+  if(!t||!newName.trim())return;
+  t.name=newName.trim();
+  sd('maintenance',maintenanceTasks);
+  renderMaintenanceList&&renderMaintenanceList();
+  renderTasksDashboard&&renderTasksDashboard();
+}
+
+function createCustomTask(){
+  const nameEl=document.getElementById('new-task-name');
+  const intEl=document.getElementById('new-task-interval');
+  const name=(nameEl?nameEl.value:'').trim();
+  const interval=Math.max(1,parseInt(intEl?intEl.value:'7')||7);
+  if(!name){if(typeof toast==='function')toast('⚠️ Bitte einen Namen eingeben','warn',2500);return;}
+  const id='custom_'+Date.now();
+  maintenanceTasks.push({id,name,interval,lastDone:null,cat:'sonstiges',_custom:true});
+  sd('maintenance',maintenanceTasks);
+  if(nameEl)nameEl.value='';
+  if(intEl)intEl.value='7';
+  renderIntervalSettings();
+  renderMaintenanceList&&renderMaintenanceList();
+  renderTasksDashboard&&renderTasksDashboard();
+  if(typeof toast==='function')toast('✅ "'+name+'" erstellt','success',2500);
 }
 
 function switchWartungTab(tab){
