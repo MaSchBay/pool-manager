@@ -923,6 +923,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="exportChemikalienReminders()">🛒 Nachkaufen</button>
           <button class="btn btn-outline btn-sm" onclick="showBoard('produkte')" style="color:var(--pool-blue)">📦 Produkte</button>
+          <button class="btn btn-outline btn-sm" onclick="startInventur()" style="color:#16a34a;border-color:#16a34a">📋 Inventur</button>
         </div>
       </div>
       <div id="dash-stock"></div>
@@ -5252,17 +5253,29 @@ function renderSwimAdvice(id, weatherData){
 
 // Produktdefinitionen: Einheit, Verbrauch pro Dosierung, Standard-Verpackung
 const STOCK_PRODUCTS = {
-  'pH-Minus':       {unit:'g',  pkgDefault:1500, perUse:Math.round(((7.5-7.3)/0.2)*150*POOL_VOLUME/10), useName:'Dosierung (pH ~7,5→7,3)'},
-  'pH-Plus':        {unit:'g',  pkgDefault:1000, perUse:Math.round(((7.3-7.1)/0.2)*100*POOL_VOLUME/10), useName:'Dosierung (pH ~7,1→7,3)'},
-  'Langzeit-Chlortabs':{unit:'Stk',pkgDefault:100, perUse:Math.round(4*POOL_VOLUME/10),                 useName:'Wöchentlich (4 Tabs/10m³)'},
-  'Schnell-Chlortabs':{unit:'Stk',pkgDefault:50,   perUse:Math.round(3*POOL_VOLUME/10),                  useName:'Regeldosierung (3 Tabs/10m³)'},
-  'Chlor Plus':     {unit:'g',  pkgDefault:1000, perUse:Math.round(175*POOL_VOLUME/10),                 useName:'Schockchlorung'},
-  'Flockmittel':    {unit:'ml', pkgDefault:1000, perUse:Math.round(12*POOL_VOLUME/10),                  useName:'Kontinuierlich'},
-  'Poolklar':       {unit:'ml', pkgDefault:1000, perUse:Math.round(50*POOL_VOLUME/10),                  useName:'Wöchentlich'},
-  'Algenschutz':    {unit:'ml', pkgDefault:1000, perUse:Math.round(100*POOL_VOLUME/10),                 useName:'Grunddosierung'},
-  'Teststreifen':   {unit:'Stk',pkgDefault:50,   perUse:1,                                              useName:'Pro Messung 1 Streifen'},
-  'Alca-Plus':      {unit:'g',  pkgDefault:5000, perUse:Math.round(190*POOL_VOLUME/10),                 useName:'TA-Wert heben (+10 ppm)'},
+  'pH-Minus':          {unit:'g',   pkgDefault:1500, type:'granulat',    perUse:Math.round(((7.5-7.3)/0.2)*150*POOL_VOLUME/10), useName:'Dosierung (pH ~7,5→7,3)'},
+  'pH-Plus':           {unit:'g',   pkgDefault:1000, type:'granulat',    perUse:Math.round(((7.3-7.1)/0.2)*100*POOL_VOLUME/10), useName:'Dosierung (pH ~7,1→7,3)'},
+  'Langzeit-Chlortabs':{unit:'Stk', pkgDefault:100,  type:'tabs', tabWeightG:20, perUse:Math.round(4*POOL_VOLUME/10),  useName:'Wöchentlich (4 Tabs/10m³)'},
+  'Schnell-Chlortabs': {unit:'Stk', pkgDefault:50,   type:'tabs', tabWeightG:20, perUse:Math.round(3*POOL_VOLUME/10),  useName:'Regeldosierung (3 Tabs/10m³)'},
+  'Chlor Plus':        {unit:'g',   pkgDefault:1000, type:'granulat',    perUse:Math.round(175*POOL_VOLUME/10),        useName:'Schockchlorung'},
+  'Flockmittel':       {unit:'ml',  pkgDefault:1000, type:'fluessigkeit', perUse:Math.round(12*POOL_VOLUME/10),        useName:'Kontinuierlich'},
+  'Poolklar':          {unit:'ml',  pkgDefault:1000, type:'fluessigkeit', perUse:Math.round(50*POOL_VOLUME/10),        useName:'Wöchentlich'},
+  'Algenschutz':       {unit:'ml',  pkgDefault:1000, type:'fluessigkeit', perUse:Math.round(100*POOL_VOLUME/10),       useName:'Grunddosierung'},
+  'Teststreifen':      {unit:'Stk', pkgDefault:50,   type:'streifen',    perUse:1,                                     useName:'Pro Messung 1 Streifen'},
+  'Alca-Plus':         {unit:'g',   pkgDefault:5000, type:'granulat',    perUse:Math.round(190*POOL_VOLUME/10),        useName:'TA-Wert heben (+10 ppm)'},
 };
+
+// Typ-Badge Hilfsfunktion
+function getStockTypeBadge(type){
+  const map={
+    fluessigkeit:{icon:'💧',label:'Flüssigkeit',bg:'#e0f2fe',col:'#0369a1'},
+    granulat:    {icon:'🔶',label:'Granulat',   bg:'#fef3c7',col:'#92400e'},
+    tabs:        {icon:'💊',label:'Tab',         bg:'#dcfce7',col:'#15803d'},
+    streifen:    {icon:'🧪',label:'Streifen',    bg:'#f3e8ff',col:'#6b21a8'},
+  };
+  const b=map[type]||{icon:'📦',label:'',bg:'#f1f5f9',col:'#475569'};
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 5px;border-radius:4px;background:'+b.bg+';color:'+b.col+'">'+b.icon+' '+b.label+'</span>';
+}
 
 // Bestand: { [name]: { qty: Zahl (in Einheit), pkgSize: Verpackungsgröße } }
 const STOCK_DEFAULTS_REAL = Object.fromEntries(
@@ -5481,11 +5494,20 @@ function renderStockDashboard(){
     const p=STOCK_PRODUCTS[name];if(!p)return'';
     // Balken: qty / peakQty (wie viel vom Maximalbestand bleibt)
     // Fallback: pkgDefault wenn noch kein Peak bekannt
-    const peak = _peakMap[name] || Math.max(s.qty, p.pkgDefault);
-    const pct = peak>0 ? Math.round((s.qty/peak)*100) : 0;
+    // Balken: qty / (aktive Packungen × pkgDefault) = wie voll sind alle Packungen zusammen
+    initGebinde(name);
+    const _activeGeb=s.gebinde.filter(function(g){return g.status!=='verbraucht';});
+    const _totalCap=(_activeGeb.length>0?_activeGeb.length:1)*p.pkgDefault;
+    const pct=_totalCap>0?Math.round(s.qty/_totalCap*100):0;
     const barCls=pct>=60?'stock-bar-ok':pct>=30?'stock-bar-warn':'stock-bar-empty';
     const warn=pct<20?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
-    const qtyStr=p.unit==='Stk'?`${s.qty} Stk`:(p.unit==='ml'&&s.qty>=1000?`${(s.qty/1000).toFixed(1)} L`:`${s.qty} ${p.unit}`);
+    // Menge anzeigen: bei Tabs auch Gewicht
+    let qtyStr=p.unit==='Stk'?s.qty+' Stk':(p.unit==='ml'&&s.qty>=1000?(s.qty/1000).toFixed(1)+' L':s.qty+' '+p.unit);
+    if(p.type==='tabs'&&p.tabWeightG){
+      const kgVal=(s.qty*p.tabWeightG/1000);
+      qtyStr+=` <span style="font-size:0.65rem;color:#64748b;font-weight:600">(${kgVal>=1?kgVal.toFixed(1)+'kg':Math.round(kgVal*1000)+'g'})</span>`;
+    }
+    const typeBadge=getStockTypeBadge(p.type||'');
     const pid=stockToPoolId[name];
     const prod=pid&&typeof poolProdukte!=='undefined'?poolProdukte.find(x=>x.poolId===pid):null;
     const imgHtml=prod&&prod.img?`<img class="stock-item-img" src="${prod.img}" alt="${name}">`:`<div class="stock-item-img-placeholder">🧪</div>`;
@@ -5494,7 +5516,6 @@ function renderStockDashboard(){
     let reichHtml='';
     if(wkUsage>0&&s.qty>0){const days=Math.round((s.qty/wkUsage)*7);const rc=days<7?'#dc2626':days<21?'#d97706':'#16a34a';reichHtml=`<div style="font-size:0.65rem;color:${rc};font-weight:800;white-space:nowrap">~${days}d</div>`;}
     // Gebinde display - compact dashboard view
-    initGebinde(name);
     const ank=s.gebinde.find(function(g){return g.status==='angebrochen';});
     const verschl=s.gebinde.filter(function(g){return g.status==='verschlossen';});
     const unit=(STOCK_PRODUCTS[name]||{unit:''}).unit;
@@ -5509,7 +5530,8 @@ function renderStockDashboard(){
     return`<div class="stock-item">
       ${imgHtml}
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)">${name}${warn}</div>
+        <div style="font-size:0.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary);display:flex;align-items:center;gap:4px">${name}${warn}</div>
+        <div style="margin-top:1px">${typeBadge}</div>
         ${gebindeInfoHtml?`<div style="margin-top:2px;display:flex;flex-wrap:wrap;gap:3px;align-items:center">${gebindeInfoHtml}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;width:56px;gap:2px">
@@ -10602,6 +10624,169 @@ function addAppleReminderFromTask() {
   addAppleReminder(title, parts.join(' | '));
 }
 
+// ── INVENTUR-TOOL ────────────────────────────────────────────
+let _invProducts = [];
+let _invIndex    = 0;
+let _invData     = {}; // { name: qty }
+
+function startInventur(){
+  // Alle Produkte die in chemStock existieren
+  _invProducts = Object.keys(STOCK_PRODUCTS).filter(function(k){ return chemStock[k]; });
+  _invIndex    = 0;
+  _invData     = {};
+  document.getElementById('modal-inventur').classList.add('open');
+  renderInventurStep();
+}
+
+function renderInventurStep(){
+  const name = _invProducts[_invIndex];
+  const p    = STOCK_PRODUCTS[name];
+  const s    = chemStock[name];
+  const total= _invProducts.length;
+  const pct  = Math.round((_invIndex/total)*100);
+  const badge= getStockTypeBadge(p.type||'');
+
+  // Header progress
+  document.getElementById('inv-progress-bar').style.width = pct+'%';
+  document.getElementById('inv-progress-text').textContent = (_invIndex+1)+' von '+total+' – '+name;
+
+  // Current recorded qty
+  const curQty = s.qty||0;
+  let curStr = curQty+' '+p.unit;
+  if(p.type==='tabs'&&p.tabWeightG){
+    const kg=(curQty*p.tabWeightG/1000);
+    curStr += ' ('+(kg>=1?kg.toFixed(1)+'kg':Math.round(kg*1000)+'g')+')';
+  }
+
+  // Gebinde info
+  initGebinde(name);
+  const ank    = s.gebinde.find(function(g){return g.status==='angebrochen';});
+  const verschl= s.gebinde.filter(function(g){return g.status==='verschlossen';});
+  let gebInfo  = '';
+  if(ank)     gebInfo += ank.qty+' '+p.unit+' angebrochen';
+  if(verschl.length) gebInfo += (gebInfo?' + ':'')+verschl.length+'× verschlossen ('+verschl.reduce(function(a,g){return a+g.qty;},0)+' '+p.unit+')';
+
+  // Tab conversion hint
+  let tabHint = '';
+  if(p.type==='tabs'&&p.tabWeightG){
+    const tabsPerKg = Math.round(1000/p.tabWeightG);
+    tabHint = '<div style="margin-top:6px;font-size:0.75rem;color:#0369a1;background:#e0f2fe;border-radius:8px;padding:6px 10px">'+
+      '💊 1 kg = '+tabsPerKg+' Tabs · 1 Tab = '+p.tabWeightG+'g'+
+      '<br><span style="opacity:0.8">kg eingeben:</span> '+
+      '<input type="number" id="inv-kg-input" placeholder="z.B. 2" step="0.1" min="0" '+
+      'style="width:70px;border:1px solid #0369a1;border-radius:6px;padding:3px 6px;font-size:0.82rem;font-family:Nunito,sans-serif" '+
+      'oninput="invKgToStk()" '+
+
+      '</div>';
+  }
+
+  // Units hint
+  let unitHint = '';
+  if(p.unit==='ml'){
+    unitHint = '<div style="font-size:0.72rem;color:#64748b;margin-top:4px">Eingabe in ml (1000 ml = 1 L)</div>';
+  } else if(p.unit==='g'){
+    unitHint = '<div style="font-size:0.72rem;color:#64748b;margin-top:4px">Eingabe in Gramm (1000 g = 1 kg)</div>';
+  }
+
+  // Pre-fill: use already-entered value if going back
+  const prefill = _invData[name]!==undefined ? _invData[name] : curQty;
+
+  document.getElementById('inv-content').innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+
+      '<div style="font-size:2rem">'+
+        ({fluessigkeit:'💧',granulat:'🔶',tabs:'💊',streifen:'🧪'}[p.type]||'📦')+
+      '</div>'+
+      '<div>'+
+        '<div style="font-weight:900;font-size:1.05rem;color:var(--text-primary)">'+name+'</div>'+
+        badge+
+      '</div>'+
+    '</div>'+
+    '<div style="background:var(--pool-surface);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:0.8rem;color:var(--text-secondary)">'+
+      '<div>📊 Aktuell gebucht: <b style="color:var(--text-primary)">'+curStr+'</b></div>'+
+      (gebInfo?'<div style="margin-top:2px;font-size:0.75rem">'+gebInfo+'</div>':'')+
+    '</div>'+
+    '<div style="font-weight:700;font-size:0.88rem;margin-bottom:8px">Tatsächlicher Bestand:</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+      '<button class="qmess-btn" onclick="invQtyAdj(-1)">−</button>'+
+      '<input type="number" id="inv-qty" value="'+prefill+'" min="0" '+
+      'style="flex:1;text-align:center;border:2px solid var(--pool-blue);border-radius:10px;padding:10px;font-size:1.2rem;font-weight:800;font-family:Nunito,sans-serif">'+
+      '<button class="qmess-btn" onclick="invQtyAdj(1)">+</button>'+
+      '<span style="font-size:0.88rem;color:var(--text-muted);min-width:28px">'+p.unit+'</span>'+
+    '</div>'+
+    unitHint+
+    tabHint;
+
+  // Buttons
+  document.getElementById('inv-btn-prev').style.display = _invIndex===0 ? 'none' : '';
+  const isLast = _invIndex===_invProducts.length-1;
+  const nextBtn= document.getElementById('inv-btn-next');
+  nextBtn.textContent = isLast ? '✅ Inventur abschließen' : 'Weiter →';
+  nextBtn.style.background = isLast ? '#16a34a' : '';
+
+  // Focus input
+  setTimeout(function(){ const el=document.getElementById('inv-qty'); if(el){el.focus();el.select();} }, 100);
+}
+
+function inventurNext(){
+  const name = _invProducts[_invIndex];
+  const qty  = parseInt(document.getElementById('inv-qty')?.value)||0;
+  _invData[name] = qty;
+
+  if(_invIndex < _invProducts.length-1){
+    _invIndex++;
+    renderInventurStep();
+  } else {
+    inventurAbschliessen();
+  }
+}
+
+function inventurPrev(){
+  if(_invIndex>0){
+    // Save current before going back
+    const name = _invProducts[_invIndex];
+    _invData[name] = parseInt(document.getElementById('inv-qty')?.value)||0;
+    _invIndex--;
+    renderInventurStep();
+  }
+}
+
+function invQtyAdj(d){
+  const el=document.getElementById('inv-qty');
+  if(el) el.value=Math.max(0,(parseInt(el.value)||0)+d);
+}
+function invKgToStk(){
+  const kg=parseFloat(document.getElementById('inv-kg-input')?.value)||0;
+  const tpk=window._invTabsPerKg||50;
+  const el=document.getElementById('inv-qty');
+  if(el) el.value=Math.round(kg*tpk);
+}
+
+function inventurAbschliessen(){
+  const ts = new Date().toISOString();
+  const changes = [];
+  Object.entries(_invData).forEach(function([name, qty]){
+    const s = chemStock[name];
+    if(!s) return;
+    const old = s.qty;
+    // Reset gebinde to single angebrochen with new qty
+    s.qty     = qty;
+    s.gebinde = [{id:Date.now()+Math.random(), qty:qty, status:'angebrochen'}];
+    if(old!==qty) changes.push(name+': '+old+'→'+qty+' '+STOCK_PRODUCTS[name].unit);
+  });
+  sd('chem_stock_v2', chemStock);
+  // Inventur in Historie loggen
+  logHistory({type:'wartung', time:ts,
+    note:'📋 Inventur abgeschlossen'+
+      (changes.length?' | '+changes.slice(0,5).join(', ')+(changes.length>5?' + '+(changes.length-5)+' weitere':''):'– keine Änderungen')});
+  // peakQty neu setzen (Inventur ist neuer Startzustand)
+  const pk={};
+  Object.entries(chemStock).forEach(function([n,s]){ pk[n]=s.qty; });
+  sd('stock_peak_qty', pk);
+  closeModal('modal-inventur');
+  renderStockDashboard();
+  if(typeof toast==='function') toast('✅ Inventur gespeichert – '+_invProducts.length+' Produkte aktualisiert','success',4000);
+}
+
 
 </script>
 
@@ -10626,6 +10811,31 @@ function addAppleReminderFromTask() {
       <button class="btn btn-outline" onclick="closeModal('modal-ban-confirm')">Abbrechen</button>
     </div>
     <input type="hidden" id="ban-confirm-taskid">
+  </div>
+</div>
+
+<!-- ===== INVENTUR-MODAL ===== -->
+<div class="modal-overlay" id="modal-inventur" style="z-index:1100">
+  <div class="modal-box" style="max-width:420px;padding:0;overflow:hidden">
+    <!-- Header -->
+    <div id="inv-header" style="background:linear-gradient(135deg,#0369a1,#0ea5e9);padding:16px 20px;color:white">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:1rem;font-weight:900">📋 Inventur</span>
+        <button onclick="closeModal('modal-inventur')" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:0.85rem">✕ Abbrechen</button>
+      </div>
+      <!-- Fortschrittsbalken -->
+      <div style="height:6px;background:rgba(255,255,255,0.3);border-radius:3px;overflow:hidden">
+        <div id="inv-progress-bar" style="height:100%;background:white;border-radius:3px;transition:width 0.3s"></div>
+      </div>
+      <div id="inv-progress-text" style="font-size:0.72rem;margin-top:4px;opacity:0.85"></div>
+    </div>
+    <!-- Content -->
+    <div id="inv-content" style="padding:20px"></div>
+    <!-- Footer Buttons -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <button id="inv-btn-prev" class="btn btn-outline" style="flex:1" onclick="inventurPrev()">← Zurück</button>
+      <button id="inv-btn-next" class="btn btn-primary" style="flex:2" onclick="inventurNext()">Weiter →</button>
+    </div>
   </div>
 </div>
 
