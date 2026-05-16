@@ -2593,6 +2593,22 @@ function calcPhMinus(p){return`${Math.round(((p-settings.ph.target)/0.2)*150*POO
 
 function getTaskDoseHint(taskId){
   const last=getLastMeasurement();
+  // Test-Aufgabe: Hinweis auf ausstehende Messung nach Dosierung
+  if(taskId==='test'){
+    const active=getActiveDosierungPending();
+    if(active.length>0){
+      const parts=active.map(x=>{
+        const label=x.typ==='chlor'?'Chlor-Dosierung':'pH-Dosierung';
+        const d=new Date(x.erledigt_am);
+        const when=d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' '+
+                   d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr';
+        const dueAt=new Date(d.getTime()+x.wartezeit_h*3600000);
+        const dueStr=dueAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+        return label+' vom '+when+' (messen ab '+dueStr+' Uhr)';
+      });
+      return '🧪 Nach Dosierung: '+parts.join(' + ')+' — bitte jetzt messen!';
+    }
+  }
   // Alca-Plus Erhaltungsgabe: only recommend if TDS suggests TA might be low
   if(taskId==='alca_plus_check'){
     if(!last||last.tds===undefined)return '→ 190g Alca-Plus als Erhaltungsdosis. TDS messen für genauere Empfehlung.';
@@ -2845,6 +2861,8 @@ function confirmTask(){
     document.getElementById('ban-confirm-fields').style.display='none';
     document.getElementById('modal-ban-confirm').classList.add('open');
   }
+  // Dosierung-Pending setzen
+  if(id==='chlor_tabs') addDosierungPending('chlor', 6);
   renderDashboard();
   renderMaintenanceList&&renderMaintenanceList();
   checkNachmessTimer&&checkNachmessTimer();
@@ -3909,6 +3927,9 @@ function logDosierung(productKey,amount){
   const _filterMap={'Chlor Plus':8,'Poolklar':2,'Flockmittel':0.25};
   const _filterH=_filterMap[p.name]||0;
   if(_filterH>0)addTimerTodo(`Filter ausschalten – ${p.name} fertig`,_filterH);
+  // Dosierung-Pending: pH-Produkte 4h Wartezeit, Chlor 6h
+  if(productKey==='phminus'||productKey==='phplus') addDosierungPending('ph', 4);
+  if(productKey==='chlorplus') addDosierungPending('chlor', 6);
   if(typeof toast==='function')toast('Dosierung "'+p.name+' – '+amount+'" dokumentiert'+(banH>0?' – Badeverbot & Timer aktiv':''),'success',3500);
   else alert(`✅ Dosierung "${p.name} – ${amount}" dokumentiert!${banH>0?' Badeverbot gesetzt und Mess-Timer läuft.':''}`);
 }
@@ -3960,25 +3981,57 @@ function saveSeason(){
 
 function daysOverdue(t){if(!t.lastDone)return t.interval+1;const d=Math.floor((Date.now()-new Date(t.lastDone))/86400000);return Math.max(0,d-t.interval)}
 function hoursOverdue(t){if(!t.lastDone)return (t.interval+1)*24;const ms=Date.now()-new Date(t.lastDone).getTime()-t.interval*86400000;return Math.max(0,Math.round(ms/3600000))}
+// ── Dosierung-Pending Logik ─────────────────────────────────
+function addDosierungPending(typ, wartezeitH){
+  const list=ld('pool_dosierung_pending',[]).filter(x=>x.typ!==typ);
+  list.push({typ, erledigt_am:new Date().toISOString(), wartezeit_h:wartezeitH});
+  sd('pool_dosierung_pending', list);
+}
+function clearDosierungPending(){
+  sd('pool_dosierung_pending',[]);
+}
+function getActiveDosierungPending(){
+  const now=Date.now();
+  return ld('pool_dosierung_pending',[]).filter(x=>
+    new Date(x.erledigt_am).getTime()+x.wartezeit_h*3600000>now
+  );
+}
+function getDosierungPendingForTyp(typ){
+  return getActiveDosierungPending().find(x=>x.typ===typ)||null;
+}
+
 function nextDue(t){
   if(!t.lastDone)return new Date(0);
   const base=new Date(new Date(t.lastDone).getTime()+t.interval*86400000);
-  // Chlor-Smart: Aufgabe vorgezogen wenn Chlor niedrig oder grenzwertig
+
+  // Chlor-Smart: NUR triggern wenn KEIN pending (sonst: Dosierung läuft noch)
   if(t.id==='chlor_tabs'){
-    const last=getLastMeasurement();
-    const sc=settings.chlor||DEFAULT_SETTINGS.chlor;
-    if(last&&last.chlor!==undefined){
-      if(last.chlor<sc.min){
-        // Bereits unter Mindestwert → als überfällig anzeigen (gestern)
-        const overdue=new Date();overdue.setDate(overdue.getDate()-1);
-        return overdue;
-      }
-      if(last.chlor<sc.target-0.3){
-        // Grenzwertig → heute fällig
-        return new Date();
+    if(!getDosierungPendingForTyp('chlor')){
+      const last=getLastMeasurement();
+      const sc=settings.chlor||DEFAULT_SETTINGS.chlor;
+      if(last&&last.chlor!==undefined){
+        if(last.chlor<sc.min){
+          const overdue=new Date();overdue.setDate(overdue.getDate()-1);
+          return overdue;
+        }
+        if(last.chlor<sc.target-0.3) return new Date();
       }
     }
+    return base;
   }
+
+  // Test-Aufgabe: vorgezogen wenn Dosierung-Pending aktiv
+  if(t.id==='test'){
+    const active=getActiveDosierungPending();
+    if(active.length>0){
+      const latestDue=Math.max(...active.map(x=>
+        new Date(x.erledigt_am).getTime()+x.wartezeit_h*3600000
+      ));
+      const testDue=new Date(latestDue);
+      if(testDue<=base) return testDue; // nur wenn früher als ohnehin fällig
+    }
+  }
+
   return base;
 }
 
@@ -4385,6 +4438,12 @@ function drawChart(canvasId,data,key,color,range,target,_yMinHint,_yMaxHint){
 
 
 function logHistory(e){historyLog.push(e);sd('history_log',historyLog)}
+
+// Messung gespeichert → Dosierung-Pending löschen (wird nach saveQMess + saveMessung aufgerufen)
+function _onMeasurementSaved(){
+  clearDosierungPending();
+  renderTasksDashboard&&renderTasksDashboard();
+}
 
 let historieSelectMode=false;
 let historieSelected=new Set();
@@ -5705,7 +5764,7 @@ function saveQMess(){
       sd('maintenance',maintenanceTasks);
     }
   }
-  closeModal('modal-qmess');
+  _onMeasurementSaved(); closeModal('modal-qmess');
   renderDashboard();
   const feedback=document.createElement('div');
   feedback.style.cssText='position:fixed;top:70px;right:16px;z-index:9000;background:#15803d;color:white;padding:10px 18px;border-radius:12px;font-weight:800;font-size:0.9rem;box-shadow:0 4px 16px rgba(0,0,0,0.15);animation:fadeIn 0.3s ease';
