@@ -5716,10 +5716,19 @@ function saveQMess(){
 
 // ----- VORRATS-WARNUNG im Dashboard -----
 function renderStockWarning(){
+  const _spid={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Langzeit-Chlortabs':'langzeit_chlortabs','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen','Alca-Plus':'alca_plus'};
   let warnings=[];
   Object.entries(chemStock).forEach(([name,s])=>{
     const p=STOCK_PRODUCTS[name];if(!p)return;
-    const pct=s.pkgSize>0?Math.round((s.qty/s.pkgSize)*100):0;
+    // Inaktive Produkte überspringen
+    const pid=_spid[name];
+    const prod=pid&&typeof poolProdukte!=='undefined'?poolProdukte.find(x=>x.poolId===pid):null;
+    if(prod&&prod.active===false)return;
+    // Balken: aktive Pakete × pkgDefault
+    initGebinde(name);
+    const ag=s.gebinde.filter(g=>g.status!=='verbraucht');
+    const cap=(ag.length>0?ag.length:1)*p.pkgDefault;
+    const pct=cap>0?Math.round((s.qty/cap)*100):0;
     if(pct<20)warnings.push(`${name} (${pct}%)`);
   });
   const el=document.getElementById('dash-stock-warning');if(!el)return;
