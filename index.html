@@ -1831,7 +1831,7 @@ let selProduct    = null;
 function defaultMaintenance(){
   return [
     {id:'test',name:'Wasser testen (GIDIGI-Messgerät)',interval:2,lastDone:null,cat:'chemie'},
-    {id:'chlor_tabs',name:'Chlortabs nachfüllen',interval:3,lastDone:null,cat:'chemie'},
+    {id:'chlor_tabs',name:'Chlortabs nachfüllen',interval:7,lastDone:null,cat:'chemie'},
     {id:'algischutz',name:'Algenschutz dosieren',interval:14,lastDone:null,cat:'chemie'},
     {id:'poolklar',name:'Poolklar zugeben',interval:7,lastDone:null,cat:'chemie'},
     {id:'flockmittel',name:'Flockmittel zugeben',interval:3,lastDone:null,cat:'chemie'},
@@ -2601,15 +2601,17 @@ function getTaskDoseHint(taskId){
   }
   // Smart chlor hint – recommends extra tab when chlor is low
   if(taskId==='chlor_tabs'||taskId==='langzeit_chlor'){
-    const s=settings.chlor||DEFAULT_SETTINGS.chlor;
+    const sc=settings.chlor||DEFAULT_SETTINGS.chlor;
     if(last&&last.chlor!==undefined){
-      if(last.chlor<s.min){
-        return`→ 4 Langzeit-Tabs + ⚠️ 1 Schnell-Tab empfohlen (Chlor niedrig: ${last.chlor} ppm)`;
-      } else if(last.chlor>s.target+0.5){
-        return`→ 4 Langzeit-Tabs (Chlor ok: ${last.chlor} ppm)`;
+      if(last.chlor<sc.min){
+        return`⚠️ Vorgezogen: Chlor zu niedrig (${last.chlor} ppm) – 4 Langzeit-Tabs + ${Math.round((sc.min-last.chlor)/0.1+1)} Schnell-Tab(s) empfohlen`;
+      } else if(last.chlor<sc.target-0.3){
+        return`⚠️ Vorgezogen: Chlor grenzwertig (${last.chlor} ppm) – 4 Langzeit-Tabs + ggf. 1–2 Schnell-Tabs`;
+      } else if(last.chlor>sc.target+0.5){
+        return`→ 4 Langzeit-Tabs (Chlor ok: ${last.chlor} ppm, kein Schnell-Tab nötig)`;
       }
     }
-    return'→ 4 Langzeit-Tabs wöchentlich · ggf. 3–5 Schnell-Tabs bei Bedarf';
+    return'→ 4 Langzeit-Tabs wöchentlich · ggf. Schnell-Tabs bei Bedarf';
   }
   const staticHints={
     'filter_clean':'→ Rückspülen 2–3 Min, dann Nachspülen',
@@ -2674,7 +2676,7 @@ function quickLogTask(){
 }
 // Task-Bestätigungs-Modal
 const TASK_STOCK_MAP={
-  chlor_tabs:'Langzeit-Chlortabs', algischutz:'Algenschutz', poolklar:'Poolklar',
+  chlor_tabs:'Langzeit-Chlortabs', langzeit_chlor:'Langzeit-Chlortabs', algischutz:'Algenschutz', poolklar:'Poolklar',
   flockmittel:'Flockmittel', test:'Teststreifen'
 };
 
@@ -2693,8 +2695,8 @@ function quickCompleteTask(id){
   document.getElementById('task-confirm-note').value='';
   const qtyRow=document.getElementById('task-confirm-qty-row');
   const qty2Row=document.getElementById('task-confirm-qty2-row');
-  // chlor_tabs: zwei Zeilen – Langzeit + Schnell getrennt
-  if(id==='chlor_tabs'){
+  // chlor_tabs + langzeit_chlor: beide zeigen Dual-Stepper Langzeit + Schnell
+  if(id==='chlor_tabs'||id==='langzeit_chlor'){
     const lzProd=STOCK_PRODUCTS['Langzeit-Chlortabs'];
     const scProd=STOCK_PRODUCTS['Schnell-Chlortabs'];
     const s=settings.chlor||DEFAULT_SETTINGS.chlor;
@@ -2706,13 +2708,20 @@ function quickCompleteTask(id){
     document.getElementById('task-confirm-unit').textContent=lzProd.unit;
     // Schnell-Tabs: Vorschlag anhand Chlor-Messwert
     let scDefault=0;
+    let scLabel='⚡ Schnell-Chlortabs (nur bei Bedarf – Chlor ok)';
     if(last&&last.chlor!==undefined){
-      if(last.chlor<s.min)scDefault=scProd.perUse; // deutlich zu niedrig → volle Dosis
-      else if(last.chlor<s.target-0.2)scDefault=Math.max(1,Math.round(scProd.perUse/2)); // leicht niedrig → halbe Dosis
+      const sc2=s||DEFAULT_SETTINGS.chlor;
+      if(last.chlor<sc2.min){
+        scDefault=Math.round((sc2.min-last.chlor)/0.1)+2;
+        scDefault=Math.max(1,Math.min(scDefault,scProd.perUse));
+        scLabel=`⚡ Schnell-Chlortabs (Vorschlag: ${scDefault} Stk – Chlor zu niedrig: ${last.chlor} ppm)`;
+      } else if(last.chlor<sc2.target-0.3){
+        scDefault=Math.max(1,Math.round(scProd.perUse/2));
+        scLabel=`⚡ Schnell-Chlortabs (Vorschlag: ${scDefault} Stk – Chlor grenzwertig: ${last.chlor} ppm)`;
+      }
     }
     qty2Row.style.display='block';
-    document.getElementById('task-confirm-qty2-label').textContent=
-      `⚡ Schnell-Chlortabs${scDefault>0?' (Vorschlag: '+scDefault+' Stk – Chlor niedrig)':' (nur bei Bedarf)'}`;
+    document.getElementById('task-confirm-qty2-label').textContent=scLabel;
     document.getElementById('task-confirm-qty2').value=scDefault;
   } else {
     qty2Row.style.display='none';
@@ -2770,9 +2779,10 @@ function confirmTask(){
   if(p&&qty>0)histNote+=` (${qty} ${p.unit} ${p===STOCK_PRODUCTS['Langzeit-Chlortabs']?'Langzeit-Tabs':'verwendet'})`;
   // Für chlor_tabs: zweite Menge (Schnell-Tabs) auslesen
   const qty2Row=document.getElementById('task-confirm-qty2-row');
-  const qty2=(id==='chlor_tabs'&&qty2Row&&qty2Row.style.display!=='none')
+  const _dualTask=(id==='chlor_tabs'||id==='langzeit_chlor');
+  const qty2=(_dualTask&&qty2Row&&qty2Row.style.display!=='none')
     ?(parseInt(document.getElementById('task-confirm-qty2').value)||0):0;
-  if(id==='chlor_tabs'&&qty2>0)histNote+=` + ${qty2} Stk Schnell-Tabs`;
+  if(_dualTask&&qty2>0)histNote+=` + ${qty2} Stk Schnell-Tabs`;
   if(note)histNote+=` – ${note}`;
   logHistory({type:'wartung',time:task.lastDone,note:histNote});
   // Bestand abziehen
@@ -2790,7 +2800,7 @@ function confirmTask(){
     sd('chem_stock_v2',chemStock);
     renderStockDashboard();
   }
-  // Schnell-Tabs Bestand abziehen
+  // Schnell-Tabs Bestand abziehen (für beide chlor_tabs und langzeit_chlor)
   if(qty2>0&&chemStock['Schnell-Chlortabs']){
     const sc=chemStock['Schnell-Chlortabs'];
     const gebinde=sc.gebinde;
@@ -3949,7 +3959,27 @@ function saveSeason(){
 
 function daysOverdue(t){if(!t.lastDone)return t.interval+1;const d=Math.floor((Date.now()-new Date(t.lastDone))/86400000);return Math.max(0,d-t.interval)}
 function hoursOverdue(t){if(!t.lastDone)return (t.interval+1)*24;const ms=Date.now()-new Date(t.lastDone).getTime()-t.interval*86400000;return Math.max(0,Math.round(ms/3600000))}
-function nextDue(t){if(!t.lastDone)return new Date(0);return new Date(new Date(t.lastDone).getTime()+t.interval*86400000)}
+function nextDue(t){
+  if(!t.lastDone)return new Date(0);
+  const base=new Date(new Date(t.lastDone).getTime()+t.interval*86400000);
+  // Chlor-Smart: Aufgabe vorgezogen wenn Chlor niedrig oder grenzwertig
+  if(t.id==='chlor_tabs'){
+    const last=getLastMeasurement();
+    const sc=settings.chlor||DEFAULT_SETTINGS.chlor;
+    if(last&&last.chlor!==undefined){
+      if(last.chlor<sc.min){
+        // Bereits unter Mindestwert → als überfällig anzeigen (gestern)
+        const overdue=new Date();overdue.setDate(overdue.getDate()-1);
+        return overdue;
+      }
+      if(last.chlor<sc.target-0.3){
+        // Grenzwertig → heute fällig
+        return new Date();
+      }
+    }
+  }
+  return base;
+}
 
 let maintFilter='all';
 function filterMaintenance(f){
@@ -8296,7 +8326,7 @@ let coverState=ld('cover_state',{covered:true,since:new Date().toISOString()});
 // ============================================================
 const COVER_INTERVAL_MAP={
   test:      {open:2, covered:4},
-  chlor_tabs:{open:3, covered:5},
+  chlor_tabs:{open:7, covered:10},
   flockmittel:{open:3,covered:5},
   algischutz:{open:14,covered:21},
   poolklar:  {open:7, covered:10},
@@ -8315,10 +8345,25 @@ function applyCovertIntervals(){
 }
 
 
+// Migration: Zusammenführen langzeit_chlor → chlor_tabs (+ langzeit_chlor entfernen)
+(function(){
+  const lz=maintenanceTasks.find(function(t){return t.id==='langzeit_chlor';});
+  const ct=maintenanceTasks.find(function(t){return t.id==='chlor_tabs';});
+  if(lz){
+    // Neueres lastDone übernehmen
+    if(lz.lastDone&&ct&&(!ct.lastDone||lz.lastDone>ct.lastDone)) ct.lastDone=lz.lastDone;
+    // langzeit_chlor aus Liste entfernen
+    const idx=maintenanceTasks.indexOf(lz);
+    if(idx>-1) maintenanceTasks.splice(idx,1);
+    // chlor_tabs sicherstellen: interval=7, name korrekt
+    if(ct){ ct.interval=7; ct.name='Chlortabs nachfüllen'; }
+    sd('maintenance',maintenanceTasks);
+  }
+})();
+
 // Migration: Add missing chemical tasks
 (function(){
   var newTasks=[
-    {id:'langzeit_chlor',name:'Langzeit-Chlortabs nachfüllen',interval:7,lastDone:null,cat:'chemie'},
     {id:'chlorplus',name:'Chlor Plus / Schockchlorung',interval:30,lastDone:null,cat:'chemie'},
 
     {id:'alca_plus_check',name:'Alca-Plus Erhaltungsgabe (190g)',interval:30,lastDone:null,cat:'chemie'},
