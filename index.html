@@ -10743,11 +10743,20 @@ function renderInventurStep(){
             'oninput="invCalcFromScale()">'+
           '</div>'+
           '<div>'+
-            '<div style="font-size:0.72rem;font-weight:700;color:#64748b;margin-bottom:4px">Leergewicht Verpackung (g)</div>'+
+            '<div style="font-size:0.72rem;font-weight:700;color:#64748b;margin-bottom:4px">Leergewicht 1 Packung (g)</div>'+
             '<input type="number" id="inv-tara-weight" value="'+_tara+'" placeholder="z.B. 180" min="0" '+
             'style="width:100%;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px;font-size:0.95rem;font-weight:700;font-family:Nunito,sans-serif;text-align:center" '+
             'oninput="invCalcFromScale();invSaveTara()">'+
           '</div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+          '<div style="font-size:0.78rem;font-weight:700;color:#64748b;white-space:nowrap">Anzahl Packungen:</div>'+
+          '<button onclick="invPkgAdj(-1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--pool-surface);font-size:1rem;cursor:pointer;font-family:Nunito,sans-serif">−</button>'+
+          '<input type="number" id="inv-pkg-count" value="1" min="1" max="20" '+
+          'style="width:56px;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px;font-size:0.95rem;font-weight:800;font-family:Nunito,sans-serif;text-align:center" '+
+          'oninput="invCalcFromScale()">'+
+          '<button onclick="invPkgAdj(1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--pool-surface);font-size:1rem;cursor:pointer;font-family:Nunito,sans-serif">+</button>'+
+          '<div id="inv-tara-total" style="font-size:0.72rem;color:#94a3b8"></div>'+
         '</div>'+
         '<div id="inv-scale-result" style="font-size:0.78rem;color:#64748b;text-align:center;min-height:18px"></div>'+
         (_tara>0?'<div style="font-size:0.7rem;color:#16a34a;margin-top:4px">✅ Leergewicht gespeichert: '+_tara+'g</div>':
@@ -10791,6 +10800,11 @@ function invQtyAdj(d){
   const el=document.getElementById('inv-qty');
   if(el) el.value=Math.max(0,(parseInt(el.value)||0)+d);
 }
+function invPkgAdj(d){
+  const el=document.getElementById('inv-pkg-count');
+  if(el) el.value=Math.max(1,(parseInt(el.value)||1)+d);
+  invCalcFromScale();
+}
 function invKgToStk(){
   const kg=parseFloat(document.getElementById('inv-kg-input')?.value)||0;
   const tpk=window._invTabsPerKg||50;
@@ -10810,27 +10824,39 @@ function invToggleWaage(){
   }
 }
 function invCalcFromScale(){
-  const total=parseFloat(document.getElementById('inv-total-weight')?.value)||0;
-  const tara =parseFloat(document.getElementById('inv-tara-weight')?.value)||0;
-  const res  =document.getElementById('inv-scale-result');
-  const qty  =document.getElementById('inv-qty');
+  const total  = parseFloat(document.getElementById('inv-total-weight')?.value)||0;
+  const tara1  = parseFloat(document.getElementById('inv-tara-weight')?.value)||0;
+  const pkgCnt = parseInt(document.getElementById('inv-pkg-count')?.value)||1;
+  const taraTotal = tara1 * pkgCnt;
+  const res    = document.getElementById('inv-scale-result');
+  const qty    = document.getElementById('inv-qty');
+  const ttEl   = document.getElementById('inv-tara-total');
+  if(ttEl && tara1>0) ttEl.textContent = '= '+taraTotal+'g Tara gesamt';
   if(total>0){
-    const net=Math.max(0,total-tara);
+    const net=Math.max(0, total-taraTotal);
     const name=_invProducts[_invIndex];
     const p=STOCK_PRODUCTS[name]||{};
     if(p.type==='tabs'&&p.tabWeightG){
       const stk=Math.round(net/p.tabWeightG);
-      if(res) res.innerHTML='<b style="color:#0369a1;font-size:0.9rem">'+stk+' Stk</b> '+
-        '<span style="color:#64748b">('+Math.round(net)+'g ÷ '+p.tabWeightG+'g/Tab)</span>';
+      if(res) res.innerHTML=
+        '<b style="color:#0369a1;font-size:0.9rem">'+stk+' Stk</b> '+
+        '<span style="color:#64748b">('+Math.round(net)+'g ÷ '+p.tabWeightG+'g/Tab'+
+        (pkgCnt>1?' · '+pkgCnt+' Packungen':'')+')</span>';
       if(qty) qty.value=stk;
     } else {
-      if(res) res.innerHTML='<b style="color:#0369a1;font-size:0.9rem">'+Math.round(net)+' g Inhalt</b> '+
-        '<span style="color:#64748b">('+total+' − '+tara+' g Tara)</span>';
+      if(res) res.innerHTML=
+        '<b style="color:#0369a1;font-size:0.9rem">'+Math.round(net)+' g Inhalt</b> '+
+        '<span style="color:#64748b">('+total+' − '+taraTotal+'g Tara'+
+        (pkgCnt>1?' ['+pkgCnt+'×'+tara1+'g]':'')+')</span>';
       if(qty) qty.value=Math.round(net);
     }
   } else {
     if(res) res.textContent='';
   }
+}
+function invPkgAdj(d){
+  const el=document.getElementById('inv-pkg-count');
+  if(el){ el.value=Math.max(1,(parseInt(el.value)||1)+d); invCalcFromScale(); }
 }
 function invSaveTara(){
   const name=_invProducts[_invIndex];
