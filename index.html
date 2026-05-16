@@ -5500,7 +5500,7 @@ function renderStockDashboard(){
     const _totalCap=(_activeGeb.length>0?_activeGeb.length:1)*p.pkgDefault;
     const pct=_totalCap>0?Math.round(s.qty/_totalCap*100):0;
     const barCls=pct>=60?'stock-bar-ok':pct>=30?'stock-bar-warn':'stock-bar-empty';
-    const warn=(pct<20&&!(prod&&prod.active===false))?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
+    const warn=pct<20?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
     // Menge anzeigen: bei Tabs auch Gewicht
     let qtyStr=p.unit==='Stk'?s.qty+' Stk':(p.unit==='ml'&&s.qty>=1000?(s.qty/1000).toFixed(1)+' L':s.qty+' '+p.unit);
     if(p.type==='tabs'&&p.tabWeightG){
@@ -5513,7 +5513,9 @@ function renderStockDashboard(){
     // Inaktive Produkte im Dashboard ausblenden
     if(prod&&prod.active===false) return '';
     const imgHtml=prod&&prod.img?`<img class="stock-item-img" src="${prod.img}" alt="${name}">`:`<div class="stock-item-img-placeholder">🧪</div>`;
-    const buyBtn=prod&&prod.amazon&&pct<50?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
+    const buyBtn=prod&&prod.amazon&&pct<50&&prod.active!==false?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
+    // warn für inaktive Produkte unterdrücken (prod jetzt verfügbar)
+    const _warnFinal = (prod&&prod.active===false) ? '' : warn;
     const wkUsage=estimateWeeklyUsage(name);
     let reichHtml='';
     if(wkUsage>0&&s.qty>0){const days=Math.round((s.qty/wkUsage)*7);const rc=days<7?'#dc2626':days<21?'#d97706':'#16a34a';reichHtml=`<div style="font-size:0.65rem;color:${rc};font-weight:800;white-space:nowrap">~${days}d</div>`;}
@@ -5532,7 +5534,7 @@ function renderStockDashboard(){
     return`<div class="stock-item">
       ${imgHtml}
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary);display:flex;align-items:center;gap:4px">${name}${warn}</div>
+        <div style="font-size:0.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary);display:flex;align-items:center;gap:4px">${name}${_warnFinal}</div>
         <div style="margin-top:1px">${typeBadge}</div>
         ${gebindeInfoHtml?`<div style="margin-top:2px;display:flex;flex-wrap:wrap;gap:3px;align-items:center">${gebindeInfoHtml}</div>`:''}
       </div>
