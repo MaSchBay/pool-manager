@@ -2545,8 +2545,7 @@ function checkAlcaPlusNeeded(){
     }
     const deficitPpm=Math.max(0,targetPpm-khPpm);
     if(deficitPpm>0){
-      const poolM3=POOL_VOLUME/1000;
-      const totalG=Math.round(deficitPpm/10*180*poolM3/10);
+      const totalG=Math.round(deficitPpm/10*180*POOL_VOLUME/10);
       const steps=totalG>200?Math.ceil(totalG/200):1;
       const stepG=Math.round(totalG/steps);
       if(steps>1){
@@ -2555,7 +2554,7 @@ function checkAlcaPlusNeeded(){
         doseRec='KH: '+lastKH+' °dKH ('+khPpm+' ppm) → Ziel '+skh.target+' °dKH. Einmalig: '+totalG+'g. In Wasser auflösen, Pumpe laufen lassen.';
       }
     } else {
-      doseRec='KH: '+lastKH+' °dKH ('+khPpm+' ppm) – im Zielbereich. Erhaltungsdosis: '+Math.round(180*POOL_VOLUME/1000/10*10/10)+'g falls TDS-Abfall erkannt.';
+      doseRec='KH: '+lastKH+' °dKH ('+khPpm+' ppm) – im Zielbereich. Erhaltungsdosis: '+Math.round(180*POOL_VOLUME/10)+'g falls TDS-Abfall erkannt.';
     }
   } else if(tds!==undefined&&tds!==null){
     if(tds<300)doseRec='KH nicht gemessen – TDS niedrig: 380g empfohlen, nach 4h wiederholen. KH mit JBL Test messen.';
@@ -3867,8 +3866,7 @@ const PRODUCTS={
       const targetPpm=Math.round(skh.target*17.8);
       if(khPpm>=targetPpm){return{amount:'Keine Dosierung nötig',note:'KH: '+kh+' °dKH ('+khPpm+' ppm) – im Zielbereich (Ziel: '+skh.target+' °dKH / '+targetPpm+' ppm)'};}
       const defPpm=targetPpm-khPpm;
-      const poolM3=POOL_VOLUME/1000;
-      const totalG=Math.round(defPpm/10*180*poolM3/10);
+      const totalG=Math.round(defPpm/10*180*POOL_VOLUME/10);
       const steps=Math.ceil(totalG/200);
       const stepG=Math.round(totalG/steps);
       const note='KH: '+kh+' °dKH ('+khPpm+' ppm) → Ziel: '+skh.target+' °dKH ('+targetPpm+' ppm) | Defizit: '+defPpm+' ppm\n'
@@ -4731,8 +4729,7 @@ function updateKHHint(){
   if(val<skh.min){
     col='#dc2626'; icon='⚠️';
     const defPpm=Math.round((skh.target-val)*17.8);
-    const poolM3=POOL_VOLUME/1000;
-    const alcaG=Math.round(defPpm/10*180*poolM3/10);
+    const alcaG=Math.round(defPpm/10*180*POOL_VOLUME/10);
     msg=' → Alca-Plus nötig: ca. '+alcaG+'g';
   } else if(val>skh.max){
     col='#f59e0b'; icon='⚠️'; msg=' → zu hoch, pH wird schwerer einstellbar';
@@ -4763,8 +4760,7 @@ function saveKH(){
   const skh=settings.kh||DEFAULT_SETTINGS.kh;
   if(val<skh.min){
     const defPpm=Math.round((skh.target-val)*17.8);
-    const poolM3=POOL_VOLUME/1000;
-    const alcaG=Math.round(defPpm/10*180*poolM3/10);
+    const alcaG=Math.round(defPpm/10*180*POOL_VOLUME/10);
     if(typeof toast==='function')toast('🟠 KH: '+val+' °dKH ('+ppm+' ppm) – Alca-Plus nötig: ~'+alcaG+'g','warn',6000);
   } else {
     if(typeof toast==='function')toast('🟠 KH gespeichert: '+val+' °dKH ('+ppm+' ppm)','success',3000);
