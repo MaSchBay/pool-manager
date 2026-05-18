@@ -1191,7 +1191,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="product-card product-algenschutz" onclick="selectProduct('algenschutz',this)"><div class="product-name">Algenschutz</div><div class="product-sub">medi pool – Blau/Grün | ⚠️ Badeverbot 2h</div><div class="product-dose">100 ml/10m³, alle 14 Tage</div></div>
       <div class="product-card product-phminus" onclick="selectProduct('phminus',this)"><div class="product-name">pH-Minus Granulat</div><div class="product-sub">medi pool – Blau/Orange | kein Badeverbot</div><div class="product-dose">150 g/10m³ senkt pH um 0,2</div></div>
       <div class="product-card product-phplus" onclick="selectProduct('phplus',this)"><div class="product-name">pH-Plus Granulat</div><div class="product-sub">medi pool – Blau/Gelb | kein Badeverbot</div><div class="product-dose">100 g/10m³ hebt pH um 0,2</div></div>
-      <div class="product-card product-alcaplus" onclick="selectProduct('alcaplus',this)"><div class="product-name">Alca-Plus</div><div class="product-sub">Bayrol – kein Badeverbot</div><div class="product-dose">190 g/10m³ · TA um ~10 ppm</div></div>
+      <div class="product-card product-alcaplus" onclick="selectProduct('alcaplus',this)"><div class="product-name">Alca-Plus</div><div class="product-sub">Bayrol – kein Badeverbot</div><div class="product-dose">180 g/10m³/10 ppm · KH-basiert</div></div>
     </div>
     <div>
       <div class="card" id="dosi-card">
@@ -2568,7 +2568,7 @@ function checkAlcaPlusNeeded(){
     triggers:triggers,
     msg:'⚠️ Deine Alkalinität könnte zu niedrig sein – der pH-Wert könnte instabil werden oder ist es bereits. Empfehlung: Bayrol Alca-Plus dosieren.',
     dose:doseRec,
-    disclaimer:'Diese Empfehlung basiert auf dem TDS-Wert als Näherung, da kein TA-Messgerät vorhanden. Kein pH+ während der Alca-Plus Behandlung zugeben. pH-Wert nach jeder Runde kontrollieren.'
+    disclaimer:'Kein pH+ während der Alca-Plus Behandlung. pH-Wert erst nach stabiler KH korrigieren.'
   };
 }
 
@@ -3856,25 +3856,29 @@ const PRODUCTS={
     instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>pH 7,0–7,6 einstellen</li><li>Tabs in <strong>Skimmer</strong></li><li>Filter laufen lassen</li><li>Nie mit anderen Chemikalien mischen!</li></ol>`},
   alcaplus:{name:'🧱 Alca-Plus (Alkalinität heben)',
     fields:[
-      {id:'tds_val',label:'Aktueller TDS-Wert (ppm)',type:'number',step:10},
-      {id:'ph_instab',label:'pH-Sprünge in letzten 48h?',type:'select',opts:['Nein – pH stabil','Ja – pH springt stark']}
+      {id:'current_kh',label:'Aktueller KH-Wert (°dKH / Tropfen)',type:'number',step:0.5}
     ],
     calc(v){
-      var tds=parseFloat(v.tds_val);
-      var instab=v.ph_instab&&v.ph_instab.startsWith('Ja');
-      var POOL_L=10.52;
-      var rounds=0,reason='';
-      if(!isNaN(tds)){
-        if(tds<300){rounds=3;reason='TDS unter 300 ppm → Alkalinität wahrscheinlich sehr niedrig (<40 ppm)';}
-        else if(tds<=600){rounds=2;reason='TDS 300-600 ppm → Alkalinität möglicherweise niedrig (40-80 ppm)';}
-        else{rounds=0;reason='TDS über 600 ppm → Alkalinität wahrscheinlich ausreichend';}
-      }
-      if(instab&&rounds===0)rounds=1;
-      var amt=Math.round(190*POOL_L/10);
-      if(rounds===0){return{amount:'Keine Dosierung empfohlen – pH beobachten',note:reason+'\n⚠️ Schätzung basierend auf TDS. Für genaue Werte Alkalinität-Teststreifen verwenden.'};}
-      return{amount:rounds+'× '+amt+'g – je 4h Abstand',note:reason+'\n→ Je Runde: '+amt+'g im Eimer auflösen, entlang Beckenrand. Pumpe 4h laufen. Dann pH messen.\n⚠️ Schätzung basierend auf TDS. Für genaue Werte Alkalinität-Teststreifen verwenden.'};
+      const skh=settings&&settings.kh?settings.kh:DEFAULT_SETTINGS.kh;
+      let kh=parseFloat(v.current_kh);
+      if(isNaN(kh)||kh<=0){const last=getLastMeasurement&&getLastMeasurement();kh=last&&last.kh!=null?last.kh:null;}
+      if(kh===null){return{amount:'KH-Wert fehlt',note:'Bitte KH mit JBL Tropftest messen (Tropfen = °dKH).\nZiel: '+skh.target+' °dKH ('+Math.round(skh.target*17.8)+' ppm)'};}
+      const khPpm=Math.round(kh*17.8);
+      const targetPpm=Math.round(skh.target*17.8);
+      if(khPpm>=targetPpm){return{amount:'Keine Dosierung nötig',note:'KH: '+kh+' °dKH ('+khPpm+' ppm) – im Zielbereich (Ziel: '+skh.target+' °dKH / '+targetPpm+' ppm)'};}
+      const defPpm=targetPpm-khPpm;
+      const poolM3=POOL_VOLUME/1000;
+      const totalG=Math.round(defPpm/10*180*poolM3/10);
+      const steps=Math.ceil(totalG/200);
+      const stepG=Math.round(totalG/steps);
+      const note='KH: '+kh+' °dKH ('+khPpm+' ppm) → Ziel: '+skh.target+' °dKH ('+targetPpm+' ppm) | Defizit: '+defPpm+' ppm\n'
+        +'→ Je Runde '+stepG+'g in Wasser auflösen (Granulat ins Wasser!), Pumpe läuft\n'
+        +'→ Gleichmäßig an mehreren Stellen einbringen\n'
+        +'→ Je Runde 4h warten, dann KH nachmessen';
+      return{amount:steps+'× '+stepG+'g – je 4h Abstand (gesamt: '+totalG+'g)',note:note};
     },
-    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>Im Eimer Wasser auflösen</li><li>Entlang Beckenrand einschütten</li><li>Pumpe mind. <strong>4h</strong></li><li>Dann pH messen – erst danach pH korrigieren</li></ol>`},
+    instr:`<ol style="line-height:2;font-size:0.88rem;padding-left:16px"><li>KH messen (JBL Tropftest): Tropfen bis Blau→Gelb = °dKH</li><li>Menge oben berechnen lassen</li><li>Granulat <strong>zuerst in Wasser</strong> auflösen (nie umgekehrt!)</li><li>Gleichmäßig an mehreren Stellen, Pumpe läuft</li><li>4h warten → KH nachmessen → ggf. wiederholen</li><li>Erst nach stabiler KH den pH-Wert korrigieren</li></ol>`},
+
   phminus:{name:'pH-Minus Granulat',
     fields:[
       {id:'current_ph',label:'Aktueller pH-Wert (gemessen)',type:'number',step:0.1},
@@ -3948,6 +3952,16 @@ function selectProduct(key,card){
   document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');
   // Auswahl nur beibehalten wenn gleiche Produktkarte nochmal geklickt wird
   const _sameProduct=(selProduct===key);
+  // Alcaplus: letzten KH-Wert vorausfüllen
+  if(key==='alcaplus'){
+    const _last=getLastMeasurement&&getLastMeasurement();
+    if(_last&&_last.kh!=null){
+      setTimeout(function(){
+        const el=document.getElementById('dosi-current_kh');
+        if(el&&!el.value) el.value=_last.kh;
+      },100);
+    }
+  }
   const _prevVals={};
   if(_sameProduct){
     // Selects des gleichen Produkts sichern (Wechsel innerhalb desselben Formulars)
@@ -6898,7 +6912,12 @@ function applyImportedData(d,mergeMode){
         if(rp.price!==undefined)lp.price=rp.price;
         if(rp.notes!==undefined)lp.notes=rp.notes;
         if(Array.isArray(rp.dosierungen))lp.dosierungen=rp.dosierungen;
-        if(rp.active!==undefined)lp.active=rp.active;
+        // active: nur überschreiben wenn remote-Timestamp neuer (last-write-wins)
+        if(rp.active!==undefined){
+          const localTs=lp._activeTs||0;
+          const remoteTs=rp._activeTs||0;
+          if(remoteTs>=localTs){ lp.active=rp.active; lp._activeTs=remoteTs; }
+        }
         if(rp.brand!==undefined)lp.brand=rp.brand;
         if(rp.size!==undefined)lp.size=rp.size;
         if(rp.amazon!==undefined)lp.amazon=rp.amazon;
@@ -9623,7 +9642,12 @@ function toggleProduktActive(poolId, active){
   const p = poolProdukte.find(x=>x.poolId===poolId);
   if(!p) return;
   p.active = active;
+  p._activeTs = Date.now();  // Timestamp für Sync-Merge
   saveProdukte();
+  // Sofort-Sync damit Drive-Version nicht wieder überschreibt
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){
+    clearTimeout(autoSyncTimer); setTimeout(gdriveSyncBoth,500);
+  }
   renderProduktBoard();
   renderStockDashboard();
   if(typeof toast==='function') toast(active?'✅ Produkt aktiviert':'❌ Produkt deaktiviert','info',2000);
