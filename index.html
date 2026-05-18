@@ -1628,6 +1628,37 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     </div>
   </div>
 </div>
+<!-- ===== KH MODAL ===== -->
+<div class="modal-overlay" id="modal-kh">
+  <div class="modal">
+    <div class="modal-title">🟠 KH messen (Karbonathärte)</div>
+    <p style="font-size:0.83rem;color:var(--text-secondary);margin-bottom:14px">
+      Küvette mit Poolwasser füllen. Reagens tropfenweise zugeben bis Farbe von <b>Blau → Gelb</b> umschlägt.<br>
+      <b>Anzahl Tropfen = °dKH-Wert</b>
+    </p>
+    <div class="form-group">
+      <label class="form-label">Tropfen / °dKH-Wert</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="spin-btn" onclick="adjustInput('kh-input',-0.5,1)">−</button>
+        <input type="number" id="kh-input" step="0.5" min="0" max="30"
+          style="text-align:center;font-size:1.2rem;font-weight:800"
+          placeholder="z.B. 5" oninput="updateKHHint()">
+        <button class="spin-btn" onclick="adjustInput('kh-input',0.5,1)">+</button>
+        <span style="font-size:0.85rem;color:var(--text-muted)">°dKH</span>
+      </div>
+      <div id="kh-hint" style="margin-top:8px;font-size:0.85rem;font-weight:700;min-height:20px"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Datum & Uhrzeit</label>
+      <input type="datetime-local" id="kh-time">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveKH()">💾 Speichern</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-kh')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-timer-measure">
   <div class="modal">
     <div class="modal-title">🧪 Messung fällig: <span id="timer-measure-title"></span></div>
@@ -2606,7 +2637,7 @@ function renderEmpfehlungen(id){
       });
     }
   }
-  maintenanceTasks.forEach(t=>{const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`});}}); 
+  _visibleTasks().forEach(t=>{const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`});}}); 
   el.innerHTML=tips.map(t=>`
     <div class="empfehlung ${t.type}" style="cursor:${t.helpIdx!==undefined?'pointer':'default'};justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" ${t.helpIdx!==undefined?`onclick="showBoard('hilfe');setTimeout(()=>startTodo(${t.helpIdx}),100)"`:''}>
       <span>💡 ${t.msg}</span>
@@ -2696,6 +2727,10 @@ function getTaskDoseHint(taskId){
   return'→ '+d.amount+' '+d.unit+(d.name?' ('+d.name+')':'')+banStr;
 }
 
+function _visibleTasks(){
+  return maintenanceTasks.filter(isTaskVisible);
+}
+
 function renderTasksDashboard(){
   const el=document.getElementById('tasks-dashboard');if(!el)return;
   const today=new Date();let html='',shown=0;
@@ -2721,7 +2756,7 @@ function renderTasksDashboard(){
 
 function renderQuickTaskDropdown(){
   const sel=document.getElementById('quick-task-select');if(!sel)return;
-  sel.innerHTML='<option value="">➕ Arbeit eintragen…</option>'+maintenanceTasks.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  sel.innerHTML='<option value="">➕ Arbeit eintragen…</option>'+_visibleTasks().map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
 }
 
 function quickLogTask(){
@@ -2743,6 +2778,7 @@ const TASK_STOCK_MAP={
 
 function quickCompleteTask(id){
   if(id==='druck_check'){openDruckModal();return;}
+  if(id==='kh_messen'){openKHModal();return;}
   // Wassertest → direkt zur Messung navigieren
   if(id==='test'){showBoard('messung');renderMessung();if(typeof toast==='function')toast('🧪 Messwerte eintragen um Wassertest abzuhaken','info',3500);return;}
   const task=maintenanceTasks.find(t=>t.id===id);if(!task)return;
@@ -4030,6 +4066,20 @@ function saveSeason(){
 
 function daysOverdue(t){if(!t.lastDone)return t.interval+1;const d=Math.floor((Date.now()-new Date(t.lastDone))/86400000);return Math.max(0,d-t.interval)}
 function hoursOverdue(t){if(!t.lastDone)return (t.interval+1)*24;const ms=Date.now()-new Date(t.lastDone).getTime()-t.interval*86400000;return Math.max(0,Math.round(ms/3600000))}
+// ── Produkt-verknüpfte Aufgaben ─────────────────────────────
+// Gibt true zurück wenn eine Aufgabe angezeigt werden soll
+function isTaskVisible(t){
+  // kh_messen: nur wenn JBL KH Produkt aktiv
+  if(t.id==='kh_messen'){
+    const khProd=typeof poolProdukte!=='undefined'
+      ? poolProdukte.find(function(p){return p.poolId==='kh_test_jbl';})
+      : null;
+    // Produkt existiert aber inaktiv → ausblenden
+    if(khProd&&khProd.active===false) return false;
+  }
+  return true;
+}
+
 // ── Dosierung-Pending Logik ─────────────────────────────────
 function addDosierungPending(typ, wartezeitH){
   const list=ld('pool_dosierung_pending',[]).filter(x=>x.typ!==typ);
@@ -4184,7 +4234,7 @@ const _BUILTIN_IDS=['test','chlor_tabs','algischutz','poolklar','flockmittel','f
 
 function renderIntervalSettings(){
   const el=document.getElementById('interval-settings');if(!el)return;
-  const taskRows=maintenanceTasks.map(t=>{
+  const taskRows=_visibleTasks().map(t=>{
     const isCustom=!_BUILTIN_IDS.includes(t.id);
     const badge=isCustom
       ?'<span style="font-size:0.68rem;background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:5px">Eigene</span>'
@@ -4643,6 +4693,68 @@ function renderHistorieList(){
   }).join('');
   const selBtn=document.getElementById('hist-select-btn');
   if(selBtn&&!historieSelectMode)selBtn.style.display='inline-flex';
+}
+
+function openKHModal(){
+  const last=getLastMeasurement();
+  const skh=settings.kh||DEFAULT_SETTINGS.kh;
+  const el=document.getElementById('kh-input');
+  if(el) el.value=last&&last.kh!=null?last.kh:'';
+  const dt=document.getElementById('kh-time');
+  if(dt){const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());dt.value=n.toISOString().slice(0,16);}
+  updateKHHint();
+  document.getElementById('modal-kh').classList.add('open');
+  setTimeout(function(){const e=document.getElementById('kh-input');if(e){e.focus();e.select();}},200);
+}
+
+function updateKHHint(){
+  const el=document.getElementById('kh-hint');if(!el)return;
+  const val=parseFloat(document.getElementById('kh-input')?.value);
+  if(isNaN(val)||val<=0){el.innerHTML='';return;}
+  const ppm=Math.round(val*17.8);
+  const skh=settings.kh||DEFAULT_SETTINGS.kh;
+  let col='#16a34a'; let icon='✅'; let msg='';
+  if(val<skh.min){
+    col='#dc2626'; icon='⚠️';
+    const defPpm=Math.round((skh.target-val)*17.8);
+    const poolM3=POOL_VOLUME/1000;
+    const alcaG=Math.round(defPpm/10*180*poolM3/10);
+    msg=' → Alca-Plus nötig: ca. '+alcaG+'g';
+  } else if(val>skh.max){
+    col='#f59e0b'; icon='⚠️'; msg=' → zu hoch, pH wird schwerer einstellbar';
+  } else {
+    msg=' → im Zielbereich ('+skh.min+'–'+skh.max+' °dKH)';
+  }
+  el.innerHTML='<span style="color:'+col+'">'+icon+' '+val+' °dKH = '+ppm+' ppm'+msg+'</span>';
+}
+
+function saveKH(){
+  const val=parseFloat(document.getElementById('kh-input')?.value);
+  if(isNaN(val)||val<0){if(typeof toast==='function')toast('Bitte KH-Wert eingeben','warn',2000);return;}
+  const timeEl=document.getElementById('kh-time');
+  const time=timeEl&&timeEl.value?new Date(timeEl.value).toISOString():new Date().toISOString();
+  // Messung speichern
+  const entry={time:time, kh:val};
+  measurements.unshift(entry);
+  if(measurements.length>500)measurements.length=500;
+  sd('measurements',measurements);
+  // kh_messen Task als erledigt markieren
+  const task=maintenanceTasks.find(function(t){return t.id==='kh_messen';});
+  if(task){task.lastDone=time;sd('maintenance',maintenanceTasks);}
+  // KH-Pending löschen
+  _onMeasurementSaved(entry);
+  closeModal('modal-kh');
+  renderDashboard();renderMaintenanceList&&renderMaintenanceList();
+  const ppm=Math.round(val*17.8);
+  const skh=settings.kh||DEFAULT_SETTINGS.kh;
+  if(val<skh.min){
+    const defPpm=Math.round((skh.target-val)*17.8);
+    const poolM3=POOL_VOLUME/1000;
+    const alcaG=Math.round(defPpm/10*180*poolM3/10);
+    if(typeof toast==='function')toast('🟠 KH: '+val+' °dKH ('+ppm+' ppm) – Alca-Plus nötig: ~'+alcaG+'g','warn',6000);
+  } else {
+    if(typeof toast==='function')toast('🟠 KH gespeichert: '+val+' °dKH ('+ppm+' ppm)','success',3000);
+  }
 }
 
 function openDruckModal(){
@@ -5273,7 +5385,7 @@ function renderStatKacheln(){
   let seasonDays='–';
   if(season.start){const d=Math.round((Date.now()-new Date(season.start))/86400000);seasonDays=d>0?`${d}`:'-';}
   // Overdue tasks
-  const overdueCount=maintenanceTasks.filter(t=>daysOverdue(t)>0).length;
+  const overdueCount=_visibleTasks().filter(t=>daysOverdue(t)>0).length;
   el.innerHTML=`
     <div class="stat-kachel">
       <div class="stat-kachel-val">${last?.ph!==undefined?last.ph.toFixed(1)+'&nbsp;'+trend(last.ph,prev?.ph):'–'}</div>
@@ -5933,10 +6045,10 @@ const _origRenderMaintenanceList=window.renderMaintenanceList;
 // Add completion summary to Wartung page header
 function renderWartungSummary(){
   const el=document.getElementById('wartung-summary');if(!el)return;
-  const total=maintenanceTasks.filter(t=>!t.hidden).length;
+  const total=_visibleTasks().filter(t=>!t.hidden).length;
   if(!total){el.innerHTML='';return;}
-  const overdueN=maintenanceTasks.filter(t=>!t.hidden&&daysOverdue(t)>0).length;
-  const dueN=maintenanceTasks.filter(t=>!t.hidden&&daysOverdue(t)===0&&Math.ceil((nextDue(t)-new Date())/86400000)<=0).length;
+  const overdueN=_visibleTasks().filter(t=>!t.hidden&&daysOverdue(t)>0).length;
+  const dueN=_visibleTasks().filter(t=>!t.hidden&&daysOverdue(t)===0&&Math.ceil((nextDue(t)-new Date())/86400000)<=0).length;
   const okN=total-overdueN-dueN;
   const pct=Math.round((okN/total)*100);
   el.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
