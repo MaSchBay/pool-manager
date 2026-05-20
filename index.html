@@ -815,7 +815,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 <div class="main">
 
 <!-- ===== DASHBOARD ===== -->
-<div class="board active" id="board-dashboard"><div id="main-dashboard" style="display:contents">
+<div class="board active" id="board-dashboard"><div id="main-dashboard" style="display:contents"><div id="hibernation-overlay" style="display:none"></div>
   <div class="page-header" style="position:relative;overflow:hidden">
     <div style="position:absolute;right:-20px;top:-20px;font-size:8rem;opacity:0.07;pointer-events:none">🏊</div>
     <h1>🏊 Pool Manager</h1>
@@ -11329,8 +11329,17 @@ function confirmWinterschlaf(){
 }
 
 function renderHibernationDashboard(){
-  const mainEl=document.getElementById('board-dashboard');
+  const mainEl=document.getElementById('hibernation-overlay');
   if(!mainEl) return;
+  mainEl.style.display='block';
+  // Normale Dashboard-Kinder ausblenden (außer overlay selbst)
+  const boardEl=document.getElementById('board-dashboard');
+  if(boardEl) Array.from(boardEl.children).forEach(function(c){
+    if(c.id!=='hibernation-overlay'&&c.id!=='main-dashboard') c.style.display='none';
+    if(c.id==='main-dashboard') Array.from(c.children).forEach(function(cc){
+      if(cc.id!=='hibernation-overlay') cc.style.display='none';
+    });
+  });
   const hibernatedAt=season.hibernatedAt?new Date(season.hibernatedAt):new Date();
   const daysSince=Math.floor((Date.now()-hibernatedAt.getTime())/86400000);
   const dateStr=hibernatedAt.toLocaleDateString('de-DE',{day:'2-digit',month:'long',year:'numeric'});
@@ -11379,6 +11388,11 @@ function wakeUpPool(){
   season.start=new Date().toISOString().slice(0,10);
   season.end=null;
   sd('season',season);
+  // Overlay ausblenden + alle Kinder wieder einblenden
+  const _ov=document.getElementById('hibernation-overlay');
+  if(_ov){_ov.style.display='none';_ov.innerHTML='';}
+  const _bd=document.getElementById('board-dashboard');
+  if(_bd) Array.from(_bd.querySelectorAll('[style*="display:none"]')).forEach(function(c){c.style.display='';});
   // Shelly wieder aktivieren
   if(typeof shellySettings!=='undefined'){
     shellySettings.enabled=true;
