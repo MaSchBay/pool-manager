@@ -1156,6 +1156,16 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         </div>
         <div id="druck-mess-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
+      <div class="form-group" id="kh-mess-group">
+        <label class="form-label" id="kh-mess-label">🟠 KH / TA (Karbonathärte) °dKH <span style="font-size:0.73rem;color:var(--text-muted)">(Tropfen zählen, optional)</span></label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="spin-btn" onclick="adjustInput('input-kh-mess',0.5,1)">−</button>
+          <input type="number" id="input-kh-mess" step="0.5" min="0" max="30" style="text-align:center" placeholder="z.B. 5">
+          <button class="spin-btn" onclick="adjustInput('input-kh-mess',0.5,1)">+</button>
+          <span style="font-size:0.82rem;color:var(--text-muted)">°dKH</span>
+        </div>
+        <div id="kh-mess-hint" style="font-size:0.76rem;margin-top:3px"></div>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">📅 Datum & Uhrzeit</label>
@@ -2253,6 +2263,15 @@ function saveMeasurement(){
   if(!isNaN(druck))entry.druck=druck;
   if(!isNaN(orp))entry.orp=orp;
   if(!isNaN(tds))entry.tds=tds;
+  const khMEl=document.getElementById('input-kh-mess');
+  const khM=khMEl?parseFloat(khMEl.value):NaN;
+  if(!isNaN(khM)&&khM>0){
+    entry.kh=khM;
+    const _khT=maintenanceTasks.find(function(t){return t.id==='kh_messen';});
+    if(_khT){_khT.lastDone=entry.time;sd('maintenance',maintenanceTasks);}
+    const _khPL=ld('pool_dosierung_pending',[]).filter(function(x){return x.typ!=='kh';});
+    sd('pool_dosierung_pending',_khPL);
+  }
   if(note)entry.note=note;
   // Pressure check from messung form
   if(!isNaN(druck)){
@@ -2269,7 +2288,7 @@ function saveMeasurement(){
     }
     sd('maintenance',maintenanceTasks);
   }
-  if(entry.ph===undefined&&entry.chlor===undefined&&entry.temp===undefined&&entry.druck===undefined&&entry.orp===undefined&&entry.tds===undefined){
+  if(entry.ph===undefined&&entry.chlor===undefined&&entry.temp===undefined&&entry.druck===undefined&&entry.orp===undefined&&entry.tds===undefined&&entry.kh===undefined){
     document.getElementById('mess-feedback').innerHTML='<span style="color:var(--danger-red)">⚠️ Mindestens einen Wert eingeben.</span>';return;
   }
   // ===== Plausibility check =====
@@ -2316,7 +2335,7 @@ function checkAutoBan(e){
 }
 
 function clearMeasurementForm(){
-  ['input-ph','input-chlor','input-temp','input-druck-mess','input-orp','input-tds','input-mess-note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['input-ph','input-chlor','input-temp','input-druck-mess','input-orp','input-tds','input-kh-mess','input-mess-note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('input-mess-time').value='';
   if(typeof clearCurrentPhotos==='function')clearCurrentPhotos();
 }
@@ -2331,6 +2350,12 @@ function renderMessung(){
   const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
   document.getElementById('input-mess-time').value=now.toISOString().slice(0,16);
   // Update labels with current settings
+  // KH-Feld nur zeigen wenn JBL Produkt aktiv
+  const _khP=typeof poolProdukte!=='undefined'?poolProdukte.find(function(p){return p.poolId==='kh_test_jbl';}):null;
+  const _khShow=!_khP||_khP.active!==false;
+  const _khGroup=document.getElementById('kh-mess-group');
+  if(_khGroup) _khGroup.style.display=_khShow?'':'none';
+  if(_khShow&&last&&last.kh!=null) document.getElementById('input-kh-mess').value=last.kh;
   document.getElementById('ph-label').textContent=`🔵 pH-Wert (Ziel: ${settings.ph.target} | ${settings.ph.min}–${settings.ph.max})`;
   document.getElementById('chlor-label').textContent=`🟡 FAC / Chlor ppm (Ziel: ${settings.chlor.target} | ${settings.chlor.min}–${settings.chlor.max})`;
   if(document.getElementById('orp-label'))document.getElementById('orp-label').innerHTML=`⚡ Desinfektionskraft (ORP) mV – Ziel: ${settings.orp.target} | ${settings.orp.min}–${settings.orp.max} <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span>`;
@@ -2344,6 +2369,7 @@ function updateMessungHints(){
     {el:'chlor-hint',id:'input-chlor',k:'chlor'},
     {el:'orp-hint',id:'input-orp',k:'orp'},
     {el:'tds-hint',id:'input-tds',k:'tds'},
+    {el:'kh-mess-hint',id:'input-kh-mess',k:'kh'},
   ].forEach(h=>{
     const val=parseFloat(document.getElementById(h.id)?.value);
     const s=settings[h.k];const el=document.getElementById(h.el);if(!el||!s)return;
@@ -2360,6 +2386,19 @@ function updateMessungHints(){
       if(val<s.min)el.innerHTML=`<span style="color:var(--danger-red)">⚠️ Zu niedrig – Desinfektionskraft unzureichend</span>`;
       else if(val>s.max)el.innerHTML=`<span style="color:var(--warn-amber)">⚠️ Erhöht – Chlorgehalt prüfen</span>`;
       else el.innerHTML='<span style="color:var(--ok-green)">✅ Gute Desinfektionskraft</span>';
+      return;
+    }
+    if(h.k==='kh'){
+      const ppm=Math.round(val*17.8);
+      if(val<s.min){
+        const defPpm=Math.round((s.target-val)*17.8);
+        const alcaG=Math.round(defPpm/10*180*POOL_VOLUME/10);
+        el.innerHTML=`<span style="color:var(--danger-red)">⚠️ ${val} °dKH = ${ppm} ppm – zu niedrig → Alca-Plus nötig: ~${alcaG}g</span>`;
+      } else if(val>s.max){
+        el.innerHTML=`<span style="color:var(--warn-amber)">⚠️ ${val} °dKH = ${ppm} ppm – etwas hoch</span>`;
+      } else {
+        el.innerHTML=`<span style="color:var(--ok-green)">✅ ${val} °dKH = ${ppm} ppm – im Zielbereich</span>`;
+      }
       return;
     }
     if(val<s.min)el.innerHTML=`<span style="color:var(--danger-red)">⚠️ Zu niedrig – ${h.k==='ph'?'pH-Plus':'Nachbehandlung nötig'}</span>`;
