@@ -1433,6 +1433,10 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="card-title">🔌 Shelly Filter-Steuerung</div>
     <div id="shelly-settings-section"></div>
   </div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">🚰 Leitungswasser-Referenz</div>
+    <div id="tapwater-settings-section"></div>
+  </div>
   <div class="card">
     <div class="card-title">🎯 Zielwerte & Bereiche</div>
     <div id="settings-targets"></div>
@@ -1993,6 +1997,7 @@ function renderEinstellungen(){
     '<p style="font-weight:700;margin-bottom:4px">Letzte Messung</p>'
     +'<p style="font-size:0.85rem;color:var(--text-secondary)">'+measStr+'</p>';
   if(typeof renderShellySettings==='function')renderShellySettings();
+  renderTapWaterSettings();
 }
 
 function renderBackupSection(){
@@ -2377,8 +2382,10 @@ function updateMessungHints(){
     if(h.k==='tds'){
       if(val<s.min)el.innerHTML=`<span style="color:var(--ok-green)">✅ Sehr sauber</span>`;
       else if(val>s.max){
-        const drain=Math.round(10520*(val-800)/val);
-        el.innerHTML=`<span style="color:var(--danger-red)">⚠️ Zu hoch → ${drain} Liter ablassen</span>`;
+        const tw=getTapWater();
+        const tapTds=tw.enabled&&tw.tds?tw.tds:0;
+        const drain=tapTds>0?Math.round(POOL_VOLUME*1000*(val-800)/(val-tapTds)):Math.round(10520*(val-800)/val);
+        el.innerHTML=`<span style="color:var(--danger-red)">⚠️ Zu hoch → ~${drain} L ablassen${tapTds>0?' (Leitungswasser TDS '+tapTds+' ppm)':''}</span>`;
       } else el.innerHTML='<span style="color:var(--ok-green)">✅ OK</span>';
       return;
     }
@@ -11472,6 +11479,97 @@ function wakeUpPool(){
   if(typeof toast==='function') toast('🌱 Pool geweckt – gute neue Saison!','success',4000);
   renderDashboard();
   renderMaintenanceList&&renderMaintenanceList();
+}
+
+
+// ── LEITUNGSWASSER-REFERENZ ──────────────────────────────────
+function getTapWater(){
+  return ld('tap_water',{enabled:false, kh:null, ph:null, tds:null});
+}
+
+function renderTapWaterSettings(){
+  const el=document.getElementById('tapwater-settings-section');
+  if(!el) return;
+  const tw=getTapWater();
+  el.innerHTML=
+    '<div style="display:grid;gap:12px">'+
+    // Aktivierungs-Toggle
+    '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--pool-surface);border-radius:10px;padding:10px 12px;border:1.5px solid '+(tw.enabled?'var(--pool-blue)':'var(--border)')+'">'+
+      '<input type="checkbox" id="tw-enabled" '+(tw.enabled?'checked':'')+' style="width:18px;height:18px;accent-color:var(--pool-blue)" onchange="saveTapWater()">'+
+      '<div>'+
+        '<div style="font-weight:800;font-size:0.88rem">Leitungswasser für Berechnungen verwenden</div>'+
+        '<div style="font-size:0.73rem;color:var(--text-muted)">Aktiviert: Wassertausch-Rechner, Alca-Plus Empfehlung und TDS-Prognose nutzen diese Referenzwerte</div>'+
+      '</div>'+
+    '</label>'+
+    // Eingabefelder
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+      '<div>'+
+        '<div class="form-label">🟠 KH (°dKH)</div>'+
+        '<input type="number" id="tw-kh" value="'+(tw.kh||'')+'" placeholder="z.B. 4" step="0.5" min="0" max="30" '+
+        'style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:0.9rem;font-family:Nunito,sans-serif;text-align:center">'+
+        (tw.kh?'<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-top:2px">'+Math.round(tw.kh*17.8)+' ppm</div>':'')+'</div>'+
+      '<div>'+
+        '<div class="form-label">🔵 pH</div>'+
+        '<input type="number" id="tw-ph" value="'+(tw.ph||'')+'" placeholder="z.B. 7.5" step="0.1" min="5" max="9" '+
+        'style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:0.9rem;font-family:Nunito,sans-serif;text-align:center"></div>'+
+      '<div>'+
+        '<div class="form-label">💧 TDS (ppm)</div>'+
+        '<input type="number" id="tw-tds" value="'+(tw.tds||'')+'" placeholder="z.B. 200" step="10" min="0" max="1000" '+
+        'style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:0.9rem;font-family:Nunito,sans-serif;text-align:center"></div>'+
+    '</div>'+
+    // Berechnungsvorschau
+    (tw.enabled&&tw.kh?'<div id="tw-preview" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:0.8rem;color:#0369a1">'+
+      calcTapWaterPreview(tw)+'</div>':'')+
+    // Buttons
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-primary btn-sm" onclick="saveTapWater()">💾 Speichern</button>'+
+      '<button class="btn btn-outline btn-sm" onclick="applyCurrentAsRef()">📋 Aktuelle Messwerte übernehmen</button>'+
+    '</div>'+
+    '</div>';
+}
+
+function calcTapWaterPreview(tw){
+  const last=getLastMeasurement();
+  let lines=[];
+  if(tw.kh&&last&&last.kh){
+    const cur=last.kh;const target=settings.kh?settings.kh.target:5.6;const tap=tw.kh;
+    if(cur>target){
+      // Wie viel ablassen für Ziel-KH?
+      const vol=POOL_VOLUME*1000;
+      const ablassL=Math.round(vol*(cur-target)/(cur-tap));
+      lines.push('🚰 Für KH '+cur+' → '+target+' °dKH: <b>~'+ablassL+' L ablassen</b> und mit Leitungswasser auffüllen');
+    } else if(cur<target){
+      const defPpm=Math.round((target-cur)*17.8);const alcaG=Math.round(defPpm/10*180*POOL_VOLUME/10);
+      lines.push('🧱 Aktuell KH '+cur+' °dKH: <b>~'+alcaG+'g Alca-Plus nötig</b> (nach Befüllung mit KH '+tap+' Leitungswasser)');
+    }
+  }
+  if(tw.tds&&last&&last.tds&&last.tds>800){
+    const vol=POOL_VOLUME*1000;
+    const cur=last.tds;const ablassL=Math.round(vol*(cur-800)/(cur-tw.tds));
+    lines.push('💧 TDS '+cur+' ppm → 800 ppm: <b>~'+ablassL+' L ablassen</b> nötig');
+  }
+  if(!lines.length) lines.push('✅ Leitungswasser-Referenz aktiv – wird in Berechnungen verwendet');
+  return lines.join('<br>');
+}
+
+function saveTapWater(){
+  const tw={
+    enabled: document.getElementById('tw-enabled')?.checked||false,
+    kh:     parseFloat(document.getElementById('tw-kh')?.value)||null,
+    ph:     parseFloat(document.getElementById('tw-ph')?.value)||null,
+    tds:    parseFloat(document.getElementById('tw-tds')?.value)||null,
+  };
+  sd('tap_water',tw);
+  if(typeof toast==='function') toast('✅ Leitungswasser-Referenz gespeichert','success',2500);
+  renderTapWaterSettings();
+}
+
+function applyCurrentAsRef(){
+  const last=getLastMeasurement();if(!last) return;
+  if(last.kh){const el=document.getElementById('tw-kh');if(el)el.value=last.kh;}
+  if(last.ph){const el=document.getElementById('tw-ph');if(el)el.value=last.ph;}
+  if(last.tds){const el=document.getElementById('tw-tds');if(el)el.value=last.tds;}
+  if(typeof toast==='function') toast('📋 Aktuelle Messwerte eingetragen – bitte speichern','info',3000);
 }
 
 
