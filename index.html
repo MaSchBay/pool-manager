@@ -1874,6 +1874,15 @@ if(!settings.chlor||!settings.chlor.min){settings.chlor=JSON.parse(JSON.stringif
 if(!settings.ph||!settings.ph.min){settings.ph=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.ph));sd('settings',settings);}
 if(!settings.temp||!settings.temp.min){settings.temp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.temp));sd('settings',settings);}
 if(!settings.kh||!settings.kh.min){settings.kh=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.kh));sd('settings',settings);}
+// Migration: KH auf ganze Zahlen aktualisieren
+if(settings.kh&&(settings.kh.min===4.5||settings.kh.target===5.6||settings.kh.max===6.7)){
+  settings.kh.min=DEFAULT_SETTINGS.kh.min;
+  settings.kh.target=DEFAULT_SETTINGS.kh.target;
+  // max nur zurücksetzen wenn kein saisonaler Wert aktiv
+  const _khSM=ld('kh_season_max',{max:null,year:null});
+  if(!_khSM.max||_khSM.year!==new Date().getFullYear()) settings.kh.max=DEFAULT_SETTINGS.kh.max;
+  sd('settings',settings);
+}
 Object.keys(DEFAULT_SETTINGS).forEach(function(k){if(!settings[k]){settings[k]=JSON.parse(JSON.stringify(DEFAULT_SETTINGS[k]));sd('settings',settings);}});
 if(!settings.orp)settings.orp=JSON.parse(JSON.stringify(DEFAULT_SETTINGS.orp));
 let timerTodos    = ld('timer_todos',[]); // [{id,title,dueAt,todoId,stepIdx}]
@@ -6187,10 +6196,16 @@ function drawSparkline(canvasId, values, color, min, max){
 function gaugeHtmlKH(val, s){
   if(val===undefined||val===null) return null;
   const ppm=Math.round(val*17.8);
-  const pct=Math.max(0,Math.min(100,Math.round((val-s.min)/(s.max-s.min)*100)));
-  const col=val<s.min?'#ef4444':val>s.max?'#f59e0b':'#22c55e';
-  const icon=val<s.min?'❌':val>s.max?'⚠️':'✅';
+  // Saisonaler Max: Skala dynamisch anpassen
+  const khSeason=ld('kh_season_max',{max:null,year:null});
+  const isSeasonal=khSeason.year===new Date().getFullYear()&&khSeason.max!=null&&khSeason.max>s.max;
+  const scaleMax=isSeasonal?khSeason.max:s.max;
+  const pct=Math.max(0,Math.min(100,Math.round((val-s.min)/(scaleMax-s.min)*100)));
+  // Farbe: unter Minimum = rot, sonst grün (saisonaler Bereich = ok)
+  const col=val<s.min?'#ef4444':'#22c55e';
+  const icon=val<s.min?'❌':'✅';
   const ppmStr=' ('+ppm+' ppm)';
+  const targetPct=Math.round((s.target-s.min)/(scaleMax-s.min)*100);
   return '<div style="padding:10px 0;border-bottom:1px solid #f1f5f9">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
       '<span style="font-weight:700;font-size:0.85rem">🟠 KH (Karbonathärte)</span>'+
@@ -6198,10 +6213,12 @@ function gaugeHtmlKH(val, s){
     '</div>'+
     '<div style="position:relative;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden">'+
       '<div style="position:absolute;left:0;top:0;height:100%;width:'+pct+'%;background:'+col+';border-radius:4px;transition:width 0.5s"></div>'+
-      '<div style="position:absolute;left:'+Math.round((s.target-s.min)/(s.max-s.min)*100)+'%;top:-1px;width:2px;height:10px;background:#0369a1;border-radius:1px"></div>'+
+      '<div style="position:absolute;left:'+targetPct+'%;top:-1px;width:2px;height:10px;background:#0369a1;border-radius:1px"></div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-muted);margin-top:3px">'+
-      '<span>'+s.min+' °dKH</span><span style="color:#0369a1">Ziel: '+s.target+'</span><span>'+s.max+' °dKH</span>'+
+      '<span>'+s.min+' °dKH</span>'+
+      '<span style="color:#0369a1">Ziel: '+s.target+'</span>'+
+      '<span>'+scaleMax+' °dKH'+(isSeasonal?' 🌊':'')+' </span>'+
     '</div>'+
   '</div>';
 }
