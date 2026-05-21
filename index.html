@@ -6269,7 +6269,12 @@ function renderMesswerteCardEnhanced(targetId, metaId){
   const _khProd=typeof poolProdukte!=='undefined'?poolProdukte.find(function(p){return p.poolId==='kh_test_jbl';}):null;
   const _khActive=!_khProd||_khProd.active!==false;
   const _khVal=last.kh!=null&&_khActive?last.kh:undefined;
-  const _khSettings=settings.kh||DEFAULT_SETTINGS.kh;
+  // Saisonaler KH-Max: settings.kh.max dynamisch anpassen
+  const _khSettings=Object.assign({},settings.kh||DEFAULT_SETTINGS.kh);
+  const _khSeason=ld('kh_season_max',{max:null,year:null});
+  if(_khSeason.year===new Date().getFullYear()&&_khSeason.max!=null&&_khSeason.max>_khSettings.max){
+    _khSettings.max=_khSeason.max;
+  }
   const gaugesHtml=[
     gaugeHtml('ph','🔵 pH-Wert','',last.ph,settings.ph),
     gaugeHtml('chlor','🟡 FAC / Chlor',' ppm',last.chlor,settings.chlor),
@@ -8891,6 +8896,24 @@ function applyCovertIntervals(){
            !t.name.toLowerCase().includes('poolwände bürsten');
   });
   if(maintenanceTasks.length!==before) sd('maintenance',maintenanceTasks);
+})();
+
+// Migration: saisonales KH-Max aus vorhandenen Messungen ermitteln
+(function(){
+  const curYear=new Date().getFullYear();
+  const stored=ld('kh_season_max',{max:null,year:null});
+  if(stored.year===curYear&&stored.max!==null) return; // bereits gesetzt
+  // Alle KH-Messungen des aktuellen Jahres durchsuchen
+  const khMeasurements=measurements.filter(function(m){
+    return m.kh!=null&&m.time&&new Date(m.time).getFullYear()===curYear;
+  });
+  if(!khMeasurements.length) return;
+  const maxKH=Math.round(Math.max.apply(null,khMeasurements.map(function(m){return m.kh;})));
+  sd('kh_season_max',{max:maxKH,year:curYear});
+  if(settings.kh&&maxKH>settings.kh.max){
+    settings.kh.max=maxKH;
+    sd('settings',settings);
+  }
 })();
 
 // Migration: kh_messen Task hinzufügen
