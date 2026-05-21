@@ -7026,7 +7026,22 @@ function applyImportedData(d,mergeMode){
 
   // Einzelwerte: Remote gewinnt (neueste Daten aus Drive)
   if(d.season){season=d.season;sdRaw('season',season);}
-  if(d.settings){settings=d.settings;sdRaw('settings',settings);}
+  if(d.settings){
+    settings=d.settings;
+    // KH immer auf ganze Zahlen erzwingen (Drive kann alte Komma-Werte haben)
+    if(settings.kh){
+      settings.kh.min=Math.round(settings.kh.min||DEFAULT_SETTINGS.kh.min);
+      settings.kh.target=Math.round(settings.kh.target||DEFAULT_SETTINGS.kh.target);
+      // max: saisonaler Wert beibehalten wenn größer als Default
+      const _khSM2=ld('kh_season_max',{max:null,year:null});
+      if(_khSM2.year===new Date().getFullYear()&&_khSM2.max!=null&&_khSM2.max>DEFAULT_SETTINGS.kh.max){
+        settings.kh.max=_khSM2.max;
+      } else {
+        settings.kh.max=Math.round(settings.kh.max||DEFAULT_SETTINGS.kh.max);
+      }
+    }
+    sdRaw('settings',settings);
+  }
   if(d.chemStock){
     const localTs=(chemStock&&chemStock._lastChange)||0;
     const remoteTs=(d.chemStock._lastChange)||0;
