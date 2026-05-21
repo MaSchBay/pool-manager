@@ -1160,7 +1160,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <label class="form-label" id="kh-mess-label">🟠 KH / TA (Karbonathärte) °dKH <span style="font-size:0.73rem;color:var(--text-muted)">(Tropfen zählen, optional)</span></label>
         <div style="display:flex;align-items:center;gap:6px">
           <button class="spin-btn" onclick="adjustInput('input-kh-mess',0.5,1)">−</button>
-          <input type="number" id="input-kh-mess" step="0.5" min="0" max="30" style="text-align:center" placeholder="z.B. 5">
+          <input type="number" id="input-kh-mess" step="1" min="0" max="30" style="text-align:center" placeholder="z.B. 5">
           <button class="spin-btn" onclick="adjustInput('input-kh-mess',0.5,1)">+</button>
           <span style="font-size:0.82rem;color:var(--text-muted)">°dKH</span>
         </div>
@@ -1659,7 +1659,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <label class="form-label">Tropfen / °dKH-Wert</label>
       <div style="display:flex;align-items:center;gap:8px">
         <button class="spin-btn" onclick="adjustInput('kh-input',-0.5,1)">−</button>
-        <input type="number" id="kh-input" step="0.5" min="0" max="30"
+        <input type="number" id="kh-input" step="1" min="0" max="30"
           style="text-align:center;font-size:1.2rem;font-weight:800"
           placeholder="z.B. 5" oninput="updateKHHint()">
         <button class="spin-btn" onclick="adjustInput('kh-input',0.5,1)">+</button>
@@ -1836,7 +1836,7 @@ const DEFAULT_SETTINGS = {
   temp: {target:24,  min:18,   max:32,   unit:' °C'},
   orp:  {target:700, min:650,  max:750,  unit:' mV'},
   tds:  {target:800, min:250,  max:1500, unit:' ppm'},
-  kh:   {target:5.6, min:4.5,  max:6.7,  unit:' °dKH'},  // 100/80/120 ppm
+  kh:   {target:6,   min:5,    max:7,    unit:' °dKH'},  // ~107/89/125 ppm
 };
 
 let measurements  = ld('measurements',[]);
@@ -4648,9 +4648,20 @@ function logHistory(e){historyLog.push(e);sd('history_log',historyLog)}
 
 // Messung gespeichert → Dosierung-Pending löschen (wird nach saveQMess + saveMessung aufgerufen)
 function _onMeasurementSaved(entry){
-  // Nur passende pending-Typen löschen
+  // KH gemessen → saisonalen Maximalwert tracken
   if(entry&&entry.kh!==undefined){
-    // KH gemessen → KH-pending löschen
+    const curYear=new Date().getFullYear();
+    const stored=ld('kh_season_max',{max:null,year:null});
+    // Jahreszahl passt + neuer Wert ist niedriger (oder noch kein Wert): updaten
+    if(stored.year!==curYear||stored.max===null||entry.kh<stored.max){
+      sd('kh_season_max',{max:Math.round(entry.kh),year:curYear});
+      // settings.kh.max dynamisch anpassen
+      if(settings.kh&&entry.kh>settings.kh.max){
+        settings.kh.max=Math.round(entry.kh);
+        sd('settings',settings);
+      }
+    }
+    // KH-pending löschen
     const list=ld('pool_dosierung_pending',[]).filter(x=>x.typ!=='kh');
     sd('pool_dosierung_pending',list);
   }
@@ -5966,7 +5977,7 @@ const QMESS_PARAMS=[
   {key:'ph',    label:'🔵 pH',              step:0.5,  dec:1, min:0,  max:14},
   {key:'chlor', label:'🟡 FAC / Chlor ppm', step:0.5,  dec:1, min:0,  max:20},
   {key:'temp',  label:'🌡️ Temp °C',         step:0.5,  dec:1, min:0,  max:50},
-  {key:'kh',    label:'🟠 KH °dKH (Tropfen zählen)', step:0.5, dec:1, min:0, max:30},
+  {key:'kh',    label:'🟠 KH °dKH (Tropfen zählen)', step:1,   dec:0, min:0, max:30},
   {key:'druck', label:'🟤 Filterdruck Bar', step:0.01, dec:2, min:0,  max:3},
 ];
 let qmessVals={};
@@ -6373,6 +6384,14 @@ document.addEventListener('DOMContentLoaded',async()=>{
   renderPartyDashboard();
   updateAnthropicKeyStatus();
   if(typeof initShelly==='function')initShelly();
+  // Saisonales KH-Max laden
+  (function(){
+    const curYear=new Date().getFullYear();
+    const stored=ld('kh_season_max',{max:null,year:null});
+    if(stored.year===curYear&&stored.max!==null&&settings.kh&&stored.max>settings.kh.max){
+      settings.kh.max=stored.max; sd('settings',settings);
+    }
+  })();
 
   // Sync wenn App wieder sichtbar wird (z.B. Tab-Wechsel oder iPhone Lock)
   document.addEventListener('visibilitychange',function(){
@@ -11469,6 +11488,9 @@ function wakeUpPool(){
   season.start=new Date().toISOString().slice(0,10);
   season.end=null;
   sd('season',season);
+  // Saisonales KH-Max zurücksetzen → nächste Saison gelten Standardwerte
+  sd('kh_season_max',{max:null,year:null});
+  if(settings.kh){settings.kh.max=DEFAULT_SETTINGS.kh.max;sd('settings',settings);}
   // Overlay ausblenden + visibility wiederherstellen
   const _ov=document.getElementById('hibernation-overlay');
   if(_ov){_ov.style.display='none';_ov.innerHTML='';}
