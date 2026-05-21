@@ -2218,13 +2218,16 @@ function saveTimerMeasure(){
 // ============================================================
 function getLastMeasurement(){
   if(!measurements.length) return null;
-  // Letzten bekannten Wert pro Parameter sammeln (nicht nur den neuesten Eintrag)
+  // Nach Datum sortieren (neueste zuerst) – unabhängig von Speicher-Reihenfolge
+  const sorted=measurements.slice().sort(function(a,b){
+    return new Date(b.time)-new Date(a.time);
+  });
   const keys=['ph','chlor','temp','orp','tds','kh','druck'];
-  const result={time:measurements[0].time};
+  const result={time:sorted[0].time};
   keys.forEach(function(k){
-    for(var i=0;i<measurements.length;i++){
-      if(measurements[i][k]!==undefined&&measurements[i][k]!==null){
-        result[k]=measurements[i][k];
+    for(var i=0;i<sorted.length;i++){
+      if(sorted[i][k]!==undefined&&sorted[i][k]!==null){
+        result[k]=sorted[i][k];
         break;
       }
     }
