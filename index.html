@@ -2568,6 +2568,11 @@ function checkAlcaPlusNeeded(){
   const last=getLastMeasurement();
   const now=new Date();
   const tds=last?last.tds:null;
+
+  // KH gemessen und im Ziel oder darüber → kein Alca-Plus nötig
+  const _skhCheck=settings.kh||DEFAULT_SETTINGS.kh;
+  if(last&&last.kh!=null&&last.kh>=_skhCheck.min) return null;
+
   let triggers=[];
 
   // Trigger 1: pH jump >0.3 in 48h without pH dosing
