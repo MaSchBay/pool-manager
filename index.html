@@ -2216,7 +2216,21 @@ function saveTimerMeasure(){
 // ============================================================
 // MEASUREMENTS
 // ============================================================
-function getLastMeasurement(){return measurements.length?measurements[measurements.length-1]:null}
+function getLastMeasurement(){
+  if(!measurements.length) return null;
+  // Letzten bekannten Wert pro Parameter sammeln (nicht nur den neuesten Eintrag)
+  const keys=['ph','chlor','temp','orp','tds','kh','druck'];
+  const result={time:measurements[0].time};
+  keys.forEach(function(k){
+    for(var i=0;i<measurements.length;i++){
+      if(measurements[i][k]!==undefined&&measurements[i][k]!==null){
+        result[k]=measurements[i][k];
+        break;
+      }
+    }
+  });
+  return Object.keys(result).length>1?result:null;
+}
 
 function saveMeasurement(){
   const ph=parseFloat(document.getElementById('input-ph').value);
