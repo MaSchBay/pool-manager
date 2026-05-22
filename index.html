@@ -5157,6 +5157,14 @@ function renderHilfe(){
 
 function toggleHelp(i){document.getElementById('help-body-'+i)?.classList.toggle('open')}
 
+function cleanOldClosedTodos(){
+  const cutoff=Date.now()-7*86400000;
+  activeTodos=activeTodos.filter(function(t){
+    return !t.closed||(new Date(t.closedAt).getTime()>cutoff);
+  });
+  sd('active_todos',activeTodos);
+}
+
 function startTodo(itemIdx){
   const item=HELP_ITEMS[itemIdx];
   const todo={id:Date.now(),title:item.q,steps:item.steps.map((s,i)=>({...s,done:false,idx:i})),startedAt:new Date().toISOString()};
@@ -5223,13 +5231,22 @@ saveTimerMeasure=function(){
 
 function closeTodo(todoId){
   const todo=activeTodos.find(t=>t.id===todoId);
-  if(todo)logHistory({type:'todo',time:new Date().toISOString(),note:`Problem abgeschlossen: ${todo.title}`});
-  activeTodos=activeTodos.filter(t=>t.id!==todoId);sd('active_todos',activeTodos);renderActiveTodos();
+  if(todo){
+    logHistory({type:'todo',time:new Date().toISOString(),note:`Problem abgeschlossen: ${todo.title}`});
+    todo.closed=true;
+    todo.closedAt=new Date().toISOString();
+  }
+  sd('active_todos',activeTodos);
+  renderActiveTodos();
+  // Sofort-Sync damit Drive den closed-Status bekommt
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){
+    clearTimeout(autoSyncTimer);setTimeout(gdriveSyncBoth,500);
+  }
 }
 
 function renderActiveTodos(){
   const sec=document.getElementById('active-todos-section');if(!sec)return;
-  const running=activeTodos.filter(t=>!t.allDone);
+  const running=activeTodos.filter(t=>!t.allDone&&!t.closed);
   if(!running.length){sec.innerHTML='';return}
   sec.innerHTML=`<div class="card"><div class="card-title">✅ Aktive Todo-Listen</div>${running.map(todo=>{
     const done=todo.steps.filter(s=>s.done).length,total=todo.steps.length;
@@ -7009,8 +7026,14 @@ function applyImportedData(d,mergeMode){
     if(mergeMode){
       var localIds=(activeTodos||[]).map(function(t){return t.id;});
       (d.activeTodos||[]).forEach(function(rt){
-        if(!localIds.includes(rt.id))activeTodos.push(rt);
-        else{var lt=activeTodos.find(function(t){return t.id===rt.id;});if(lt&&rt.updatedAt&&(!lt.updatedAt||new Date(rt.updatedAt)>new Date(lt.updatedAt)))Object.assign(lt,rt);}
+        if(!localIds.includes(rt.id)){
+          // Nur hinzufügen wenn nicht in lokaler closed-Liste
+          if(!rt.closed) activeTodos.push(rt);
+        } else {
+          var lt=activeTodos.find(function(t){return t.id===rt.id;});
+          if(lt&&lt.closed) return; // lokal geschlossen → nie re-öffnen
+          if(lt&&rt.updatedAt&&(!lt.updatedAt||new Date(rt.updatedAt)>new Date(lt.updatedAt)))Object.assign(lt,rt);
+        }
       });
     } else {activeTodos=d.activeTodos;}
     sdRaw('active_todos',activeTodos);
