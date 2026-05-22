@@ -6121,7 +6121,7 @@ function renderStockWarning(){
 
 // ----- ÜBERFÄLLIGE AUFGABEN BADGE im Nav -----
 function updateOverdueBadge(){
-  const count=maintenanceTasks.filter(t=>daysOverdue(t)>0).length+activeTodos.filter(t=>!t.steps.every(s=>s.done)).length;
+  const count=maintenanceTasks.filter(t=>daysOverdue(t)>0).length+activeTodos.filter(t=>!t.closed&&!t.steps.every(s=>s.done)).length;
   const navBtn=document.getElementById('nav-hilfe');
   const mnavBtn=document.getElementById('mnav-hilfe');
   const badge=count>0?` <span style="background:#ef4444;color:white;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:800;margin-left:2px">${count}</span>`:'';
