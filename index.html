@@ -2769,6 +2769,22 @@ function calcPhMinus(p){return`${Math.round(((p-settings.ph.target)/0.2)*150*POO
 
 function getTaskDoseHint(taskId){
   const last=getLastMeasurement();
+  // Party-Hinweis wenn Aufgabe party-bezogen vorgezogen wird
+  const _now=Date.now();
+  const _nextP=(typeof poolParties!=='undefined'?poolParties:[])
+    .filter(function(p){return !p.deleted&&p.status==='planned'&&new Date(p.date).getTime()>_now;})
+    .sort(function(a,b){return new Date(a.date)-new Date(b.date);})[0];
+  if(_nextP){
+    const _pd=new Date(_nextP.date);
+    const _days=(_pd.getTime()-_now)/86400000;
+    const _dateStr=_pd.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'});
+    if(taskId==='test'&&_days<=7)
+      return '🎉 Vor der Party ('+_dateStr+'): alle Werte müssen grün sein!';
+    if(taskId==='chlor_tabs'&&_days<=3)
+      return '🎉 Party-Vorbereitung: Schockchlorung 2d vor Party ('+_dateStr+')';
+    if(taskId==='flockmittel'&&_days<=4)
+      return '🎉 Party-Vorbereitung: Flockmittel vor Party dosieren';
+  }
   // KH messen: Hinweis nach Alca-Plus
   if(taskId==='kh_messen'){
     const khP=getDosierungPendingForTyp('kh');
@@ -4262,6 +4278,38 @@ function nextDue(t){
       ));
       const testDue=new Date(latestDue);
       if(testDue<=base) return testDue;
+    }
+  }
+
+  // Party-Vorbereitung: Aufgaben anhand nächster Party vorziehen
+  if(!getDosierungPendingForTyp('chlor')&&!getDosierungPendingForTyp('ph')){
+    const _now=Date.now();
+    const _nextParty=(typeof poolParties!=='undefined'?poolParties:[])
+      .filter(function(p){return !p.deleted&&p.status==='planned'&&new Date(p.date).getTime()>_now;})
+      .sort(function(a,b){return new Date(a.date)-new Date(b.date);})[0];
+    if(_nextParty){
+      const _pd=new Date(_nextParty.date).getTime();
+      const _daysUntil=(_pd-_now)/86400000;
+      if(_daysUntil<=7){ // Nur wenn Party in 7 Tagen oder weniger
+        // Wasser testen: 1 Tag vor Party
+        if(t.id==='test'){
+          const _partyTestDue=new Date(_pd-86400000);
+          _partyTestDue.setHours(9,0,0,0);
+          if(_partyTestDue<base) return _partyTestDue;
+        }
+        // Chlortabs: 2 Tage vor Party (Schockchlorung)
+        if(t.id==='chlor_tabs'&&_daysUntil<=3){
+          const _partyChlorDue=new Date(_pd-2*86400000);
+          _partyChlorDue.setHours(9,0,0,0);
+          if(_partyChlorDue<base) return _partyChlorDue;
+        }
+        // Flockmittel: 2 Tage vor Party
+        if(t.id==='flockmittel'&&_daysUntil<=4){
+          const _partyFlockDue=new Date(_pd-2*86400000);
+          _partyFlockDue.setHours(9,0,0,0);
+          if(_partyFlockDue<base) return _partyFlockDue;
+        }
+      }
     }
   }
 
