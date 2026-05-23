@@ -2153,6 +2153,12 @@ function renderBanBanner(id){
 // ============================================================
 function addTimerTodoAtTime(text,date){
   if(!timerTodos)timerTodos=[];
+  // Dedup: gleicher Text + Fälligkeit im gleichen 1h-Fenster → nicht nochmal hinzufügen
+  const dueTs=date.getTime();
+  const exists=timerTodos.find(function(t){
+    return (t.text===text||t.title===text)&&!t.dismissed&&Math.abs(new Date(t.dueAt).getTime()-dueTs)<3600000;
+  });
+  if(exists) return;
   timerTodos.push({id:Date.now(),text,dueAt:date.toISOString(),done:false,createdAt:new Date().toISOString()});
   sd('timer_todos',timerTodos);
   renderTimerTodos&&renderTimerTodos();
@@ -2167,7 +2173,7 @@ function addTimerTodo(title, hours, todoId=null, stepIdx=null){
 
 function renderTimerTodos(containerId){
   const el=document.getElementById(containerId);if(!el)return;
-  const active=timerTodos.filter(t=>!t.done);
+  const active=timerTodos.filter(t=>!t.done&&!t.dismissed);
   // Handle dashboard card visibility
   if(containerId==='timer-todos-dashboard'){
     const card=document.getElementById('timer-card-dashboard');
@@ -2201,8 +2207,11 @@ function renderTimerTodos(containerId){
 }
 
 function dismissTimerTodo(id){
-  const t=timerTodos.find(x=>x.id===id);if(t)t.done=true;
-  sd('timer_todos',timerTodos);renderTimerTodos('timer-todos-dashboard');renderTimerTodos('iphone-timertodos');
+  const t=timerTodos.find(x=>x.id===id);
+  if(t){t.done=true;t.dismissed=true;t.dismissedAt=new Date().toISOString();}
+  sd('timer_todos',timerTodos);
+  renderTimerTodos('timer-todos-dashboard');renderTimerTodos('iphone-timertodos');
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){clearTimeout(autoSyncTimer);setTimeout(gdriveSyncBoth,500);}
 }
 
 function openTimerMeasure(id){
@@ -6432,6 +6441,24 @@ document.addEventListener('DOMContentLoaded',async()=>{
   renderPartyDashboard();
   updateAnthropicKeyStatus();
   if(typeof initShelly==='function')initShelly();
+  // Alte dismissed Todos aufräumen (>3 Tage)
+  (function(){
+    var cutoff=Date.now()-3*86400000;
+    var before=timerTodos.length;
+    timerTodos=timerTodos.filter(function(t){
+      return !t.dismissed||(new Date(t.dismissedAt||0).getTime()>cutoff);
+    });
+    if(timerTodos.length!==before) sd('timer_todos',timerTodos);
+  })();
+  // Cleanup: deleted Parties älter als 7 Tage
+  (function(){
+    var cutoff=Date.now()-7*86400000;
+    var before=poolParties.length;
+    poolParties=poolParties.filter(function(p){
+      return !p.deleted||(new Date(p.deletedAt||0).getTime()>cutoff);
+    });
+    if(poolParties.length!==before) saveParties&&saveParties();
+  })();
   // Saisonales KH-Max laden
   (function(){
     const curYear=new Date().getFullYear();
@@ -7042,7 +7069,9 @@ function applyImportedData(d,mergeMode){
   if(d.timerTodos){
     if(mergeMode){
       var ltIds=(timerTodos||[]).map(function(t){return t.id;});
-      (d.timerTodos||[]).forEach(function(rt){if(!ltIds.includes(rt.id))timerTodos.push(rt);});
+      (d.timerTodos||[]).forEach(function(rt){
+        if(!ltIds.includes(rt.id)&&!rt.dismissed) timerTodos.push(rt);
+      });
     } else {timerTodos=d.timerTodos;}
     sdRaw('timer_todos',timerTodos);
   }
@@ -7166,7 +7195,11 @@ function applyImportedData(d,mergeMode){
       // Merge: lokale Parties behalten, remote Parties ergänzen
       var localPartyIds=(poolParties||[]).map(function(p){return p.id;});
       (d.poolParties||[]).forEach(function(rp){
-        if(!localPartyIds.includes(rp.id)) poolParties.push(rp);
+        if(!localPartyIds.includes(rp.id)&&!rp.deleted) poolParties.push(rp);
+        else if(localPartyIds.includes(rp.id)&&rp.deleted){
+          var lp=poolParties.find(function(p){return p.id===rp.id;});
+          if(lp) lp.deleted=true; // remote deleted → lokal auch löschen
+        }
       });
     } else {
       poolParties=d.poolParties;
@@ -8398,16 +8431,18 @@ function endParty(partyId){
 }
 
 function deleteParty(partyId){
-  poolParties=poolParties.filter(p=>p.id!==partyId);
+  const p=poolParties.find(function(p){return p.id===partyId;});
+  if(p){p.deleted=true;p.deletedAt=new Date().toISOString();}
   saveParties();renderParties();renderDashboard();
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){clearTimeout(autoSyncTimer);setTimeout(gdriveSyncBoth,500);}
   if(typeof toast==='function')toast('Party gelöscht','info',2000);
 }
 
 function renderParties(){
   const el=document.getElementById('party-list');if(!el)return;
   const now=new Date();
-  const active=poolParties.filter(p=>p.status==='planned'&&new Date(p.date)>now);
-  const past=poolParties.filter(p=>p.status==='ended'||(p.status==='planned'&&new Date(p.date)<=now));
+  const active=poolParties.filter(p=>!p.deleted&&p.status==='planned'&&new Date(p.date)>now);
+  const past=poolParties.filter(p=>!p.deleted&&(p.status==='ended'||(p.status==='planned'&&new Date(p.date)<=now)));
   if(!active.length&&!past.length){
     el.innerHTML='<p style="color:var(--text-muted);padding:10px;font-size:0.85rem">Noch keine Poolparty geplant.</p>';
     return;
@@ -8447,7 +8482,7 @@ function renderParties(){
 function renderPartyDashboard(){
   const el=document.getElementById('party-dashboard-badge');if(!el)return;
   const now=new Date();
-  const next=poolParties.filter(p=>p.status==='planned'&&new Date(p.date)>now)
+  const next=poolParties.filter(p=>!p.deleted&&p.status==='planned'&&new Date(p.date)>now)
     .sort((a,b)=>new Date(a.date)-new Date(b.date))[0];
   if(!next){el.innerHTML='';el.style.display='none';return;}
   el.style.display='block';
