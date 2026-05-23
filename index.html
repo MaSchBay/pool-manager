@@ -828,9 +828,12 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <div id="shelly-filter-card"></div>
   <div id="kinder-ban-dashboard"></div>
   <div class="card" id="timer-card-dashboard" style="display:none">
-    <div class="card-title" style="justify-content:space-between">
+    <div class="card-title" style="justify-content:space-between;align-items:center">
       <span>⏰ Timer & Erinnerungen</span>
-      <span id="timer-count-badge" style="font-size:0.72rem;font-weight:700;background:var(--pool-light);color:var(--pool-dark);padding:3px 10px;border-radius:12px"></span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="timer-clear-all" onclick="dismissAllTimerTodos()" style="display:none;font-size:0.72rem;padding:3px 10px;border-radius:8px;border:1px solid #dc2626;background:transparent;color:#dc2626;cursor:pointer;font-family:Nunito,sans-serif;font-weight:700">🗑 Alle löschen</button>
+        <span id="timer-count-badge" style="font-size:0.72rem;font-weight:700;background:var(--pool-light);color:var(--pool-dark);padding:3px 10px;border-radius:12px"></span>
+      </div>
     </div>
     <div id="timer-todos-dashboard"></div>
   </div>
@@ -2182,6 +2185,9 @@ function renderTimerTodos(containerId){
       if(!active.length){card.style.display='none';el.innerHTML='';return;}
       card.style.display='block';
       if(badge)badge.textContent=active.length+' aktiv';
+      // "Alle löschen" Button wenn >2 aktive Timer
+      const clearAllBtn=document.getElementById('timer-clear-all');
+      if(clearAllBtn) clearAllBtn.style.display=active.length>2?'inline-block':'none';
     }
   }
   if(!active.length){el.innerHTML='';return}
@@ -2206,6 +2212,14 @@ function renderTimerTodos(containerId){
   setTimeout(()=>renderTimerTodos(containerId),30000);
 }
 
+function dismissAllTimerTodos(){
+  const now=new Date().toISOString();
+  timerTodos.forEach(function(t){if(!t.dismissed){t.done=true;t.dismissed=true;t.dismissedAt=now;}});
+  sd('timer_todos',timerTodos);
+  renderTimerTodos('timer-todos-dashboard');renderTimerTodos('iphone-timertodos');
+  queueAutoSync&&queueAutoSync();
+}
+
 function dismissTimerTodo(id){
   const t=timerTodos.find(x=>x.id===id);
   if(!t) return;
@@ -2221,7 +2235,7 @@ function dismissTimerTodo(id){
   });
   sd('timer_todos',timerTodos);
   renderTimerTodos('timer-todos-dashboard');renderTimerTodos('iphone-timertodos');
-  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){clearTimeout(autoSyncTimer);setTimeout(gdriveSyncBoth,500);}
+  queueAutoSync&&queueAutoSync();
 }
 
 function openTimerMeasure(id){
