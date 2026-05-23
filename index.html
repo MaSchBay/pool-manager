@@ -2185,11 +2185,11 @@ function renderTimerTodos(containerId){
     let countStr='',isOver=false;
     if(rem<=0){isOver=true;countStr='Jetzt messen!';}
     else{const hh=Math.floor(rem/3600000),mm=Math.floor((rem%3600000)/60000);countStr=`noch ${hh}h ${mm}min`;}
-    const isDruck=t.title&&t.title.toLowerCase().includes('druck');
+    const _tLabel=t.title||t.text||'';const isDruck=_tLabel.toLowerCase().includes('druck');
     return`<div class="timer-todo" style="${isOver?'border-color:#ef4444;background:linear-gradient(135deg,#fff1f2,#fecaca)':''}">
       <div style="font-size:1.5rem;flex-shrink:0">${isOver?'🔔':'⏰'}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:800;font-size:0.9rem;text-align:left">${t.title}</div>
+        <div style="font-weight:800;font-size:0.9rem;text-align:left">${t.title||t.text||'⏰ Timer'}</div>
         <div style="font-size:0.78rem;color:var(--text-secondary);text-align:left">Fällig: ${due.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</div>
       </div>
       <div class="timer-countdown" style="${isOver?'color:#dc2626':''};flex-shrink:0">${countStr}</div>
