@@ -2208,7 +2208,17 @@ function renderTimerTodos(containerId){
 
 function dismissTimerTodo(id){
   const t=timerTodos.find(x=>x.id===id);
-  if(t){t.done=true;t.dismissed=true;t.dismissedAt=new Date().toISOString();}
+  if(!t) return;
+  const matchText=t.title||t.text||'';
+  const matchDue=new Date(t.dueAt).getTime();
+  // Alle Duplikate mit gleichem Text + ähnlicher Fälligkeit (±2h) auch dismissieren
+  timerTodos.forEach(function(tt){
+    const ttText=tt.title||tt.text||'';
+    const ttDue=new Date(tt.dueAt).getTime();
+    if(ttText===matchText&&Math.abs(ttDue-matchDue)<7200000){
+      tt.done=true;tt.dismissed=true;tt.dismissedAt=new Date().toISOString();
+    }
+  });
   sd('timer_todos',timerTodos);
   renderTimerTodos('timer-todos-dashboard');renderTimerTodos('iphone-timertodos');
   if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){clearTimeout(autoSyncTimer);setTimeout(gdriveSyncBoth,500);}
