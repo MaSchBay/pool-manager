@@ -7161,7 +7161,18 @@ function applyImportedData(d,mergeMode){
     if(typeof renderKinderBanDashboard==='function')renderKinderBanDashboard();
     if(typeof renderKinderBanMary==='function')renderKinderBanMary();
   }
-  if(d.poolParties){sd('pool_parties',d.poolParties);}
+  if(d.poolParties){
+    if(mergeMode){
+      // Merge: lokale Parties behalten, remote Parties ergänzen
+      var localPartyIds=(poolParties||[]).map(function(p){return p.id;});
+      (d.poolParties||[]).forEach(function(rp){
+        if(!localPartyIds.includes(rp.id)) poolParties.push(rp);
+      });
+    } else {
+      poolParties=d.poolParties;
+    }
+    sd('pool_parties',poolParties);
+  }
 }
 
 async function updateSyncUI(){
@@ -8337,6 +8348,8 @@ function saveParty(){
   poolParties.push(party);
   saveParties();
   closeModal('modal-party');
+  renderParties&&renderParties();
+  renderPartyDashboard&&renderPartyDashboard();
   // Plan-Todos erstellen
   plan.forEach(function(step){
     if(new Date(step.dueDate)>new Date()){
@@ -8344,6 +8357,7 @@ function saveParty(){
     }
   });
   logHistory({type:'party',time:new Date().toISOString(),note:'🎉 Poolparty geplant: '+name+' am '+partyDate.toLocaleDateString('de-DE'),partyId:id});
+  if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled){clearTimeout(autoSyncTimer);setTimeout(gdriveSyncBoth,500);}
   renderParties();
   renderDashboard();
   if(typeof toast==='function')toast('🎉 Poolparty geplant! '+plan.length+' Vorbereitungsschritte erstellt','success',4000);
