@@ -1109,9 +1109,9 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="form-group">
         <label class="form-label">🌡️ Temperatur °C</label>
         <div style="display:flex;align-items:center;gap:6px">
-          <button class="spin-btn" onclick="adjustInput('input-temp',-0.5,1)">−</button>
-          <input type="number" id="input-temp" step="0.5" min="10" max="40" style="text-align:center">
-          <button class="spin-btn" onclick="adjustInput('input-temp',0.5,1)">+</button>
+          <button class="spin-btn" onclick="adjustInput('input-temp',-0.1,1)">−</button>
+          <input type="number" id="input-temp" step="0.1" min="10" max="40" style="text-align:center">
+          <button class="spin-btn" onclick="adjustInput('input-temp',0.1,1)">+</button>
         </div>
       </div>
       <div class="form-group">
@@ -1126,18 +1126,18 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="form-group">
         <label class="form-label" id="tds-label">💧 Wasserbelastung (TDS) ppm <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
-          <button class="spin-btn" onclick="adjustInput('input-tds',-50,0)">−</button>
-          <input type="number" id="input-tds" step="50" min="0" max="5000" style="text-align:center" placeholder="z.B. 800">
-          <button class="spin-btn" onclick="adjustInput('input-tds',50,0)">+</button>
+          <button class="spin-btn" onclick="adjustInput('input-tds',-1,0)">−</button>
+          <input type="number" id="input-tds" step="1" min="0" max="5000" style="text-align:center" placeholder="z.B. 800">
+          <button class="spin-btn" onclick="adjustInput('input-tds',1,0)">+</button>
         </div>
         <div id="tds-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
       <div class="form-group">
         <label class="form-label" id="orp-label">⚡ Desinfektionskraft (ORP) mV <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
-          <button class="spin-btn" onclick="adjustInput('input-orp',-10,0)">−</button>
-          <input type="number" id="input-orp" step="10" min="0" max="1000" style="text-align:center" placeholder="z.B. 700">
-          <button class="spin-btn" onclick="adjustInput('input-orp',10,0)">+</button>
+          <button class="spin-btn" onclick="adjustInput('input-orp',-1,0)">−</button>
+          <input type="number" id="input-orp" step="1" min="0" max="1000" style="text-align:center" placeholder="z.B. 700">
+          <button class="spin-btn" onclick="adjustInput('input-orp',1,0)">+</button>
         </div>
         <div id="orp-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
@@ -1153,9 +1153,9 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="form-group">
         <label class="form-label">🟤 Filterdruck Bar <span style="font-size:0.73rem;color:var(--text-muted)">(optional)</span></label>
         <div style="display:flex;align-items:center;gap:6px">
-          <button class="spin-btn" onclick="adjustInput('input-druck-mess',-0.1,2)">−</button>
+          <button class="spin-btn" onclick="adjustInput('input-druck-mess',-0.1,1)">−</button>
           <input type="number" id="input-druck-mess" step="0.1" min="0" max="3" style="text-align:center" placeholder="z.B. 0.3">
-          <button class="spin-btn" onclick="adjustInput('input-druck-mess',0.1,2)">+</button>
+          <button class="spin-btn" onclick="adjustInput('input-druck-mess',0.1,1)">+</button>
         </div>
         <div id="druck-mess-hint" style="font-size:0.76rem;margin-top:3px"></div>
       </div>
@@ -2391,8 +2391,15 @@ function renderMessung(){
   updateAnthropicKeyStatus();
   const last=getLastMeasurement();
   if(last){
-    // Nur Temperatur vorausfüllen
-    if(last.temp!==undefined)document.getElementById('input-temp').value=last.temp;
+    // Letzte Messwerte vorausfüllen (außer KH – muss frisch gemessen werden)
+    if(last.ph!==undefined)  document.getElementById('input-ph').value=last.ph;
+    if(last.chlor!==undefined)document.getElementById('input-chlor').value=last.chlor;
+    if(last.temp!==undefined) document.getElementById('input-temp').value=last.temp;
+    if(last.orp!==undefined)  document.getElementById('input-orp').value=last.orp;
+    if(last.tds!==undefined)  document.getElementById('input-tds').value=last.tds;
+    // Filterdruck: letzten Wert vorausfüllen
+    // Filterdruck nicht vorausfüllen – muss frisch abgelesen werden
+    // KH NICHT vorausfüllen (Tropftest muss frisch durchgeführt werden)
   }
   const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
   document.getElementById('input-mess-time').value=now.toISOString().slice(0,16);
@@ -2402,7 +2409,7 @@ function renderMessung(){
   const _khShow=!_khP||_khP.active!==false;
   const _khGroup=document.getElementById('kh-mess-group');
   if(_khGroup) _khGroup.style.display=_khShow?'':'none';
-  if(_khShow&&last&&last.kh!=null) document.getElementById('input-kh-mess').value=last.kh;
+  // KH nicht vorausfüllen – Tropftest muss frisch durchgeführt werden
   document.getElementById('ph-label').textContent=`🔵 pH-Wert (Ziel: ${settings.ph.target} | ${settings.ph.min}–${settings.ph.max})`;
   document.getElementById('chlor-label').textContent=`🟡 FAC / Chlor ppm (Ziel: ${settings.chlor.target} | ${settings.chlor.min}–${settings.chlor.max})`;
   if(document.getElementById('orp-label'))document.getElementById('orp-label').innerHTML=`⚡ Desinfektionskraft (ORP) mV – Ziel: ${settings.orp.target} | ${settings.orp.min}–${settings.orp.max} <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span>`;
@@ -8484,8 +8491,10 @@ function generatePartyPlan(partyDate,persons){
   // Am Partytag: 4h vorher messen
   const partyMorning=new Date(pd);partyMorning.setHours(partyDate.getHours()-4,0,0,0);
   plan.push({task:'🧪 Finaler Wassertest (4h vor Partystart)',dueDate:partyMorning.toISOString(),daysOffset:0,done:false,important:true});
-  // Nach der Party
-  addStep(0,'🚿 Nach der Party: Schockchlorung ('+(persons>=15?'Doppeldosis':'Standarddosis')+')',true);
+  // Nach der Party: Schockchlorung 4h nach Partystart (Gäste weg)
+  const afterParty=new Date(pd+4*3600000); // 4h nach Party-Beginn
+  plan.push({task:'🚿 Nach der Party: Schockchlorung ('+(persons>=15?'Doppeldosis':'Standarddosis')+')',
+    dueDate:afterParty.toISOString(),daysOffset:0,done:false,important:true});
   addStep(1,'🧪 Wassertest am Tag nach der Party');
   return plan;
 }
