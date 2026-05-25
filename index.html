@@ -6510,6 +6510,12 @@ document.addEventListener('DOMContentLoaded',async()=>{
   });
   renderDashboard();
   setInterval(()=>{if(document.getElementById('board-dashboard').classList.contains('active'))renderDashboard();renderTimerTodos('timer-todos-dashboard')},60000);
+  // Periodischer Sync alle 3 Minuten – hält alle Geräte aktuell
+  setInterval(function(){
+    if(typeof gdriveSyncBoth==='function'&&gdriveFileId&&autoSyncEnabled&&!_syncInProgress){
+      gdriveSyncBoth();
+    }
+  },3*60*1000);
   // Init extras
   initDarkMode();
   initCloudSync();
