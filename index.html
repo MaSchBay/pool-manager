@@ -2176,6 +2176,22 @@ function addTimerTodo(title, hours, todoId=null, stepIdx=null){
 
 function renderTimerTodos(containerId){
   const el=document.getElementById(containerId);if(!el)return;
+  // Auto-dismiss: Wassertest-Timer wenn Messung nach Fälligkeit vorhanden
+  (function(){
+    const last=getLastMeasurement&&getLastMeasurement();
+    timerTodos.forEach(function(t){
+      if(t.dismissed||t.done) return;
+      const label=t.title||t.text||'';
+      const isWater=label.toLowerCase().includes('wasser')&&label.toLowerCase().includes('test');
+      if(isWater&&last&&last.time){
+        const measTime=new Date(last.time).getTime();
+        const dueTime=new Date(t.dueAt).getTime();
+        if(measTime>=dueTime){
+          t.dismissed=true;t.dismissedAt=new Date().toISOString();
+        }
+      }
+    });
+  })();
   const active=timerTodos.filter(t=>!t.done&&!t.dismissed);
   // Handle dashboard card visibility
   if(containerId==='timer-todos-dashboard'){
@@ -2206,7 +2222,7 @@ function renderTimerTodos(containerId){
       </div>
       <div class="timer-countdown" style="${isOver?'color:#dc2626':''};flex-shrink:0">${countStr}</div>
       ${isOver?(isDruck?`<button class="btn btn-warn btn-sm" onclick="openDruckModal()">📊 Druck</button>`:`<button class="btn btn-primary btn-sm" onclick="openTimerMeasure(${t.id})">🧪 Messen</button>`):''}
-      <button class="btn btn-outline btn-sm" onclick="dismissTimerTodo(${t.id})" style="flex-shrink:0">✕</button>
+      <button class="btn btn-outline btn-sm" onclick="dismissTimerTodo(this.dataset.id)" data-id="${t.id}" style="flex-shrink:0">✕</button>
     </div>`;
   }).join('');
   setTimeout(()=>renderTimerTodos(containerId),30000);
@@ -2221,6 +2237,7 @@ function dismissAllTimerTodos(){
 }
 
 function dismissTimerTodo(id){
+  id=isNaN(id)?id:Number(id);
   const t=timerTodos.find(x=>x.id===id||x.id===String(id)||String(x.id)===String(id));
   if(!t) return;
   const matchText=t.title||t.text||'';
