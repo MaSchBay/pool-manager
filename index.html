@@ -3271,25 +3271,7 @@ async function renderIphone(){
       });
     },50);
   }
-  // Timer Todos
-  const timerIphone=document.getElementById('iphone-timertodos');
-  if(timerIphone){
-    // Auto-dismiss Wassertest-Timer wenn bereits gemessen
-    (function(){const lm=getLastMeasurement&&getLastMeasurement();timerTodos.forEach(function(t){
-      if(t.dismissed||t.done)return;const lb=t.title||t.text||'';
-      if(lb.toLowerCase().includes('wasser')&&lb.toLowerCase().includes('test')&&lm&&lm.time&&new Date(lm.time).getTime()>=new Date(t.dueAt).getTime()){t.dismissed=true;t.dismissedAt=new Date().toISOString();}
-    });})();
-    const active=timerTodos.filter(t=>!t.done&&!t.dismissed);
-    timerIphone.innerHTML=active.length?active.map(t=>{
-      const due=new Date(t.dueAt),rem=due-now;const isOver=rem<=0;
-      const hh=isOver?0:Math.floor(rem/3600000),mm=isOver?0:Math.floor((rem%3600000)/60000);
-      return`<div style="background:${isOver?'#fff1f2':'#fffbeb'};border:2px solid ${isOver?'#ef4444':'#f59e0b'};border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
-        <div style="font-size:1.5rem">${isOver?'🔔':'⏰'}</div>
-        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${t.title||t.text||'⏰ Timer'}</div>
-        <div style="font-size:0.78rem;font-weight:700;color:${isOver?'#dc2626':'#d97706'}">${isOver?'Jetzt messen!':'noch '+hh+'h '+mm+'min'}</div></div>
-      </div>`;
-    }).join(''):'';
-  }
+  // renderTimerTodos('iphone-timertodos') bereits oben aufgerufen
   // Weather
   const w=await fetchWeather();
   renderWeatherWarning('weather-warning-iphone',w);
