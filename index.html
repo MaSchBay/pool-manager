@@ -2221,7 +2221,7 @@ function dismissAllTimerTodos(){
 }
 
 function dismissTimerTodo(id){
-  const t=timerTodos.find(x=>x.id===id);
+  const t=timerTodos.find(x=>x.id===id||x.id===String(id)||String(x.id)===String(id));
   if(!t) return;
   const matchText=t.title||t.text||'';
   const matchDue=new Date(t.dueAt).getTime();
@@ -3263,7 +3263,7 @@ async function renderIphone(){
       const hh=isOver?0:Math.floor(rem/3600000),mm=isOver?0:Math.floor((rem%3600000)/60000);
       return`<div style="background:${isOver?'#fff1f2':'#fffbeb'};border:2px solid ${isOver?'#ef4444':'#f59e0b'};border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
         <div style="font-size:1.5rem">${isOver?'🔔':'⏰'}</div>
-        <div style="flex:1"><div style="font-weight:700;font-size:0.85rem">${t.title}</div>
+        <div style="flex:1"><div style="font-weight:700;font-size:0.85rem">${t.title||t.text||'⏰ Timer'}</div>
         <div style="font-size:0.78rem;font-weight:700;color:${isOver?'#dc2626':'#d97706'}">${isOver?'Jetzt messen!':'noch '+hh+'h '+mm+'min'}</div></div>
       </div>`;
     }).join(''):'';
@@ -3332,7 +3332,7 @@ async function renderIphone(){
     else{timerEl.innerHTML=active.map(t=>{
       const due=new Date(t.dueAt),rem=due-now;const isOver=rem<=0;
       const hh=isOver?0:Math.floor(rem/3600000),mm=isOver?0:Math.floor((rem%3600000)/60000);
-      return`<div style="padding:8px 0;border-bottom:1px solid #f1f5f9"><div style="font-weight:700;font-size:0.85rem">${t.title}</div><div style="font-size:0.78rem;font-weight:700;color:${isOver?'#dc2626':'#d97706'};margin-top:2px">${isOver?'🔔 Jetzt messen!':'⏰ noch '+hh+'h '+mm+'min'}</div></div>`;
+      return`<div style="padding:8px 0;border-bottom:1px solid #f1f5f9"><div style="font-weight:700;font-size:0.85rem">${t.title||t.text||'⏰ Timer'}</div><div style="font-size:0.78rem;font-weight:700;color:${isOver?'#dc2626':'#d97706'};margin-top:2px">${isOver?'🔔 Jetzt messen!':'⏰ noch '+hh+'h '+mm+'min'}</div></div>`;
     }).join('');}
   }
   // 7-day quality chart
@@ -5501,9 +5501,12 @@ function calcPoolScore(){
     return Math.max(0,100-(dist/(range/2))*50);
   }
 
+  // FAC: ORP-adjustiertes Minimum für Score
+  const _scMin=last.orp>=700?0.5:last.orp>=650?1.0:1.5;
+  const _chlorMin=last.orp!==undefined&&last.orp!==null?_scMin:(s.chlor||DEFAULT_SETTINGS.chlor).min;
   const weights=[
     {score:paramScore(last.ph,s.ph.min,s.ph.max,s.ph.target), w:25},
-    {score:paramScore(last.chlor,s.chlor.min,s.chlor.max,s.chlor.target), w:25},
+    {score:paramScore(last.chlor,_chlorMin,(s.chlor||DEFAULT_SETTINGS.chlor).max,(s.chlor||DEFAULT_SETTINGS.chlor).target), w:25},
     {score:paramScore(last.orp,(s.orp||DEFAULT_SETTINGS.orp).min,(s.orp||DEFAULT_SETTINGS.orp).max,(s.orp||DEFAULT_SETTINGS.orp).target), w:30},
     {score:tdsScore(last.tds), w:20},
   ].filter(x=>x.score!==null);
@@ -6406,9 +6409,16 @@ function renderMesswerteCardEnhanced(targetId, metaId){
   if(_khSeason.year===new Date().getFullYear()&&_khSeason.max!=null&&_khSeason.max>_khSettings.max){
     _khSettings.max=_khSeason.max;
   }
+  // FAC: Minimum ORP-basiert anpassen
+  const _chlorSettings=Object.assign({},settings.chlor||DEFAULT_SETTINGS.chlor);
+  if(last.orp!==undefined&&last.orp!==null){
+    if(last.orp>=700) _chlorSettings.min=0.5;        // ORP super → FAC 0.5 reicht
+    else if(last.orp>=650) _chlorSettings.min=1.0;   // ORP ok → normal
+    else _chlorSettings.min=1.5;                      // ORP niedrig → mehr Chlor nötig
+  }
   const gaugesHtml=[
     gaugeHtml('ph','🔵 pH-Wert','',last.ph,settings.ph),
-    gaugeHtml('chlor','🟡 FAC / Chlor',' ppm',last.chlor,settings.chlor),
+    gaugeHtml('chlor','🟡 FAC / Chlor',' ppm',last.chlor,_chlorSettings),
     gaugeHtml('orp','⚡ Desinfektionskraft (ORP)',' mV',last.orp,settings.orp),
     gaugeHtml('tds','💧 Wasserbelastung (TDS)',' ppm',last.tds,settings.tds),
     _khVal!==undefined?gaugeHtmlKH(_khVal,_khSettings):null,
@@ -8569,18 +8579,50 @@ function renderParties(){
 function renderPartyDashboard(){
   const el=document.getElementById('party-dashboard-badge');if(!el)return;
   const now=new Date();
+  // Abgelaufene Party (Zeit vorbei aber noch nicht bestätigt beendet)
+  const pastUnconfirmed=poolParties.filter(p=>!p.deleted&&p.status==='planned'&&new Date(p.date)<=now)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+  if(pastUnconfirmed){
+    el.style.display='block';
+    const pd2=new Date(pastUnconfirmed.date);
+    el.innerHTML='<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="font-size:1.8rem">🎉</div>'+
+        '<div><div style="font-weight:900;font-size:0.95rem">'+pastUnconfirmed.name+' – ist sie vorbei?</div>'+
+        '<div style="font-size:0.78rem;color:#92400e">'+pd2.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'})+' '+pd2.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+'</div></div>'+
+      '</div>'+
+      '<button onclick="endParty('+pastUnconfirmed.id+')" style="background:#f59e0b;color:white;border:none;border-radius:10px;padding:9px 16px;font-family:Nunito,sans-serif;font-weight:800;font-size:0.85rem;cursor:pointer;white-space:nowrap">✅ Party beendet!</button>'+
+    '</div>';
+    return;
+  }
   const next=poolParties.filter(p=>!p.deleted&&p.status==='planned'&&new Date(p.date)>now)
     .sort((a,b)=>new Date(a.date)-new Date(b.date))[0];
   if(!next){el.innerHTML='';el.style.display='none';return;}
   el.style.display='block';
   const pd=new Date(next.date);
-  const daysLeft=Math.ceil((pd-now)/86400000);
+  const msLeft=pd-now;
+  const hrsLeft=msLeft/3600000;
+  const daysLeft=Math.ceil(msLeft/86400000);
+  // Countdown-Text: Tage / Stunden / heute
+  let countdownText;
+  if(hrsLeft<1){
+    const minsLeft=Math.round(msLeft/60000);
+    countdownText='in '+minsLeft+'min';
+  } else if(hrsLeft<2){
+    countdownText='in 1h '+Math.round((hrsLeft-1)*60)+'min';
+  } else if(hrsLeft<48){
+    countdownText='in '+Math.round(hrsLeft)+'h';
+  } else if(daysLeft===1){
+    countdownText='heute um '+pd.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  } else {
+    countdownText='in '+daysLeft+'d';
+  }
   // Badeverbot-Check
   const banActive=ban&&new Date(ban.until)>pd;
   el.innerHTML='<div class="party-badge" style="margin-bottom:10px">'+
     '<div class="party-badge-icon">🎉</div>'+
     '<div class="party-badge-info">'+
-      '<div class="party-badge-title">'+next.name+' in '+daysLeft+'d</div>'+
+      '<div class="party-badge-title">'+next.name+' '+countdownText+'</div>'+
       '<div class="party-badge-detail">'+pd.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'})+' '+pd.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+'</div>'+
       (banActive?'<div style="color:#dc2626;font-size:0.75rem;font-weight:700">⚠️ Badeverbot läuft bis '+new Date(ban.until).toLocaleString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'!</div>':'')+
     '</div>'+
