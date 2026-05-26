@@ -1202,8 +1202,8 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div class="product-card product-flockmittel" onclick="selectProduct('flockmittel',this)"><div class="product-name">Flockmittel Flüssig</div><div class="product-sub">medi pool – Blau/Pink | kein Badeverbot</div><div class="product-dose">5–20 ml/10m³ laufend | 30–60 ml einmalig</div></div>
       <div class="product-card product-poolklar" onclick="selectProduct('poolklar',this)"><div class="product-name">Poolklar</div><div class="product-sub" style="color:#c4b5fd">medi pool – Dunkel/Lila | ⚠️ Badeverbot 2h</div><div class="product-dose" style="color:#ddd6fe">50 ml/10m³ wöchentlich</div></div>
       <div class="product-card product-algenschutz" onclick="selectProduct('algenschutz',this)"><div class="product-name">Algenschutz</div><div class="product-sub">medi pool – Blau/Grün | ⚠️ Badeverbot 2h</div><div class="product-dose">100 ml/10m³, alle 14 Tage</div></div>
-      <div class="product-card product-phminus" onclick="selectProduct('phminus',this)"><div class="product-name">pH-Minus Granulat</div><div class="product-sub">medi pool – Blau/Orange | kein Badeverbot</div><div class="product-dose">150 g/10m³ senkt pH um 0,2</div></div>
-      <div class="product-card product-phplus" onclick="selectProduct('phplus',this)"><div class="product-name">pH-Plus Granulat</div><div class="product-sub">medi pool – Blau/Gelb | kein Badeverbot</div><div class="product-dose">100 g/10m³ hebt pH um 0,2</div></div>
+      <div class="product-card product-phminus" onclick="selectProduct('phminus',this)"><div class="product-name">pH-Minus Granulat</div><div class="product-sub">medi pool – Blau/Orange | ⏱️ 30 min Wartezeit</div><div class="product-dose">150 g/10m³ senkt pH um 0,2</div></div>
+      <div class="product-card product-phplus" onclick="selectProduct('phplus',this)"><div class="product-name">pH-Plus Granulat</div><div class="product-sub">medi pool – Blau/Gelb | ⏱️ 30 min Wartezeit</div><div class="product-dose">100 g/10m³ hebt pH um 0,2</div></div>
       <div class="product-card product-alcaplus" onclick="selectProduct('alcaplus',this)"><div class="product-name">Alca-Plus</div><div class="product-sub">Bayrol – kein Badeverbot</div><div class="product-dose">180 g/10m³/10 ppm · KH-basiert</div></div>
     </div>
     <div>
@@ -3274,13 +3274,18 @@ async function renderIphone(){
   // Timer Todos
   const timerIphone=document.getElementById('iphone-timertodos');
   if(timerIphone){
-    const active=timerTodos.filter(t=>!t.done);
+    // Auto-dismiss Wassertest-Timer wenn bereits gemessen
+    (function(){const lm=getLastMeasurement&&getLastMeasurement();timerTodos.forEach(function(t){
+      if(t.dismissed||t.done)return;const lb=t.title||t.text||'';
+      if(lb.toLowerCase().includes('wasser')&&lb.toLowerCase().includes('test')&&lm&&lm.time&&new Date(lm.time).getTime()>=new Date(t.dueAt).getTime()){t.dismissed=true;t.dismissedAt=new Date().toISOString();}
+    });})();
+    const active=timerTodos.filter(t=>!t.done&&!t.dismissed);
     timerIphone.innerHTML=active.length?active.map(t=>{
       const due=new Date(t.dueAt),rem=due-now;const isOver=rem<=0;
       const hh=isOver?0:Math.floor(rem/3600000),mm=isOver?0:Math.floor((rem%3600000)/60000);
       return`<div style="background:${isOver?'#fff1f2':'#fffbeb'};border:2px solid ${isOver?'#ef4444':'#f59e0b'};border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
         <div style="font-size:1.5rem">${isOver?'🔔':'⏰'}</div>
-        <div style="flex:1"><div style="font-weight:700;font-size:0.85rem">${t.title||t.text||'⏰ Timer'}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${t.title||t.text||'⏰ Timer'}</div>
         <div style="font-size:0.78rem;font-weight:700;color:${isOver?'#dc2626':'#d97706'}">${isOver?'Jetzt messen!':'noch '+hh+'h '+mm+'min'}</div></div>
       </div>`;
     }).join(''):'';
@@ -3430,7 +3435,7 @@ async function renderIpad(){
   // Ban / Timer bar
   const timerBar=document.getElementById('ipad-timertodos-bar');
   if(timerBar){
-    const active=timerTodos.filter(t=>!t.done);
+    const active=timerTodos.filter(t=>!t.done&&!t.dismissed);
     timerBar.innerHTML=active.length?active.map(t=>{
       const due=new Date(t.dueAt),rem=due-now;const isOver=rem<=0;
       const hh=isOver?0:Math.floor(rem/3600000),mm=isOver?0:Math.floor((rem%3600000)/60000);
@@ -3961,7 +3966,7 @@ function poolTempEstimate(idx,airMax,airMin,wmoCode){
 // ============================================================
 // DOSIERUNG
 // ============================================================
-const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0.5,chlorplus:0.5,flockmittel:0,poolklar:2,algenschutz:2,phminus:0,phplus:0,alcaplus:0};
+const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0.5,chlorplus:0.5,flockmittel:0,poolklar:0,algenschutz:2,phminus:0,phplus:0,alcaplus:0};
 const PRODUCTS={
   schnellchlor:{name:'Schnell-Chlortabs 20g',
     fields:[{id:'mode',label:'Modus',type:'select',opts:['Regelbetrieb (alle 3 Tage)','Stoßbehandlung']}],
@@ -4128,7 +4133,11 @@ function selectProduct(key,card){
   selProduct=key;
   const p=PRODUCTS[key];document.getElementById('dosi-title').textContent=`📊 ${p.name}`;
   const banH=BAN_H[key];
-  let fHtml=banH>0?`<div style="background:#fff1f2;padding:9px;border-radius:8px;margin-bottom:10px;font-size:0.83rem;font-weight:700;color:#b91c1c">⚠️ Badeverbot ${banH<1?(banH*60)+' Min':(banH+'h')} nach Anwendung</div>`:'';
+  let _banLabel='';if(banH>0){
+  if(banH<=0.25)_banLabel='15 Min';else if(banH<=0.5)_banLabel='30 Min';
+  else if(banH<1)_banLabel=Math.round(banH*60)+' Min';else _banLabel=banH+'h';
+}
+let fHtml=banH>0?`<div style="background:#fff1f2;padding:9px;border-radius:8px;margin-bottom:10px;font-size:0.83rem;font-weight:700;color:#b91c1c">⚠️ Badeverbot ${_banLabel} nach Anwendung</div>`:'';
   p.fields.forEach(f=>{
     fHtml+=`<div class="form-group"><label class="form-label">${f.label}`;
     if(f.autoFill==='chlor_days'){const ad=getDaysSinceLastChlorDosing();if(ad!==null)fHtml+=` <span style="font-size:0.72rem;color:#16a34a;font-weight:700">(aus Verlauf: ${ad}d)</span>`;}
@@ -4157,15 +4166,54 @@ function calcDosage(){
   p.fields.forEach(f=>{const el=document.getElementById('dosi-'+f.id);if(el)vals[f.id]=el.tagName==='SELECT'?el.value:el.value});
   const r=p.calc(vals);const banH=BAN_H[selProduct];
   const until=new Date(Date.now()+banH*3600000);
-  let html=`<div style="background:var(--pool-surface);padding:14px;border-radius:12px;border:2px solid var(--pool-blue)"><div style="font-size:1.05rem;font-weight:900;color:var(--pool-dark)">💊 ${r.amount}</div>${r.note?`<div style="margin-top:7px;color:var(--text-secondary);font-size:0.88rem">${r.note}</div>`:''}</div>`;
-  if(banH>0)html+=`<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger btn-sm" onclick="setBanProduct('${selProduct}','${until.toISOString().slice(0,16)}')">🚫 Badeverbot setzen (${banH}h)</button></div>`;
+  // Menge parsierbar machen für editierbares Feld
+  const _amtMatch=r.amount.match(/^([\d.]+)\s*(ml|g|l|L|Stk|Tabs?)(.*)$/i);
+  window._dosiAmtNum=_amtMatch?parseFloat(_amtMatch[1]):null;
+  window._dosiAmtUnit=_amtMatch?_amtMatch[2]:'';
+  window._dosiAmtRest=_amtMatch?_amtMatch[3].trim():'';
+  window._dosiAmtStep=window._dosiAmtUnit&&window._dosiAmtUnit.toLowerCase().match(/stk|tab/)?1:5;
+  const banLabel=banH<=0.25?'15 Min':banH<=0.5?'30 Min':banH<1?Math.round(banH*60)+' Min':banH+'h';
+  let html=`<div style="background:var(--pool-surface);padding:14px;border-radius:12px;border:2px solid var(--pool-blue)">
+    <div style="font-size:1.05rem;font-weight:900;color:var(--pool-dark)">💊 ${r.amount}</div>
+    ${r.note?`<div style="margin-top:7px;color:var(--text-secondary);font-size:0.88rem">${r.note}</div>`:''}
+  </div>`;
+  // Editierbares Mengenfeld (nur wenn Zahl parsebar)
+  if(window._dosiAmtNum!==null){
+    html+=`<div style="margin-top:10px;background:#f8fafc;border-radius:10px;padding:10px 12px;border:1px solid var(--border)">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">✏️ Menge anpassen:</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="spin-btn" onclick="adjustDosiAmt(-1)">−</button>
+        <input type="number" id="dosi-amt-custom" value="${window._dosiAmtNum}" step="${window._dosiAmtStep}" min="0"
+          style="width:80px;text-align:center;border:2px solid var(--pool-blue);border-radius:8px;padding:6px;font-size:1rem;font-weight:700;font-family:Nunito,sans-serif">
+        <button class="spin-btn" onclick="adjustDosiAmt(1)">+</button>
+        <span style="font-size:0.9rem;font-weight:700;color:var(--text-secondary)">${window._dosiAmtUnit} ${window._dosiAmtRest}</span>
+      </div>
+    </div>`;
+  }
+  if(banH>0)html+=`<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger btn-sm" onclick="setBanProduct('${selProduct}','${until.toISOString().slice(0,16)}')">🚫 Badeverbot setzen (${banLabel})</button></div>`;
   html+=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">` +
-    `<button class="btn btn-ok btn-sm" onclick="logDosierung('${selProduct}','${r.amount.replace(/'/g,'&apos;')}')">📝 Dosierung dokumentieren</button>` +
-    `<button onclick="addAppleReminder('${(PRODUCTS[selProduct]?.name||'Dosierung').replace(/'/g,"\'")} – ${r.amount.replace(/'/g,"\'").replace(/`/g,'').slice(0,40)}','${r.note?r.note.replace(/'/g,"\'").slice(0,80):''}')" style="padding:6px 12px;border-radius:8px;border:1.5px solid #e2e8f0;background:white;cursor:pointer;font-family:Nunito,sans-serif;font-size:0.78rem;font-weight:700;color:#475569;display:flex;align-items:center;gap:5px"><span>📱</span>Erinnerung</button>` +
+    `<button class="btn btn-ok btn-sm" onclick="logDosiCustom('${selProduct}')">📝 Dosierung dokumentieren</button>` +
+    `<button onclick="addAppleReminder('${(PRODUCTS[selProduct]?.name||'Dosierung').replace(/'/g,"\'")} – ${r.amount.replace(/'/g,"\'").replace(/\`/g,'').slice(0,40)}','${r.note?r.note.replace(/'/g,"\'").slice(0,80):''}')" style="padding:6px 12px;border-radius:8px;border:1.5px solid #e2e8f0;background:white;cursor:pointer;font-family:Nunito,sans-serif;font-size:0.78rem;font-weight:700;color:#475569;display:flex;align-items:center;gap:5px"><span>📱</span>Erinnerung</button>` +
     `</div>`;
   document.getElementById('dosi-result').innerHTML=html;
 }
 
+function adjustDosiAmt(d){
+  const el=document.getElementById('dosi-amt-custom');if(!el)return;
+  el.value=Math.max(0,parseFloat(el.value||0)+(d*(window._dosiAmtStep||1)));
+}
+function logDosiCustom(productKey){
+  const el=document.getElementById('dosi-amt-custom');
+  let amount;
+  if(el&&window._dosiAmtUnit){
+    amount=el.value+' '+window._dosiAmtUnit+(window._dosiAmtRest?' '+window._dosiAmtRest:'');
+  } else {
+    // Fallback: letzten berechneten Wert aus Result-HTML holen
+    const amtEl=document.querySelector('#dosi-result .pool-dark');
+    amount=amtEl?amtEl.textContent.replace('💊','').trim():'';
+  }
+  logDosierung(productKey,amount.trim());
+}
 function logDosierung(productKey,amount){
   const p=PRODUCTS[productKey];const banH=BAN_H[productKey];
   const _stockKey_={'langzeittabs':'Langzeit-Chlortabs','schnellchlor':'Schnell-Chlortabs','mischdosi':'Chlor Plus','chlorplus':'Chlor Plus','flockmittel':'Flockmittel','poolklar':'Poolklar','algenschutz':'Algenschutz','phminus':'pH-Minus','phplus':'pH-Plus','alcaplus':'Alca-Plus'}[productKey]||p.name;
@@ -7307,10 +7355,16 @@ function applyImportedData(d,mergeMode){
       // Merge: lokale Parties behalten, remote Parties ergänzen
       var localPartyIds=(poolParties||[]).map(function(p){return p.id;});
       (d.poolParties||[]).forEach(function(rp){
-        if(!localPartyIds.includes(rp.id)&&!rp.deleted) poolParties.push(rp);
-        else if(localPartyIds.includes(rp.id)&&rp.deleted){
+        if(!localPartyIds.includes(rp.id)&&!rp.deleted){
+          poolParties.push(rp);
+        } else if(localPartyIds.includes(rp.id)){
           var lp=poolParties.find(function(p){return p.id===rp.id;});
-          if(lp) lp.deleted=true; // remote deleted → lokal auch löschen
+          if(!lp) return;
+          if(rp.deleted) lp.deleted=true;
+          // Status-Änderungen propagieren (ended > planned)
+          if(rp.status==='ended'&&lp.status==='planned'){
+            lp.status='ended'; if(rp.endedAt) lp.endedAt=rp.endedAt;
+          }
         }
       });
     } else {
