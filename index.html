@@ -2179,16 +2179,25 @@ function renderTimerTodos(containerId){
   // Auto-dismiss: Wassertest-Timer wenn Messung nach Fälligkeit vorhanden
   (function(){
     const last=getLastMeasurement&&getLastMeasurement();
+    const nowMs=Date.now();
     timerTodos.forEach(function(t){
       if(t.dismissed||t.done) return;
-      const label=t.title||t.text||'';
-      const isWater=label.toLowerCase().includes('wasser')&&label.toLowerCase().includes('test');
-      if(isWater&&last&&last.time){
-        const measTime=new Date(last.time).getTime();
-        const dueTime=new Date(t.dueAt).getTime();
-        if(measTime>=dueTime){
-          t.dismissed=true;t.dismissedAt=new Date().toISOString();
-        }
+      const label=(t.title||t.text||'').toLowerCase();
+      const dueTime=new Date(t.dueAt).getTime();
+      const overdueMs=nowMs-dueTime;
+      // Wassertest: auto-dismiss wenn Messung nach Fälligkeit
+      const isWater=label.includes('wasser')&&label.includes('test');
+      if(isWater&&last&&last.time&&new Date(last.time).getTime()>=dueTime){
+        t.dismissed=true;t.dismissedAt=new Date().toISOString();return;
+      }
+      // Filter/Poolklar Timer: auto-dismiss wenn > 6h überfällig
+      const isFilter=label.includes('filter')||label.includes('poolklar')||label.includes('ausschalten');
+      if(isFilter&&overdueMs>6*3600000){
+        t.dismissed=true;t.dismissedAt=new Date().toISOString();return;
+      }
+      // Alle Timer: auto-dismiss wenn > 48h überfällig
+      if(overdueMs>48*3600000){
+        t.dismissed=true;t.dismissedAt=new Date().toISOString();
       }
     });
   })();
@@ -2215,14 +2224,18 @@ function renderTimerTodos(containerId){
     else{const hh=Math.floor(rem/3600000),mm=Math.floor((rem%3600000)/60000);countStr=`noch ${hh}h ${mm}min`;}
     const _tLabel=t.title||t.text||'';const isDruck=_tLabel.toLowerCase().includes('druck');
     return`<div class="timer-todo" style="${isOver?'border-color:#ef4444;background:linear-gradient(135deg,#fff1f2,#fecaca)':''}">
-      <div style="font-size:1.5rem;flex-shrink:0">${isOver?'🔔':'⏰'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:800;font-size:0.9rem;text-align:left">${t.title||t.text||'⏰ Timer'}</div>
-        <div style="font-size:0.78rem;color:var(--text-secondary);text-align:left">Fällig: ${due.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</div>
+      <div style="display:flex;align-items:flex-start;gap:10px;width:100%">
+        <div style="font-size:1.3rem;flex-shrink:0;padding-top:2px">${isOver?'🔔':'⏰'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:0.88rem;line-height:1.3;word-break:break-word">${t.title||t.text||'⏰ Timer'}</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px">Fällig: ${due.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="dismissTimerTodo(this.dataset.id)" data-id="${t.id}" style="flex-shrink:0;padding:4px 10px">✕</button>
       </div>
-      <div class="timer-countdown" style="${isOver?'color:#dc2626':''};flex-shrink:0">${countStr}</div>
-      ${isOver?(isDruck?`<button class="btn btn-warn btn-sm" onclick="openDruckModal()">📊 Druck</button>`:`<button class="btn btn-primary btn-sm" onclick="openTimerMeasure(${t.id})">🧪 Messen</button>`):''}
-      <button class="btn btn-outline btn-sm" onclick="dismissTimerTodo(this.dataset.id)" data-id="${t.id}" style="flex-shrink:0">✕</button>
+      ${isOver?`<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(239,68,68,0.2)">
+        <span style="font-weight:800;font-size:0.85rem;color:#dc2626;flex:1">⏰ ${countStr}</span>
+        ${isDruck?`<button class="btn btn-warn btn-sm" onclick="openDruckModal()">📊 Druck</button>`:`<button class="btn btn-primary btn-sm" onclick="openTimerMeasure(${t.id})">🧪 Messen</button>`}
+      </div>`:'<div style="margin-top:4px;font-weight:700;font-size:0.85rem;color:#d97706">'+countStr+'</div>'}
     </div>`;
   }).join('');
   setTimeout(()=>renderTimerTodos(containerId),30000);
