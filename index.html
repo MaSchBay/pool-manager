@@ -10964,6 +10964,12 @@ async function haFetchSensors() {
     ]);
     if (swRes.ok) { const j = await swRes.json(); filterOn = j.state === 'on'; }
     if (smRes.ok) { const j = await smRes.json(); sondermodusOn = j.state === 'on'; }
+    // Aktuellen Leistungswert holen für echten Laufstatus
+    const pwRes = await fetch(`${base}/api/states/${haSettings.shellyPowerEntity||'sensor.shelly1pmminig3_e4b063f25a98_leistung'}`, { headers });
+    let filterPower = 0;
+    if (pwRes.ok) { const j = await pwRes.json(); filterPower = parseFloat(j.state)||0; }
+    // Echter Laufstatus: Schalter AN und Leistung über Schwellwert
+    const filterRunning = filterOn && filterPower > (haSettings.powerThreshold||50);
   } catch {}
 
   // FI-Warnung: wenn Filter von AN → AUS wechselt → FI muss manuell zurückgeschaltet werden
@@ -10980,7 +10986,7 @@ async function haFetchSensors() {
     sd('shelly_gfci_warning', false);
   }
 
-  haLiveData = { airTemp, humidity, waterTemp, filterRunMin, filterOn, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
+  haLiveData = { airTemp, humidity, waterTemp, filterRunMin, filterOn, filterPower, filterRunning, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
 
   // Messfeld vorausfüllen
   if (waterTemp !== null) {
@@ -11018,7 +11024,7 @@ function renderHaCard() {
   const fH    = Math.floor(fMin / 60), fR = fMin % 60;
   const fStr  = fH > 0 ? `${fH}h ${fR}min` : `${fR}min`;
   const fPct  = Math.min(100, Math.round(fMin / 480 * 100));
-  const fCol  = fPct >= 100 ? 'var(--success)' : fPct >= 60 ? 'var(--pool-blue)' : '#f59e0b';
+  const fCol  = fPct >= 100 ? '#22c55e' : fPct >= 60 ? '#0ea5e9' : '#f59e0b';
 
   // Wassertemp
   const wStr  = d.waterTemp !== null ? d.waterTemp.toFixed(1) + ' °C' : '-- °C';
@@ -11037,9 +11043,14 @@ function renderHaCard() {
       '<span>🏠 Home Assistant</span>' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
         (d.filterOn !== null
-          ? '<span style="display:flex;align-items:center;gap:5px;font-size:0.78rem;font-weight:800;padding:3px 10px;border-radius:20px;background:' + (d.filterOn ? '#f0fdf4' : '#fef2f2') + ';color:' + (d.filterOn ? '#15803d' : '#b91c1c') + ';border:1px solid ' + (d.filterOn ? '#bbf7d0' : '#fecaca') + '">' +
-            '<span style="width:8px;height:8px;border-radius:50%;background:' + (d.filterOn ? '#22c55e' : '#ef4444') + ';' + (d.filterOn ? 'animation:pulse 2s infinite' : '') + '"></span>' +
-            (d.filterOn ? 'LÄUFT' : 'AUS') +
+          ? '<span style="display:flex;align-items:center;gap:5px;font-size:0.78rem;font-weight:800;padding:3px 10px;border-radius:20px;background:' +
+            (d.filterRunning ? '#f0fdf4' : d.filterOn ? '#fffbeb' : '#fef2f2') + ';color:' +
+            (d.filterRunning ? '#15803d' : d.filterOn ? '#92400e' : '#b91c1c') + ';border:1px solid ' +
+            (d.filterRunning ? '#bbf7d0' : d.filterOn ? '#fde68a' : '#fecaca') + '">' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:' +
+            (d.filterRunning ? '#22c55e' : d.filterOn ? '#f59e0b' : '#ef4444') + ';' +
+            (d.filterRunning ? 'animation:pulse 2s infinite' : '') + '"></span>' +
+            (d.filterRunning ? 'LÄUFT' : d.filterOn ? 'Steckdose an · Filter aus' : 'AUS') +
           '</span>'
           : '') +
         (d.sondermodusOn ? '<span style="font-size:0.72rem;font-weight:800;background:#fee2e2;color:#b91c1c;padding:3px 8px;border-radius:8px;border:1px solid #fecaca">🔴 24h-Betrieb aktiv</span>' : '') +
