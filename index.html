@@ -10947,7 +10947,18 @@ async function haFetchSensors() {
     if (dayMM)   dayRise   = +(dayMM.max - dayMM.min).toFixed(1);      // positiv = Erwärmung
   }
 
-  haLiveData = { airTemp, humidity, waterTemp, filterRunMin, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
+  // Filter-Status + Sondermodus aus HA
+  let filterOn = null, sondermodusOn = false;
+  try {
+    const [swRes, smRes] = await Promise.all([
+      fetch(`${base}/api/states/switch.shelly1pmminig3_e4b063f25a98`, { headers }),
+      fetch(`${base}/api/states/input_boolean.poolfilter_sondermodus`, { headers }),
+    ]);
+    if (swRes.ok) { const j = await swRes.json(); filterOn = j.state === 'on'; }
+    if (smRes.ok) { const j = await smRes.json(); sondermodusOn = j.state === 'on'; }
+  } catch {}
+
+  haLiveData = { airTemp, humidity, waterTemp, filterRunMin, filterOn, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
 
   // Messfeld vorausfüllen
   if (waterTemp !== null) {
@@ -10957,6 +10968,7 @@ async function haFetchSensors() {
 
   // Dashboard + Badge aktualisieren
   renderHaCard();
+  if(typeof renderShellyCard==='function') renderShellyCard(); // Shelly-Karte ausblenden
   const badge = document.getElementById('ha-live-badge');
   if (badge) _renderHaLiveBadge(badge);
 }
@@ -10998,13 +11010,29 @@ function renderHaCard() {
 
   el.innerHTML =
     '<div class="card" style="margin-bottom:12px">' +
-    '<div class="card-title" style="justify-content:space-between;align-items:center">' +
+    // Filter-Status
+    '<div class="card-title" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">' +
       '<span>🏠 Home Assistant</span>' +
-      '<div style="display:flex;align-items:center;gap:10px">' +
-        (fresh ? '<span style="font-size:0.7rem;color:var(--text-muted)">☀️ ' + fmt(d.sunrise) + ' · 🌙 ' + fmt(d.sunset) + '</span>' : '') +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        (d.filterOn !== null
+          ? '<span style="display:flex;align-items:center;gap:5px;font-size:0.78rem;font-weight:800;padding:3px 10px;border-radius:20px;background:' + (d.filterOn ? '#f0fdf4' : '#fef2f2') + ';color:' + (d.filterOn ? '#15803d' : '#b91c1c') + ';border:1px solid ' + (d.filterOn ? '#bbf7d0' : '#fecaca') + '">' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:' + (d.filterOn ? '#22c55e' : '#ef4444') + ';' + (d.filterOn ? 'animation:pulse 2s infinite' : '') + '"></span>' +
+            (d.filterOn ? 'LÄUFT' : 'AUS') +
+          '</span>'
+          : '') +
+        (d.sondermodusOn ? '<span style="font-size:0.72rem;font-weight:800;background:#fee2e2;color:#b91c1c;padding:3px 8px;border-radius:8px">24h AN</span>' : '') +
+        (fresh ? '<span style="font-size:0.68rem;color:var(--text-muted)">☀️ ' + fmt(d.sunrise) + ' 🌙 ' + fmt(d.sunset) + '</span>' : '') +
         '<button onclick="haFetchSensors()" style="border:1px solid var(--border);background:transparent;border-radius:8px;padding:3px 10px;font-size:0.75rem;cursor:pointer;color:var(--text-secondary)">🔄</button>' +
       '</div>' +
     '</div>' +
+    // FI-Warnung
+    (_shellyState && _shellyState.gfciWarning
+      ? '<div style="background:#fee2e2;border:2px solid #ef4444;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">' +
+          '<span style="font-size:1.4rem">⚡</span>' +
+          '<div><div style="font-size:0.82rem;font-weight:800;color:#b91c1c">Personenschutzschalter (FI) zurücksetzen!</div>' +
+          '<div style="font-size:0.75rem;color:#dc2626;margin-top:2px">Shelly hat Strom getrennt – FI vor Neustart zurücksetzen.</div></div>' +
+        '</div>'
+      : '') +
 
     // Zeile 1: Luft + Feuchte + Wasser
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">' +
