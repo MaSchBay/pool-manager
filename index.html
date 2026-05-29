@@ -1433,6 +1433,10 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     </div>
   </div>
   <div class="card" style="margin-bottom:14px">
+    <div class="card-title">🏠 Home Assistant Integration</div>
+    <div id="ha-settings-section"></div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
     <div class="card-title">🔌 Shelly Filter-Steuerung</div>
     <div id="shelly-settings-section"></div>
   </div>
@@ -2009,6 +2013,7 @@ function renderEinstellungen(){
     '<p style="font-weight:700;margin-bottom:4px">Letzte Messung</p>'
     +'<p style="font-size:0.85rem;color:var(--text-secondary)">'+measStr+'</p>';
   if(typeof renderShellySettings==='function')renderShellySettings();
+  if(typeof renderHaSettings==='function')renderHaSettings();
   renderTapWaterSettings();
 }
 
@@ -6596,6 +6601,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   renderPartyDashboard();
   updateAnthropicKeyStatus();
   if(typeof initShelly==='function')initShelly();
+  if(typeof haFetchSensors==='function')haFetchSensors();
   // Alte dismissed Todos aufräumen (>3 Tage)
   (function(){
     var cutoff=Date.now()-3*86400000;
@@ -10797,6 +10803,164 @@ function loadProduktImage(poolId, input){
 
 
 // ============================================================
+// ══════════════════════════════════════════════════════════════
+// HOME ASSISTANT INTEGRATION
+// ══════════════════════════════════════════════════════════════
+
+const HA_DEFAULTS = {
+  enabled:    false,
+  url:        'http://homeassistant.local:8123',
+  token:      '',
+  airTempEntity:   'sensor.gtb_klima_temperatur',
+  humidityEntity:  'sensor.gtb_klima_luftfeuchtigkeit',
+  waterTempEntity: '',   // wird nach Lieferung Dienstag eingetragen
+};
+
+let haSettings = Object.assign({}, HA_DEFAULTS, ld('ha_settings', {}));
+
+// Latest values fetched from HA
+let haLiveData = { airTemp: null, humidity: null, waterTemp: null, fetchedAt: 0 };
+
+async function haFetchSensors() {
+  if (!haSettings.enabled || !haSettings.url || !haSettings.token) return;
+  const base    = haSettings.url.replace(/\/$/, '');
+  const headers = { 'Authorization': 'Bearer ' + haSettings.token, 'Content-Type': 'application/json' };
+
+  async function fetchState(entityId) {
+    if (!entityId) return null;
+    try {
+      const r = await fetch(base + '/api/states/' + entityId, { headers });
+      if (!r.ok) return null;
+      const j = await r.json();
+      const v = parseFloat(j.state);
+      return isNaN(v) ? null : v;
+    } catch { return null; }
+  }
+
+  const [airTemp, humidity, waterTemp] = await Promise.all([
+    fetchState(haSettings.airTempEntity),
+    fetchState(haSettings.humidityEntity),
+    fetchState(haSettings.waterTempEntity),
+  ]);
+
+  haLiveData = { airTemp, humidity, waterTemp, fetchedAt: Date.now() };
+
+  // Pre-fill water temp in active measurement field if empty
+  if (waterTemp !== null) {
+    const el = document.getElementById('input-temp');
+    if (el && el.value === '') el.value = waterTemp.toFixed(1);
+  }
+
+  // Refresh HA status badge if visible
+  const badge = document.getElementById('ha-live-badge');
+  if (badge) _renderHaLiveBadge(badge);
+}
+
+function _renderHaLiveBadge(el) {
+  if (!haSettings.enabled) { el.innerHTML = ''; return; }
+  const age = haLiveData.fetchedAt ? Math.round((Date.now() - haLiveData.fetchedAt) / 1000) : null;
+  const ok  = age !== null && age < 600;
+  const parts = [];
+  if (haLiveData.airTemp   !== null) parts.push('🌡 ' + haLiveData.airTemp.toFixed(1) + '°C Luft');
+  if (haLiveData.humidity  !== null) parts.push('💧 ' + Math.round(haLiveData.humidity) + '% Feuchte');
+  if (haLiveData.waterTemp !== null) parts.push('🌊 ' + haLiveData.waterTemp.toFixed(1) + '°C Wasser');
+  el.innerHTML = ok && parts.length
+    ? '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;font-size:0.78rem;color:#166534;margin-top:10px">'
+      + parts.join(' · ') + ' <span style="color:#86efac;font-size:0.7rem">(vor ' + age + 's)</span></div>'
+    : '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">Keine HA-Daten verfügbar</div>';
+}
+
+function renderHaSettings() {
+  const el = document.getElementById('ha-settings-section');
+  if (!el) return;
+  el.innerHTML =
+    '<div style="display:grid;gap:12px">' +
+
+    // Enable toggle
+    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
+      '<input type="checkbox" id="ha-enabled" ' + (haSettings.enabled ? 'checked' : '') + ' style="width:20px;height:20px;accent-color:var(--pool-blue)">' +
+      '<span style="font-weight:700;font-size:0.88rem">Home Assistant aktivieren</span>' +
+    '</label>' +
+
+    // URL + Token
+    '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px;display:grid;gap:10px">' +
+      '<div style="font-size:0.78rem;color:#0369a1;font-weight:700">🏠 Verbindung</div>' +
+      '<div style="font-size:0.75rem;color:#0369a1">Token: HA → Profil (unten links) → Sicherheit → Token erstellen</div>' +
+      '<div>' +
+        '<div class="form-label">HA URL</div>' +
+        '<input type="text" id="ha-url" value="' + haSettings.url + '" placeholder="http://homeassistant.local:8123" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
+      '</div>' +
+      '<div>' +
+        '<div class="form-label">Long-Lived Access Token</div>' +
+        '<input type="password" id="ha-token" value="' + haSettings.token + '" placeholder="ey..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
+      '</div>' +
+    '</div>' +
+
+    // Entities
+    '<div style="background:#fafafa;border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:10px">' +
+      '<div style="font-size:0.78rem;font-weight:700;color:var(--text-secondary)">📡 Sensor Entity-IDs</div>' +
+      '<div>' +
+        '<div class="form-label">Lufttemperatur</div>' +
+        '<input type="text" id="ha-air-temp" value="' + haSettings.airTempEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
+      '</div>' +
+      '<div>' +
+        '<div class="form-label">Luftfeuchtigkeit</div>' +
+        '<input type="text" id="ha-humidity" value="' + haSettings.humidityEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
+      '</div>' +
+      '<div>' +
+        '<div class="form-label">Wassertemperatur <span style="font-weight:400;color:var(--text-muted)">(Sensor folgt Di.)</span></div>' +
+        '<input type="text" id="ha-water-temp" value="' + (haSettings.waterTempEntity || '') + '" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
+      '</div>' +
+    '</div>' +
+
+    // Live badge
+    '<div id="ha-live-badge"></div>' +
+
+    // Buttons
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primary btn-sm" onclick="saveHaSettings()">💾 Speichern</button>' +
+      '<button class="btn btn-outline btn-sm" onclick="haTestConnection()">🔌 Verbindung testen</button>' +
+    '</div>' +
+    '<div id="ha-test-result" style="font-size:0.8rem;min-height:18px"></div>' +
+    '</div>';
+
+  _renderHaLiveBadge(document.getElementById('ha-live-badge'));
+}
+
+function saveHaSettings() {
+  haSettings.enabled          = document.getElementById('ha-enabled')?.checked || false;
+  haSettings.url              = (document.getElementById('ha-url')?.value || '').trim().replace(/\/$/, '');
+  haSettings.token            = (document.getElementById('ha-token')?.value || '').trim();
+  haSettings.airTempEntity    = (document.getElementById('ha-air-temp')?.value || '').trim();
+  haSettings.humidityEntity   = (document.getElementById('ha-humidity')?.value || '').trim();
+  haSettings.waterTempEntity  = (document.getElementById('ha-water-temp')?.value || '').trim();
+  sd('ha_settings', haSettings);
+  if (typeof toast === 'function') toast('✅ HA-Einstellungen gespeichert', 'success', 2500);
+  haFetchSensors();
+}
+
+async function haTestConnection() {
+  const el = document.getElementById('ha-test-result');
+  if (el) el.innerHTML = '⏳ Verbinde...';
+  const url   = (document.getElementById('ha-url')?.value || '').trim().replace(/\/$/, '');
+  const token = (document.getElementById('ha-token')?.value || '').trim();
+  if (!url || !token) { if (el) el.innerHTML = '⚠️ URL und Token eingeben'; return; }
+  try {
+    const r = await fetch(url + '/api/', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (r.ok) {
+      if (el) el.innerHTML = '<span style="color:#16a34a">✅ Verbindung erfolgreich</span>';
+    } else {
+      if (el) el.innerHTML = '<span style="color:#dc2626">❌ Fehler ' + r.status + ' – Token prüfen</span>';
+    }
+  } catch (e) {
+    if (el) el.innerHTML = '<span style="color:#dc2626">❌ Nicht erreichbar – URL und Netzwerk prüfen</span>';
+  }
+}
+
+// Auto-fetch every 5 minutes
+setInterval(haFetchSensors, 300000);
+
+// ══════════════════════════════════════════════════════════════
 // SHELLY 1PM MINI – FILTER-INTEGRATION (Cloud + Lokal)
 // ============================================================
 
