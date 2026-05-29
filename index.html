@@ -6299,6 +6299,10 @@ function updateOverdueBadge(){
 const _dashboardBase=renderDashboard;
 renderDashboard=async function(){
   await _dashboardBase();
+  // Shelly-Karte sofort ausblenden wenn HA aktiv
+  if(typeof haSettings!=='undefined' && haSettings.enabled && haSettings.url && haSettings.token){
+    const sc=document.getElementById('shelly-filter-card'); if(sc) sc.innerHTML='';
+  }
   // New dashboard features
   renderPoolGauge();
   renderStatKacheln();
@@ -10958,6 +10962,20 @@ async function haFetchSensors() {
     if (smRes.ok) { const j = await smRes.json(); sondermodusOn = j.state === 'on'; }
   } catch {}
 
+  // FI-Warnung: wenn Filter von AN → AUS wechselt → FI muss manuell zurückgeschaltet werden
+  const prevFilterOn = haLiveData.filterOn;
+  if (prevFilterOn === true && filterOn === false) {
+    if (typeof _shellyState !== 'undefined') {
+      _shellyState.gfciWarning = true;
+      sd('shelly_gfci_warning', true);
+    }
+  }
+  // FI-Warnung löschen wenn Filter wieder läuft
+  if (filterOn === true && typeof _shellyState !== 'undefined') {
+    _shellyState.gfciWarning = false;
+    sd('shelly_gfci_warning', false);
+  }
+
   haLiveData = { airTemp, humidity, waterTemp, filterRunMin, filterOn, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
 
   // Messfeld vorausfüllen
@@ -11020,17 +11038,20 @@ function renderHaCard() {
             (d.filterOn ? 'LÄUFT' : 'AUS') +
           '</span>'
           : '') +
-        (d.sondermodusOn ? '<span style="font-size:0.72rem;font-weight:800;background:#fee2e2;color:#b91c1c;padding:3px 8px;border-radius:8px">24h AN</span>' : '') +
+        (d.sondermodusOn ? '<span style="font-size:0.72rem;font-weight:800;background:#fee2e2;color:#b91c1c;padding:3px 8px;border-radius:8px;border:1px solid #fecaca">🔴 24h-Betrieb aktiv</span>' : '') +
         (fresh ? '<span style="font-size:0.68rem;color:var(--text-muted)">☀️ ' + fmt(d.sunrise) + ' 🌙 ' + fmt(d.sunset) + '</span>' : '') +
         '<button onclick="haFetchSensors()" style="border:1px solid var(--border);background:transparent;border-radius:8px;padding:3px 10px;font-size:0.75rem;cursor:pointer;color:var(--text-secondary)">🔄</button>' +
       '</div>' +
     '</div>' +
     // FI-Warnung
-    (_shellyState && _shellyState.gfciWarning
-      ? '<div style="background:#fee2e2;border:2px solid #ef4444;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">' +
-          '<span style="font-size:1.4rem">⚡</span>' +
-          '<div><div style="font-size:0.82rem;font-weight:800;color:#b91c1c">Personenschutzschalter (FI) zurücksetzen!</div>' +
-          '<div style="font-size:0.75rem;color:#dc2626;margin-top:2px">Shelly hat Strom getrennt – FI vor Neustart zurücksetzen.</div></div>' +
+    (typeof _shellyState !== 'undefined' && _shellyState.gfciWarning
+      ? '<div style="background:#fee2e2;border:2px solid #ef4444;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px">' +
+          '<span style="font-size:1.6rem;flex-shrink:0">⚡</span>' +
+          '<div style="flex:1">' +
+            '<div style="font-size:0.85rem;font-weight:800;color:#b91c1c">FI-Schalter zurücksetzen!</div>' +
+            '<div style="font-size:0.78rem;color:#dc2626;margin-top:3px">Shelly hat Strom getrennt. Bevor der Filter wieder anlaufen kann, muss der FI-Schalter manuell eingeschaltet werden.</div>' +
+          '</div>' +
+          '<button onclick="shellyDismissGfci()" style="background:none;border:none;color:#b91c1c;cursor:pointer;font-size:1.2rem;flex-shrink:0;padding:0 2px" title="Quittieren">×</button>' +
         '</div>'
       : '') +
 
@@ -11378,6 +11399,8 @@ async function shellyCommand(on){
 // ── Haupt-Tick (jede Minute) ─────────────────────────────────
 async function shellyTick(){
   if(!shellySettings.enabled) return;
+  // HA übernimmt Steuerung – Shelly-Tick überspringen
+  if(typeof haSettings!=='undefined' && haSettings.enabled && haSettings.url && haSettings.token) return;
   if(shellySettings.mode==='local' && !shellySettings.ip) return;
   if(shellySettings.mode==='cloud' && (!shellySettings.cloudAuthKey||!shellySettings.cloudDeviceId)) return;
 
@@ -11536,6 +11559,8 @@ async function shellyBadeschlussTimer(){
 function renderShellyCard(){
   const el = document.getElementById('shelly-filter-card');
   if(!el) return;
+  // Wenn HA aktiv: Karte ausblenden
+  if(typeof haSettings!=='undefined' && haSettings.enabled && haSettings.url && haSettings.token){ el.innerHTML=''; return; }
   const configured = shellySettings.enabled && (
     (shellySettings.mode==='cloud' && shellySettings.cloudAuthKey && shellySettings.cloudDeviceId) ||
     (shellySettings.mode==='local' && shellySettings.ip)
