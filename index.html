@@ -2600,7 +2600,13 @@ function renderWeatherCard(id,w){
       cnt++;
     }
   }
-  el.innerHTML=`<div style="display:flex;align-items:center;gap:14px"><div style="font-size:2.8rem">${currIcon}</div><div><div style="font-family:Nunito,sans-serif;font-weight:900;font-size:2.6rem;color:var(--pool-dark);line-height:1">${Math.round(curr.temperature_2m)}°C</div><div style="color:var(--text-secondary);font-size:0.9rem">${wm.l}</div><div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap"><span style="font-size:0.78rem;color:var(--text-muted)">💧${curr.relative_humidity_2m}%</span><span style="font-size:0.78rem;color:var(--text-muted)">🌬️${Math.round(curr.windspeed_10m)}km/h</span><span style="font-size:0.78rem;color:var(--text-muted)">🌧️${curr.precipitation}mm</span><span style="font-size:0.78rem;color:var(--text-muted)">🌅 ${ss}</span></div></div></div><div class="forecast-hours-row" style="margin-top:12px">${h3}</div>`;
+  // HA-Daten bevorzugen wenn verfügbar (Lufttemperatur + Feuchtigkeit)
+  const haTemp = (typeof haLiveData!=='undefined' && haLiveData.airTemp !== null) ? haLiveData.airTemp : null;
+  const haHum  = (typeof haLiveData!=='undefined' && haLiveData.humidity !== null) ? Math.round(haLiveData.humidity) : null;
+  const dispTemp = haTemp !== null ? Math.round(haTemp) : Math.round(curr.temperature_2m);
+  const dispHum  = haHum  !== null ? haHum : curr.relative_humidity_2m;
+  const haLabel  = haTemp !== null ? '<span style="font-size:0.65rem;color:#0369a1;background:#e0f2fe;border-radius:4px;padding:1px 5px;margin-left:5px;font-weight:700">HA</span>' : '';
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:14px"><div style="font-size:2.8rem">${currIcon}</div><div><div style="font-family:Nunito,sans-serif;font-weight:900;font-size:2.6rem;color:var(--pool-dark);line-height:1">${dispTemp}°C${haLabel}</div><div style="color:var(--text-secondary);font-size:0.9rem">${wm.l}</div><div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap"><span style="font-size:0.78rem;color:var(--text-muted)">💧${dispHum}%</span><span style="font-size:0.78rem;color:var(--text-muted)">🌬️${Math.round(curr.windspeed_10m)}km/h</span><span style="font-size:0.78rem;color:var(--text-muted)">🌧️${curr.precipitation}mm</span><span style="font-size:0.78rem;color:var(--text-muted)">🌅 ${ss}</span></div></div></div><div class="forecast-hours-row" style="margin-top:12px">${h3}</div>`;
 }
 
 function renderWeatherWarning(id,w){
@@ -5773,9 +5779,11 @@ function renderBadeplaner(weatherData){
 // ----- SCHWIMM-EMPFEHLUNG im Wetter-Card -----
 function renderSwimAdvice(id, weatherData){
   const el=document.getElementById(id);if(!el)return;
+  // HA Wassertemperatur bevorzugen, Fallback auf letzte Messung
+  const haWt = (typeof haLiveData!=='undefined' && haLiveData.waterTemp !== null) ? haLiveData.waterTemp : null;
   const last=getLastMeasurement();
-  if(!last||last.temp===undefined){el.innerHTML='';return;}
-  const wt=last.temp;
+  if(!haWt && (!last||last.temp===undefined)){el.innerHTML='';return;}
+  const wt = haWt !== null ? haWt : last.temp;
   let cls='temp-ok',msg='',icon='';
   if(wt<20){cls='temp-too-cold';icon='🥶';msg=`Wassertemp ${wt}° – etwas kühl zum Schwimmen`}
   else if(wt>30){cls='temp-hot';icon='🌡️';msg=`Wassertemp ${wt}° – warm, häufiger messen!`}
@@ -10982,8 +10990,8 @@ function renderHaCard() {
   const wStr  = d.waterTemp !== null ? d.waterTemp.toFixed(1) + ' °C' : '-- °C';
   const wSub  = d.waterTemp !== null ? '' : '<span style="font-size:0.72rem;color:var(--text-muted)"> Sensor Di.</span>';
 
-  // Nacht-Absenkung / Tages-Erwärmung
-  const nightStr = d.nightDrop !== null ? (d.nightDrop > 0 ? '+' : '') + d.nightDrop + ' °C' : '-- °C';
+  // Nacht-Abkühlung / Tages-Erwärmung
+  const nightStr = d.nightDrop !== null ? (d.nightDrop >= 0 ? '+' : '') + d.nightDrop + ' °C' : '-- °C';
   const dayStr   = d.dayRise   !== null ? (d.dayRise   > 0 ? '+' : '') + d.dayRise   + ' °C' : '-- °C';
   const nightCol = d.nightDrop !== null ? (d.nightDrop < -2 ? '#ef4444' : '#94a3b8') : 'var(--text-muted)';
   const dayCol   = d.dayRise   !== null ? (d.dayRise   > 3  ? '#f59e0b' : '#22c55e') : 'var(--text-muted)';
@@ -11005,23 +11013,28 @@ function renderHaCard() {
       _haKachel('🌊', wStr, 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''),         d.waterTemp !== null) +
     '</div>' +
 
-    // Filter-Laufzeit
+    // Filter-Laufzeit + Steuerung
     '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+      '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">' +
         '<span style="font-size:0.78rem;font-weight:700;color:var(--text-secondary)">🔄 Filter heute</span>' +
         '<span style="font-size:0.88rem;font-weight:800;color:' + fCol + '">' + (d.filterRunMin !== null ? fStr : '--') + ' <span style="font-size:0.72rem;color:var(--text-muted)">/8h</span></span>' +
+        '<div style="display:flex;gap:5px;margin-left:auto">' +
+          '<button onclick="shellyManualOn()" style="padding:4px 11px;border-radius:7px;border:none;background:#16a34a;color:white;font-weight:700;font-size:0.74rem;cursor:pointer">▲ Ein</button>' +
+          '<button onclick="shellyManualOff()" style="padding:4px 11px;border-radius:7px;border:none;background:#dc2626;color:white;font-weight:700;font-size:0.74rem;cursor:pointer">▼ Aus</button>' +
+          '<button onclick="shellySondermodus()" style="padding:4px 9px;border-radius:7px;border:2px solid ' + (shellySettings&&shellySettings.sondermodus24h?'#dc2626':'#9ca3af') + ';background:' + (shellySettings&&shellySettings.sondermodus24h?'#fee2e2':'transparent') + ';color:' + (shellySettings&&shellySettings.sondermodus24h?'#b91c1c':'#6b7280') + ';font-weight:700;font-size:0.72rem;cursor:pointer">24h ' + (shellySettings&&shellySettings.sondermodus24h?'AN':'AUS') + '</button>' +
+        '</div>' +
       '</div>' +
       '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">' +
         '<div style="height:100%;width:' + fPct + '%;background:' + fCol + ';border-radius:3px;transition:width .5s"></div>' +
       '</div>' +
     '</div>' +
 
-    // Nacht-Absenkung + Tages-Erwärmung
+    // Nacht-Abkühlung + Tages-Erwärmung
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
       '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">' +
         '<div style="font-size:1.1rem">🌙</div>' +
         '<div style="font-size:1rem;font-weight:800;color:' + nightCol + '">' + nightStr + '</div>' +
-        '<div style="font-size:0.68rem;color:var(--text-muted);font-weight:700;margin-top:2px">NACHT-ABSENKUNG</div>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted);font-weight:700;margin-top:2px">NACHT-ABKÜHLUNG</div>' +
         '<div style="font-size:0.65rem;color:var(--text-muted)">' + fmt(d.sunrise ? new Date(d.sunrise - 86400000*0) : null) + ' SU → SA</div>' +
       '</div>' +
       '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">' +
