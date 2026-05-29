@@ -2298,6 +2298,7 @@ function saveTimerMeasure(){
     measurements.push(entry);sd('measurements',measurements);
     logHistory({type:'messung',time:entry.time,...entry,note:'Nach Timer-Erinnerung gemessen'});
     checkAutoBan(entry);
+    if(typeof updateSkimmerTabFacKorr==='function')updateSkimmerTabFacKorr();
   }
   // Mark timer done
   const t=timerTodos.find(x=>x.id===id);if(t){t.done=true;sd('timer_todos',timerTodos);}
@@ -2403,6 +2404,8 @@ function saveMeasurement(){
   setTimeout(()=>{document.getElementById('mess-feedback').innerHTML=''},3000);
   if(typeof toast==='function')toast('Messung gespeichert','success',2000);
   if(navigator.vibrate)navigator.vibrate(60);
+  // FAC-basierte Kalibrierung der Tab-Prognose
+  if(typeof updateSkimmerTabFacKorr==='function')updateSkimmerTabFacKorr();
   clearMeasurementForm();
 }
 
@@ -9553,6 +9556,10 @@ function registerSkimmerTabs(anzahl, zeitpunkt) {
   skimmerTabState.tabsEingelegt = anzahl;
   skimmerTabState.eingelgtAm = (zeitpunkt || new Date()).toISOString();
   skimmerTabState.tabWeightG = 20;
+  // Korrekturfaktor zurücksetzen – neue Tabs, neuer Lernzyklus
+  skimmerTabState.facKorrFaktor = 1.0;
+  skimmerTabState.facKorrAm = null;
+  skimmerTabState.facKorrBasis = null;
   saveSkimmerTabState();
   renderSkimmerTabPrognose();
 }
@@ -9583,13 +9590,93 @@ function tempDecayFactor(tempC) {
   return Math.pow(1.15, (t - 20) / 5);
 }
 
+// FAC-basierte Kalibrierung der Tab-Auflösungsrate
+// Wird nach jeder Messung aufgerufen (min. 4h nach Einlegen, max. 5 Tage alt)
+// Vergleicht: erwarteter FAC-Beitrag der Tabs vs. gemessener FAC-Delta
+// Ergebnis: facKorrFaktor in skimmerTabState (< 1.0 = schneller verbraucht, > 1.0 = langsamer)
+function updateSkimmerTabFacKorr() {
+  const s = skimmerTabState;
+  if (!s.eingelgtAm || s.tabsEingelegt <= 0) return;
+
+  const eingelgtAt = new Date(s.eingelgtAm).getTime();
+  const seitStunden = (Date.now() - eingelgtAt) / 3600000;
+
+  // Nur zwischen 4h und 5 Tagen nach Einlegen kalibrieren (sinnvoller Zeitraum)
+  if (seitStunden < 4 || seitStunden > 120) return;
+
+  // Letzte Messung MIT FAC-Wert, die NACH dem Einlegen liegt
+  const messNachEinlegen = measurements
+    .filter(function(m) { return m.chlor !== undefined && m.time && new Date(m.time).getTime() > eingelgtAt + 4*3600000; })
+    .sort(function(a,b) { return new Date(b.time) - new Date(a.time); });
+
+  if (messNachEinlegen.length === 0) return;
+  const neueste = messNachEinlegen[0];
+
+  // Messung vor dem Einlegen (Basiswert)
+  const messVorher = measurements
+    .filter(function(m) { return m.chlor !== undefined && m.time && new Date(m.time).getTime() < eingelgtAt; })
+    .sort(function(a,b) { return new Date(b.time) - new Date(a.time); });
+
+  const facVorher = messVorher.length > 0 ? messVorher[0].chlor : (settings.chlor ? settings.chlor.target : 2.0);
+  const facGemessen = neueste.chlor;
+
+  // Erwarteter FAC nach Tabs: 4 Tabs à 20g à ~56% Aktivchlor / 10.520L ≈ +0.42 ppm
+  // Aber: Ein Teil löst sich erst über die Woche → nach X Stunden erst anteilig
+  const temp = getWaterTemp();
+  const tageProTab = tabDissolutionDaysPerTab(temp);
+  const gesamtTage = s.tabsEingelegt * tageProTab;
+  const seitTage = seitStunden / 24;
+  const anteilAufgeloest = Math.min(1, seitTage / gesamtTage);
+
+  // Chlorbeitrag: 20g Tab × 56% Aktivchlor = 11.2g Cl₂ pro Tab
+  // ppm in 10.520L: 11.2g / 10.52m³ = ~1.06 ppm pro Tab (gesamt)
+  const chlorProTabGesamt = (s.tabWeightG * 0.56) / POOL_VOLUME / 1000 * 1000; // ppm
+  const erwarteterChlorBeitrag = s.tabsEingelegt * chlorProTabGesamt * anteilAufgeloest;
+
+  // Tatsächlicher FAC-Delta (kann durch UV/Verbrauch auch negativ sein)
+  const facDelta = facGemessen - facVorher;
+
+  // Natürlicher Abbau ohne Tabs: aus predictChlorDecay Basisrate schätzen
+  // Fallback: 0.2 ppm/Tag Abbau (konservativ)
+  const chlorDecay = predictChlorDecay ? predictChlorDecay() : null;
+  const abbauRateProTag = chlorDecay && chlorDecay.ratePerDay < 0 ? Math.abs(chlorDecay.ratePerDay) : 0.2;
+  const erwarteterAbbau = abbauRateProTag * seitTage;
+
+  // Netto-erwarteter Chlorwert: Beitrag der Tabs minus natürlicher Abbau
+  const nettoErwartet = erwarteterChlorBeitrag - erwarteterAbbau;
+  if (nettoErwartet <= 0.05) return; // Zu wenig Signal – nicht kalibrieren
+
+  // Korrekturfaktor: wie gut stimmt der tatsächliche Delta mit dem erwarteten überein?
+  // facDelta = tatsächlicher Netto-Effekt; nettoErwartet = theoretischer Netto-Effekt
+  // Faktor > 1: Tabs wirken besser/länger als erwartet
+  // Faktor < 1: Tabs werden schneller verbraucht (höhere Badenutzung, UV, etc.)
+  const rohFaktor = (facDelta + erwarteterAbbau) / erwarteterChlorBeitrag;
+  // Begrenzen auf [0.3, 2.0] und mit gleitendem Mittel dämpfen
+  const clampedFaktor = Math.max(0.3, Math.min(2.0, rohFaktor));
+  const alterFaktor = s.facKorrFaktor || 1.0;
+  // 70% neuer Wert, 30% alter Wert (Dämpfung gegen Ausreißer)
+  const neuerFaktor = Math.round((0.7 * clampedFaktor + 0.3 * alterFaktor) * 100) / 100;
+
+  if (Math.abs(neuerFaktor - alterFaktor) > 0.05) {
+    skimmerTabState.facKorrFaktor = neuerFaktor;
+    skimmerTabState.facKorrAm = neueste.time;
+    skimmerTabState.facKorrBasis = { facVorher: facVorher, facGemessen: facGemessen, erwartet: Math.round(nettoErwartet*100)/100 };
+    saveSkimmerTabState();
+  }
+}
+
 // Berechnet: Restgewicht Tabs im Skimmer (g), Prognose Leerung
 function calcSkimmerTabPrognose() {
   const s = skimmerTabState;
   if (!s.eingelgtAm || s.tabsEingelegt <= 0) return null;
 
   const temp = getWaterTemp();
-  const tage = tabDissolutionDaysPerTab(temp);   // Auflösungszeit pro Tab in Tagen
+  const tageRoh = tabDissolutionDaysPerTab(temp);   // Auflösungszeit pro Tab in Tagen (temperaturkorrigiert)
+
+  // FAC-Korrekturfaktor anwenden: Faktor < 1 → Tabs lösen sich schneller → weniger Tage
+  const facKorr = s.facKorrFaktor || 1.0;
+  const tage = tageRoh * facKorr;
+
   const gesamtGramm = s.tabsEingelegt * s.tabWeightG;  // z.B. 4×20 = 80g
   const gesamtTage = s.tabsEingelegt * tage;     // Gesamtlaufzeit (Tabs lösen sich sequenziell)
   const seit = (Date.now() - new Date(s.eingelgtAm).getTime()) / 86400000; // Tage seit Einlegen
@@ -9607,6 +9694,14 @@ function calcSkimmerTabPrognose() {
       ? `🌡️ Wassertemp. ${temp.toFixed(1)}°C – Verbrauch leicht erhöht`
       : null);
 
+  // FAC-Kalibrierungs-Hinweis
+  let facKorrHinweis = null;
+  if (facKorr < 0.85) {
+    facKorrHinweis = `📊 FAC-Messung: Tabs werden ~${Math.round((1-facKorr)*100)}% schneller verbraucht als erwartet – Prognose angepasst`;
+  } else if (facKorr > 1.15) {
+    facKorrHinweis = `📊 FAC-Messung: Tabs halten ~${Math.round((facKorr-1)*100)}% länger als erwartet – Prognose angepasst`;
+  }
+
   return {
     restGramm: Math.round(restGramm),
     restTage: restTage,
@@ -9618,6 +9713,8 @@ function calcSkimmerTabPrognose() {
     temp: temp,
     tempFactor: tempFactor,
     tempHinweis: tempHinweis,
+    facKorr: facKorr,
+    facKorrHinweis: facKorrHinweis,
     auflösungTageProTab: Math.round(tage * 10) / 10
   };
 }
@@ -9664,6 +9761,7 @@ function renderSkimmerTabPrognose() {
         '</div>' +
         // Temperaturhinweis
         (p.tempHinweis ? '<div style="font-size:0.78rem;color:#b45309;margin-bottom:4px">' + p.tempHinweis + '</div>' : '') +
+        (p.facKorrHinweis ? '<div style="font-size:0.78rem;color:#6d28d9;margin-bottom:4px">' + p.facKorrHinweis + '</div>' : '') +
         // Dringende Warnung
         (dringend ? '<div style="font-size:0.82rem;color:#dc2626;font-weight:700;margin-bottom:6px">🚨 Tabs jetzt nachfüllen!</div>' : '') +
       '</div>';
