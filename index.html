@@ -10956,20 +10956,17 @@ async function haFetchSensors() {
   }
 
   // Filter-Status + Sondermodus aus HA
-  let filterOn = null, sondermodusOn = false;
+  let filterOn = null, sondermodusOn = false, filterPower = 0, filterRunning = false;
   try {
-    const [swRes, smRes] = await Promise.all([
+    const [swRes, smRes, pwRes] = await Promise.all([
       fetch(`${base}/api/states/switch.shelly1pmminig3_e4b063f25a98`, { headers }),
       fetch(`${base}/api/states/input_boolean.poolfilter_sondermodus`, { headers }),
+      fetch(`${base}/api/states/${haSettings.shellyPowerEntity||'sensor.shelly1pmminig3_e4b063f25a98_leistung'}`, { headers }),
     ]);
     if (swRes.ok) { const j = await swRes.json(); filterOn = j.state === 'on'; }
     if (smRes.ok) { const j = await smRes.json(); sondermodusOn = j.state === 'on'; }
-    // Aktuellen Leistungswert holen für echten Laufstatus
-    const pwRes = await fetch(`${base}/api/states/${haSettings.shellyPowerEntity||'sensor.shelly1pmminig3_e4b063f25a98_leistung'}`, { headers });
-    let filterPower = 0;
     if (pwRes.ok) { const j = await pwRes.json(); filterPower = parseFloat(j.state)||0; }
-    // Echter Laufstatus: Schalter AN und Leistung über Schwellwert
-    const filterRunning = filterOn && filterPower > (haSettings.powerThreshold||50);
+    filterRunning = filterOn === true && filterPower > (haSettings.powerThreshold||50);
   } catch {}
 
   // FI-Warnung: wenn Filter von AN → AUS wechselt → FI muss manuell zurückgeschaltet werden
