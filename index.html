@@ -10990,16 +10990,19 @@ function renderHaCard() {
 
   el.innerHTML =
     '<div class="card" style="margin-bottom:12px">' +
-    '<div class="card-title" style="justify-content:space-between">' +
+    '<div class="card-title" style="justify-content:space-between;align-items:center">' +
       '<span>🏠 Home Assistant</span>' +
-      (fresh ? '<span style="font-size:0.7rem;color:var(--text-muted)">☀️ ' + fmt(d.sunrise) + ' · 🌙 ' + fmt(d.sunset) + '</span>' : '') +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        (fresh ? '<span style="font-size:0.7rem;color:var(--text-muted)">☀️ ' + fmt(d.sunrise) + ' · 🌙 ' + fmt(d.sunset) + '</span>' : '') +
+        '<button onclick="haFetchSensors()" style="border:1px solid var(--border);background:transparent;border-radius:8px;padding:3px 10px;font-size:0.75rem;cursor:pointer;color:var(--text-secondary)">🔄</button>' +
+      '</div>' +
     '</div>' +
 
     // Zeile 1: Luft + Feuchte + Wasser
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">' +
-      _haKachel('🌡️', d.airTemp !== null ? d.airTemp.toFixed(1) + ' °C' : '-- °C', 'Luft', d.airTemp !== null ? '#f1f5f9' : 'var(--text-muted)') +
-      _haKachel('💧', d.humidity !== null ? Math.round(d.humidity) + ' %' : '-- %', 'Feuchte', d.humidity !== null ? '#f1f5f9' : 'var(--text-muted)') +
-      _haKachel('🌊', wStr + (d.waterTemp === null ? '' : ''), 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''), d.waterTemp !== null ? '#f1f5f9' : 'var(--text-muted)') +
+      _haKachel('🌡️', d.airTemp  !== null ? d.airTemp.toFixed(1)  + ' °C' : '-- °C', 'Luft',    d.airTemp  !== null) +
+      _haKachel('💧', d.humidity !== null ? Math.round(d.humidity) + ' %'  : '-- %',  'Feuchte', d.humidity !== null) +
+      _haKachel('🌊', wStr, 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''),         d.waterTemp !== null) +
     '</div>' +
 
     // Filter-Laufzeit
@@ -11032,11 +11035,12 @@ function renderHaCard() {
     '</div>';
 }
 
-function _haKachel(icon, val, label, col) {
+function _haKachel(icon, val, label, hasValue) {
+  const col = hasValue ? 'var(--text-primary,#1e293b)' : 'var(--text-muted,#94a3b8)';
   return '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px 6px;text-align:center">' +
     '<div style="font-size:1.2rem">' + icon + '</div>' +
     '<div style="font-size:0.95rem;font-weight:800;color:' + col + ';line-height:1.2">' + val + '</div>' +
-    '<div style="font-size:0.65rem;color:var(--text-muted);font-weight:700;margin-top:2px">' + label.toUpperCase() + '</div>' +
+    '<div style="font-size:0.65rem;color:var(--text-muted,#94a3b8);font-weight:700;margin-top:2px">' + label.toUpperCase() + '</div>' +
   '</div>';
 }
 
@@ -11289,13 +11293,42 @@ async function shellySet(on){
   return await shellyLocalRPC('Switch.Set',{id:0, on:on});
 }
 
+// HA Service-Call Helper
+async function haCallService(domain, service, data){
+  if(!haSettings.enabled||!haSettings.url||!haSettings.token) return false;
+  try{
+    const r = await fetch(haSettings.url+'/api/services/'+domain+'/'+service,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+haSettings.token,'Content-Type':'application/json'},
+      body:JSON.stringify(data)
+    });
+    return r.ok;
+  }catch{return false;}
+}
+
+// HA datetime helper: set input_datetime
+async function haSetDatetime(entityId, date){
+  const pad = n => String(n).padStart(2,'0');
+  const dt = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return await haCallService('input_datetime','set_datetime',{entity_id:entityId, datetime:dt});
+}
+
 async function shellyCommand(on){
+  // Wenn HA konfiguriert: Schalten über HA (HA-Automation übernimmt Logik)
+  if(haSettings.enabled && haSettings.url && haSettings.token){
+    const ok = await haCallService('switch', on?'turn_on':'turn_off',
+      {entity_id:'switch.shelly1pmminig3_e4b063f25a98'});
+    if(ok){
+      if(!on){ _shellyState.gfciWarning=true; sd('shelly_gfci_warning',true); }
+      _shellyState.output = on;
+      renderShellyCard();
+      return true;
+    }
+  }
+  // Fallback: direkt über Shelly
   const result = await shellySet(on);
   if(result === null) return false;
-  if(!on){
-    _shellyState.gfciWarning = true;
-    sd('shelly_gfci_warning', true);
-  }
+  if(!on){ _shellyState.gfciWarning=true; sd('shelly_gfci_warning',true); }
   _shellyState.output = on;
   renderShellyCard();
   return true;
@@ -11390,9 +11423,6 @@ async function shellyPushSchedules(){
 
 // Nach Dosierung: Shelly schaltet nach X Minuten ab (toggle_after)
 async function shellyPushDoseTimer(productKey){
-  if(!shellySettings.enabled) return;
-  if(shellySettings.mode==='cloud'&&!shellySettings.cloudDeviceId) return;
-  if(shellySettings.mode==='local'&&!shellySettings.ip) return;
   const minMap = {chlorplus:8*60, poolklar:2*60, flockmittel:15};
   const min = minMap[productKey];
   if(!min) return;
@@ -11400,12 +11430,29 @@ async function shellyPushDoseTimer(productKey){
   const fireAt = new Date(Date.now() + sek*1000);
   const timeStr = fireAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
   const namen = {chlorplus:'Chlor Plus',poolklar:'Poolklar',flockmittel:'Flockmittel'};
+
+  // Wenn HA konfiguriert: Timer über HA setzen (intelligente Logik in HA-Automation)
+  if(haSettings.enabled && haSettings.url && haSettings.token){
+    const dtOk = await haSetDatetime('input_datetime.poolfilter_dosier_timer', fireAt);
+    const swOk = await haCallService('switch','turn_on',{entity_id:'switch.shelly1pmminig3_e4b063f25a98'});
+    if(dtOk || swOk){
+      if(typeof logHistory==='function')
+        logHistory({type:'wartung',time:new Date().toISOString(),
+          note:'⚗️ HA-Timer: Nach '+namen[productKey]+' – Filter bis '+timeStr+' Uhr (HA übernimmt)'});
+      if(typeof toast==='function')
+        toast('⚗️ Filter läuft nach '+namen[productKey]+' – HA schaltet um '+timeStr+' Uhr ab','info',5000);
+      return;
+    }
+  }
+
+  // Fallback: direkt über Shelly Cloud/Lokal
+  if(!shellySettings.enabled) return;
+  if(shellySettings.mode==='cloud'&&!shellySettings.cloudDeviceId) return;
+  if(shellySettings.mode==='local'&&!shellySettings.ip) return;
   let res;
   if(shellySettings.mode==='cloud'){
-    // Cloud: /device/relay/control mit timer-Parameter
     res = await shellyCloudControl(true, sek);
   } else {
-    // Lokal: Switch.Set mit toggle_after
     res = await shellyLocalRPC('Switch.Set',{id:0, on:true, toggle_after:sek});
   }
   if(res && !res._err){
@@ -11550,9 +11597,15 @@ async function shellySondermodus(){
   sd('shelly_settings', shellySettings);
   const an = shellySettings.sondermodus24h;
   if(typeof toast==='function')
-    toast(an ? '🔴 24h-Betrieb aktiviert – übertrage auf Shelly…' : '✅ 24h-Betrieb deaktiviert – übertrage auf Shelly…','info',3000);
-  // Zeitpläne entsprechend aktivieren/deaktivieren
-  await shellyPushSchedules();
+    toast(an ? '🔴 24h-Betrieb aktiviert…' : '✅ 24h-Betrieb deaktiviert…','info',3000);
+  // Wenn HA konfiguriert: Sondermodus über HA input_boolean
+  if(haSettings.enabled && haSettings.url && haSettings.token){
+    await haCallService('input_boolean', an?'turn_on':'turn_off',
+      {entity_id:'input_boolean.poolfilter_sondermodus'});
+  } else {
+    // Fallback: Shelly-Zeitpläne direkt
+    await shellyPushSchedules();
+  }
   renderShellyCard();
   renderShellySettings();
 }
