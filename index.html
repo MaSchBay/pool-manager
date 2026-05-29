@@ -846,6 +846,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="card-title">🚫 Kinder-Badeverbot</div>
     <div id="kinder-ban-panel"></div>
   </div>
+  <div id="skimmer-tab-prognose"></div>
   <div id="chlor-decay-dashboard"></div>
   <div id="backup-reminder-main"></div>
   <div id="dash-stock-warning"></div>
@@ -9517,9 +9518,10 @@ renderChlorDecayCard=function(){
   const dateStr=p.date.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'});
   const coverHint=p.adjusted?' <span style="font-weight:800;color:#b45309">(Pool offen – Abbau beschleunigt)</span>':
     coverState.covered?' <span style="font-size:0.78rem;opacity:0.8">(Plane drauf)</span>':'';
+  const tempHint=p.tempAdjusted?' <span style="font-size:0.78rem;color:#b45309">🌡️ '+p.tempC.toFixed(1)+'°C – Verbrauch temperaturbedingt erhöht</span>':'';
   el.innerHTML='<div class="chlor-decay-card">'
     +'<div style="font-size:1.4rem">📉</div>'
-    +'<div style="flex:1">Chlor fällt voraussichtlich '+when+' ('+dateStr+') unter Minimum ('+settings.chlor.min+' ppm) – Verbrauch: ~'+Math.abs(p.ratePerDay).toFixed(2)+' ppm pro Tag'+coverHint+'</div>'
+    +'<div style="flex:1">Chlor fällt voraussichtlich '+when+' ('+dateStr+') unter Minimum ('+settings.chlor.min+' ppm) – Verbrauch: ~'+Math.abs(p.ratePerDay).toFixed(2)+' ppm pro Tag'+coverHint+tempHint+'</div>'
     +'</div>';
 };
 
@@ -9529,6 +9531,251 @@ renderDashboard=async function(){
   await _origRenderDashboard();
   if(typeof renderCoverStatusCard==='function')renderCoverStatusCard();
 };
+
+// ============================================================
+// LANGZEIT-TAB PROGNOSE (Skimmer-Tabs + Temperaturabhängiger Verbrauch)
+// ============================================================
+
+// --- State: Skimmer-Tab-Tracking ---
+// skimmerTabState: { tabsEingelegt: number, eingelgtAm: ISO-string, tabWeightG: 20 }
+let skimmerTabState = ld('skimmerTabState', {
+  tabsEingelegt: 0,
+  eingelgtAm: null,
+  tabWeightG: 20
+});
+
+function saveSkimmerTabState() {
+  sd('skimmerTabState', skimmerTabState);
+}
+
+// Registriert, dass Langzeit-Tabs in den Skimmer gelegt wurden
+function registerSkimmerTabs(anzahl, zeitpunkt) {
+  skimmerTabState.tabsEingelegt = anzahl;
+  skimmerTabState.eingelgtAm = (zeitpunkt || new Date()).toISOString();
+  skimmerTabState.tabWeightG = 20;
+  saveSkimmerTabState();
+  renderSkimmerTabPrognose();
+}
+
+// Holt Wassertemperatur: zuerst aus HA-Live, sonst letzte Messung
+function getWaterTemp() {
+  if (typeof haLiveData !== 'undefined' && haLiveData && haLiveData.waterTemp !== null && haLiveData.waterTemp !== undefined) {
+    return haLiveData.waterTemp;
+  }
+  const last = getLastMeasurement();
+  return (last && last.temp !== undefined) ? last.temp : null;
+}
+
+// Auflösungsrate in Tage pro Tab (20g) als Funktion der Temperatur
+// Basis: 7 Tage bei 25°C (medi pool Angabe ca. 4 Tabs/10.000L/Woche)
+// Chemische Faustregel: je 10°C Erhöhung ~doppelte Reaktionsrate (van't Hoff)
+// Vereinfacht: Lösungsdauer = 7 × 2^((25 - T) / 10) Tage, begrenzt auf [2, 14]
+function tabDissolutionDaysPerTab(tempC) {
+  const t = (tempC !== null && tempC !== undefined) ? tempC : 25;
+  const days = 7 * Math.pow(2, (25 - t) / 10);
+  return Math.max(2, Math.min(14, days));
+}
+
+// Temperatur-Faktor für den Chlor-Verbrauch im Wasser
+// Basis: 1.0 bei 20°C; +~15% je 5°C Erhöhung (kombiniert: UV, Biologie, Oxidation)
+function tempDecayFactor(tempC) {
+  const t = (tempC !== null && tempC !== undefined) ? tempC : 20;
+  return Math.pow(1.15, (t - 20) / 5);
+}
+
+// Berechnet: Restgewicht Tabs im Skimmer (g), Prognose Leerung
+function calcSkimmerTabPrognose() {
+  const s = skimmerTabState;
+  if (!s.eingelgtAm || s.tabsEingelegt <= 0) return null;
+
+  const temp = getWaterTemp();
+  const tage = tabDissolutionDaysPerTab(temp);   // Auflösungszeit pro Tab in Tagen
+  const gesamtGramm = s.tabsEingelegt * s.tabWeightG;  // z.B. 4×20 = 80g
+  const gesamtTage = s.tabsEingelegt * tage;     // Gesamtlaufzeit (Tabs lösen sich sequenziell)
+  const seit = (Date.now() - new Date(s.eingelgtAm).getTime()) / 86400000; // Tage seit Einlegen
+  const verbrauchteGramm = Math.min(gesamtGramm, (seit / gesamtTage) * gesamtGramm);
+  const restGramm = Math.max(0, gesamtGramm - verbrauchteGramm);
+  const restTage = Math.max(0, gesamtTage - seit);
+  const leerDatum = new Date(new Date(s.eingelgtAm).getTime() + gesamtTage * 86400000);
+  const restProzent = gesamtGramm > 0 ? Math.round(restGramm / gesamtGramm * 100) : 0;
+
+  // Temperaturhinweis für Chlorverbrauch
+  const tempFactor = tempDecayFactor(temp);
+  const tempHinweis = temp !== null && temp > 25
+    ? `⚠️ Wassertemp. ${temp.toFixed(1)}°C – Chlorverbrauch ~${Math.round((tempFactor-1)*100)}% erhöht`
+    : (temp !== null && temp > 22
+      ? `🌡️ Wassertemp. ${temp.toFixed(1)}°C – Verbrauch leicht erhöht`
+      : null);
+
+  return {
+    restGramm: Math.round(restGramm),
+    restTage: restTage,
+    leerDatum: leerDatum,
+    restProzent: restProzent,
+    gesamtGramm: gesamtGramm,
+    tabsEingelegt: s.tabsEingelegt,
+    eingelgtAm: s.eingelgtAm,
+    temp: temp,
+    tempFactor: tempFactor,
+    tempHinweis: tempHinweis,
+    auflösungTageProTab: Math.round(tage * 10) / 10
+  };
+}
+
+// Rendert die Skimmer-Tab-Prognose-Karte im Dashboard
+function renderSkimmerTabPrognose() {
+  const el = document.getElementById('skimmer-tab-prognose');
+  if (!el) return;
+  el.innerHTML = '';
+
+  const p = calcSkimmerTabPrognose();
+
+  // --- Input-Bereich: immer sichtbar (kompakt) ---
+  const lastDone = skimmerTabState.eingelgtAm
+    ? new Date(skimmerTabState.eingelgtAm).toLocaleDateString('de-DE', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})
+    : '–';
+
+  // Standard: 4 Tabs (gerundet auf Pool-Volumen)
+  const stdTabs = Math.round(4 * POOL_VOLUME / 10);
+
+  let progHtml = '';
+  if (p && p.restProzent > 0) {
+    const when = p.restTage < 1 ? 'heute' : p.restTage < 2 ? 'morgen' : 'in ' + Math.round(p.restTage) + ' Tagen';
+    const dateStr = p.leerDatum.toLocaleDateString('de-DE', {weekday:'short', day:'numeric', month:'short'});
+
+    // Farb-Kodierung nach Füllstand
+    const barColor = p.restProzent > 60 ? '#16a34a' : p.restProzent > 30 ? '#d97706' : '#dc2626';
+    const statusIcon = p.restProzent > 60 ? '🟢' : p.restProzent > 30 ? '🟡' : '🔴';
+    const dringend = p.restProzent <= 30;
+
+    progHtml =
+      '<div style="margin-top:10px">' +
+        // Fortschrittsbalken
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<div style="flex:1;background:rgba(0,0,0,0.1);border-radius:99px;height:8px;overflow:hidden">' +
+            '<div style="width:' + p.restProzent + '%;height:100%;background:' + barColor + ';border-radius:99px;transition:width 0.4s"></div>' +
+          '</div>' +
+          '<span style="font-size:0.8rem;font-weight:700;color:' + barColor + '">' + p.restProzent + '%</span>' +
+        '</div>' +
+        // Prognose-Zeile
+        '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:4px">' +
+          statusIcon + ' <strong>~' + p.restGramm + 'g</strong> Restgewicht – Tabs verbraucht ' + when + ' (' + dateStr + ')' +
+          ' · Auflösungsrate: ~' + p.auflösungTageProTab + ' Tage/Tab' +
+        '</div>' +
+        // Temperaturhinweis
+        (p.tempHinweis ? '<div style="font-size:0.78rem;color:#b45309;margin-bottom:4px">' + p.tempHinweis + '</div>' : '') +
+        // Dringende Warnung
+        (dringend ? '<div style="font-size:0.82rem;color:#dc2626;font-weight:700;margin-bottom:6px">🚨 Tabs jetzt nachfüllen!</div>' : '') +
+      '</div>';
+  } else if (p && p.restProzent === 0) {
+    progHtml = '<div style="margin-top:8px;font-size:0.82rem;color:#dc2626;font-weight:700">🔴 Skimmer leer – Tabs sofort nachfüllen!</div>';
+  } else {
+    progHtml = '<div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Noch keine Tabs eingetragen – bitte beim nächsten Nachfüllen eintragen.</div>';
+  }
+
+  el.innerHTML =
+    '<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-left:4px solid #16a34a;border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+        '<div style="font-size:0.88rem;font-weight:700;color:#15803d">🕐 Langzeit-Tabs im Skimmer</div>' +
+        (skimmerTabState.eingelgtAm ? '<div style="font-size:0.74rem;color:var(--text-muted)">Eingelegt: ' + lastDone + '</div>' : '') +
+      '</div>' +
+      progHtml +
+      // Eingabe-Zeile
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap">' +
+        '<span style="font-size:0.8rem;color:var(--text-muted)">Tabs eingelegt:</span>' +
+        '<button onclick="adjustSkimmerTabInput(-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid #16a34a;background:white;font-size:1rem;cursor:pointer;color:#16a34a;font-weight:700;line-height:1">−</button>' +
+        '<input id="skimmer-tab-input" type="number" min="1" max="20" value="' + stdTabs + '" style="width:48px;text-align:center;border:1px solid #16a34a;border-radius:6px;padding:4px;font-size:0.9rem">' +
+        '<button onclick="adjustSkimmerTabInput(1)" style="width:28px;height:28px;border-radius:6px;border:1px solid #16a34a;background:white;font-size:1rem;cursor:pointer;color:#16a34a;font-weight:700;line-height:1">+</button>' +
+        '<button onclick="confirmSkimmerTabsJetzt()" style="padding:5px 12px;background:#16a34a;color:white;border:none;border-radius:7px;font-size:0.8rem;cursor:pointer;font-weight:600">✅ Jetzt eingelegt</button>' +
+      '</div>' +
+    '</div>';
+}
+
+function adjustSkimmerTabInput(delta) {
+  const inp = document.getElementById('skimmer-tab-input');
+  if (!inp) return;
+  const val = parseInt(inp.value) || 4;
+  inp.value = Math.max(1, Math.min(20, val + delta));
+}
+
+function confirmSkimmerTabsJetzt() {
+  const inp = document.getElementById('skimmer-tab-input');
+  const anzahl = inp ? (parseInt(inp.value) || Math.round(4 * POOL_VOLUME / 10)) : Math.round(4 * POOL_VOLUME / 10);
+  registerSkimmerTabs(anzahl, new Date());
+
+  // Chlor-Tabs-Aufgabe als erledigt markieren
+  const ct = maintenanceTasks.find(function(t){return t.id==='chlor_tabs'||t.id==='langzeit_chlor';});
+  if(ct){ct.lastDone=new Date().toISOString();sd('maintenance',maintenanceTasks);}
+
+  // Vorrat abziehen
+  const lzStock = chemStock && chemStock['chlortabs'];
+  if(lzStock && lzStock.qty >= anzahl){
+    lzStock.qty = Math.max(0, lzStock.qty - anzahl);
+    sd('chem_stock_v2', chemStock);
+    if(typeof renderStockDashboard==='function') renderStockDashboard();
+  }
+
+  logHistory({type:'wartung', time:new Date().toISOString(), note:'🕐 '+anzahl+' Langzeit-Chlortabs in Skimmer eingelegt'});
+  if(typeof toast==='function') toast('🕐 '+anzahl+' Langzeit-Tabs eingetragen – Prognose aktualisiert!','success',3000);
+  if(typeof queueAutoSync==='function') queueAutoSync();
+  renderSkimmerTabPrognose();
+  if(typeof renderTasksDashboard==='function') renderTasksDashboard();
+}
+
+// Prüft ob eine Nachfüll-Erinnerung fällig ist (dynamisch, nicht nur 7-Tage-Zyklus)
+function checkSkimmerTabReminder() {
+  const p = calcSkimmerTabPrognose();
+  if (!p) return null;
+  if (p.restProzent === 0) return {level:'danger', msg:'Skimmer-Tabs vollständig aufgelöst – sofort nachfüllen!'};
+  if (p.restProzent <= 25) return {level:'danger', msg:'Nur noch '+p.restProzent+'% Tab-Restgewicht ('+p.restGramm+'g) – bald nachfüllen!'};
+  if (p.restTage <= 2) return {level:'warn', msg:'Tabs reichen noch ~'+Math.round(p.restTage*24)+'h – nachfüllen!'};
+  return null;
+}
+
+// Erweitert predictChlorDecay um Temperatur-Faktor
+const _origPredictChlorDecayTemp = predictChlorDecay;
+predictChlorDecay = function() {
+  const base = _origPredictChlorDecayTemp();
+  if (!base) return null;
+  const temp = getWaterTemp();
+  if (temp !== null && temp !== undefined) {
+    const factor = tempDecayFactor(temp);
+    if (factor > 1.05) {
+      // Beschleunigter Abbau durch Temperatur – historische Rate mit Faktor anpassen
+      // (vorsichtig: nur wenn Temp-Sensor verfügbar, Einfluss max. 40% um Overreaction zu vermeiden)
+      const adj = Math.min(factor, 1.4);
+      base.ratePerDay = base.ratePerDay * adj;
+      base.days = (base.lastChlor - settings.chlor.min) / (-base.ratePerDay);
+      base.date = new Date(
+        new Date(measurements.filter(function(m){return m.chlor!==undefined;}).slice(-1)[0].time).getTime()
+        + base.days * 86400000
+      );
+      base.tempAdjusted = true;
+      base.tempC = temp;
+    }
+  }
+  return base;
+};
+
+// Hook: Skimmer-Tab-Prognose beim Dashboard-Render aufrufen
+// (wird nach dem cover-hook eingehängt)
+const _origRenderDashboardTabs = renderDashboard;
+renderDashboard = async function() {
+  await _origRenderDashboardTabs();
+  if(typeof renderSkimmerTabPrognose==='function') renderSkimmerTabPrognose();
+};
+
+// Beim Start direkt rendern
+(function initSkimmerTabPrognose(){
+  // Warten bis DOM bereit
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(renderSkimmerTabPrognose, 200);
+    });
+  } else {
+    setTimeout(renderSkimmerTabPrognose, 200);
+  }
+})();
 
 // ============================================================
 // ÄNDERUNGSWÜNSCHE-BOARD
