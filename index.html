@@ -826,6 +826,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <div id="nachmess-timer-banner"></div>
   <div id="filter-timer-banner"></div>
   <div id="shelly-filter-card"></div>
+  <div id="ha-live-card" style="display:none"></div>
   <div id="kinder-ban-dashboard"></div>
   <div class="card" id="timer-card-dashboard" style="display:none">
     <div class="card-title" style="justify-content:space-between;align-items:center">
@@ -6298,6 +6299,7 @@ renderDashboard=async function(){
   renderStockWarning();
   updateOverdueBadge();
   renderFilterTimer();
+  if(typeof renderHaCard==='function')renderHaCard();
   const w=await fetchWeather();
   renderBadeplaner(w);
   renderSwimAdvice('dash-swim-advice',w);
@@ -10808,28 +10810,94 @@ function loadProduktImage(poolId, input){
 // ══════════════════════════════════════════════════════════════
 
 const HA_DEFAULTS = {
-  enabled:    false,
-  url:        'http://homeassistant.local:8123',
-  token:      '',
+  enabled:         false,
+  url:             'https://xxp8udynvfppjsvog6ucwug2cxe0d059.ui.nabu.casa',
+  token:           '',
   airTempEntity:   'sensor.gtb_klima_temperatur',
   humidityEntity:  'sensor.gtb_klima_luftfeuchtigkeit',
-  waterTempEntity: '',   // wird nach Lieferung Dienstag eingetragen
+  waterTempEntity: '',  // Sensor folgt Dienstag
+  shellyPowerEntity: 'sensor.shelly1pmminig3_e4b063f25a98_leistung',
+  powerThreshold:  150,
 };
 
 let haSettings = Object.assign({}, HA_DEFAULTS, ld('ha_settings', {}));
 
-// Latest values fetched from HA
-let haLiveData = { airTemp: null, humidity: null, waterTemp: null, fetchedAt: 0 };
+let haLiveData = {
+  airTemp:      null,
+  humidity:     null,
+  waterTemp:    null,
+  filterRunMin: null,
+  nightDrop:    null,  // Temp-Absenkung SU→SA
+  dayRise:      null,  // Temp-Erhöhung SA→SU
+  sunrise:      null,
+  sunset:       null,
+  fetchedAt:    0
+};
 
+// ── Sonnenaufgang/Untergang für Deggendorf (48.83°N, 12.96°E) ─
+function calcSunTime(date, isSunrise) {
+  const lat = 48.83, lon = 12.96;
+  const D2R = Math.PI / 180;
+  const dayOfYear = Math.round((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
+  const B = (360 / 365) * (dayOfYear - 81) * D2R;
+  const EoT = 9.87 * Math.sin(2*B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+  const decl = 23.45 * Math.sin(B) * D2R;
+  const latR = lat * D2R;
+  const cosH = -Math.tan(latR) * Math.tan(decl);
+  if (cosH < -1 || cosH > 1) return null;
+  const H = Math.acos(cosH) / D2R / 15;
+  const noon = 12 - lon/15 - EoT/60;
+  const utcH = isSunrise ? noon - H : noon + H;
+  const r = new Date(date); r.setHours(0,0,0,0);
+  r.setMinutes(Math.round(utcH * 60) + new Date().getTimezoneOffset() * -1);
+  return r;
+}
+
+// ── History API ────────────────────────────────────────────────
+async function haFetchHistory(base, headers, entityId, from, to) {
+  if (!entityId) return [];
+  try {
+    const url = `${base}/api/history/period/${from.toISOString()}?filter_entity_id=${entityId}&end_time=${to.toISOString()}&minimal_response=true&significant_changes_only=false`;
+    const r = await fetch(url, { headers });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (Array.isArray(j) && j[0]) ? j[0] : [];
+  } catch { return []; }
+}
+
+// ── Laufzeit berechnen (Minuten über Schwellwert) ──────────────
+function calcRunMinutes(history, threshold, from, to) {
+  let runMs = 0;
+  for (let i = 0; i < history.length; i++) {
+    const pw = parseFloat(history[i].state) || 0;
+    const ss = new Date(history[i].last_changed || history[i].lc * 1000);
+    const se = (i+1 < history.length)
+      ? new Date(history[i+1].last_changed || history[i+1].lc * 1000)
+      : to;
+    const cs = Math.max(ss.getTime(), from.getTime());
+    const ce = Math.min(se.getTime(), to.getTime());
+    if (ce > cs && pw > threshold) runMs += (ce - cs);
+  }
+  return Math.round(runMs / 60000);
+}
+
+// ── Min/Max aus History ────────────────────────────────────────
+function historyMinMax(history) {
+  let min = Infinity, max = -Infinity;
+  history.forEach(e => { const v = parseFloat(e.state); if (!isNaN(v)) { min=Math.min(min,v); max=Math.max(max,v); }});
+  return (min === Infinity) ? null : { min, max };
+}
+
+// ── Hauptfetch ─────────────────────────────────────────────────
 async function haFetchSensors() {
   if (!haSettings.enabled || !haSettings.url || !haSettings.token) return;
   const base    = haSettings.url.replace(/\/$/, '');
-  const headers = { 'Authorization': 'Bearer ' + haSettings.token, 'Content-Type': 'application/json' };
+  const headers = { 'Authorization': 'Bearer ' + haSettings.token };
 
   async function fetchState(entityId) {
     if (!entityId) return null;
     try {
-      const r = await fetch(base + '/api/states/' + entityId, { headers });
+      const r = await fetch(`${base}/api/states/${entityId}`, { headers });
       if (!r.ok) return null;
       const j = await r.json();
       const v = parseFloat(j.state);
@@ -10837,103 +10905,204 @@ async function haFetchSensors() {
     } catch { return null; }
   }
 
+  // Live-Sensoren
   const [airTemp, humidity, waterTemp] = await Promise.all([
     fetchState(haSettings.airTempEntity),
     fetchState(haSettings.humidityEntity),
     fetchState(haSettings.waterTempEntity),
   ]);
 
-  haLiveData = { airTemp, humidity, waterTemp, fetchedAt: Date.now() };
+  // Zeitgrenzen
+  const now      = new Date();
+  const midnight = new Date(now); midnight.setHours(0,0,0,0);
+  const sunrise  = calcSunTime(now, true);
+  const sunset   = calcSunTime(now, false);
+  const ydSunset = calcSunTime(new Date(now - 86400000), false);
 
-  // Pre-fill water temp in active measurement field if empty
+  // Filter-Laufzeit heute
+  let filterRunMin = null;
+  if (haSettings.shellyPowerEntity) {
+    const fh = await haFetchHistory(base, headers, haSettings.shellyPowerEntity, midnight, now);
+    filterRunMin = calcRunMinutes(fh, haSettings.powerThreshold || 150, midnight, now);
+  }
+
+  // Wassertemp-History (nur wenn Sensor konfiguriert)
+  let nightDrop = null, dayRise = null;
+  if (haSettings.waterTempEntity && ydSunset && sunrise) {
+    const [nightHist, dayHist] = await Promise.all([
+      haFetchHistory(base, headers, haSettings.waterTempEntity, ydSunset, sunrise),
+      haFetchHistory(base, headers, haSettings.waterTempEntity, sunrise, now),
+    ]);
+    const nightMM = historyMinMax(nightHist);
+    const dayMM   = historyMinMax(dayHist);
+    if (nightMM) nightDrop = +(nightMM.min - nightMM.max).toFixed(1);  // negativ = Abkühlung
+    if (dayMM)   dayRise   = +(dayMM.max - dayMM.min).toFixed(1);      // positiv = Erwärmung
+  }
+
+  haLiveData = { airTemp, humidity, waterTemp, filterRunMin, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
+
+  // Messfeld vorausfüllen
   if (waterTemp !== null) {
     const el = document.getElementById('input-temp');
     if (el && el.value === '') el.value = waterTemp.toFixed(1);
   }
 
-  // Refresh HA status badge if visible
+  // Dashboard + Badge aktualisieren
+  renderHaCard();
   const badge = document.getElementById('ha-live-badge');
   if (badge) _renderHaLiveBadge(badge);
 }
 
+// ── Dashboard-Karte ────────────────────────────────────────────
+function renderHaCard() {
+  const el = document.getElementById('ha-live-card');
+  if (!el) return;
+  if (!haSettings.enabled) { el.style.display = 'none'; return; }
+  el.style.display = '';
+
+  const d = haLiveData;
+  const fresh = d.fetchedAt && (Date.now() - d.fetchedAt) < 600000;
+
+  if (!fresh && d.fetchedAt === 0) {
+    el.innerHTML = '<div class="card"><div class="card-title">🏠 Home Assistant</div><div style="color:var(--text-muted);font-size:0.85rem">Lade Daten…</div></div>';
+    return;
+  }
+
+  // Sonnenzeiten als Text
+  const fmt = d => d ? d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) : '--';
+
+  // Filter-Laufzeit
+  const fMin  = d.filterRunMin ?? 0;
+  const fH    = Math.floor(fMin / 60), fR = fMin % 60;
+  const fStr  = fH > 0 ? `${fH}h ${fR}min` : `${fR}min`;
+  const fPct  = Math.min(100, Math.round(fMin / 480 * 100));
+  const fCol  = fPct >= 100 ? 'var(--success)' : fPct >= 60 ? 'var(--pool-blue)' : '#f59e0b';
+
+  // Wassertemp
+  const wStr  = d.waterTemp !== null ? d.waterTemp.toFixed(1) + ' °C' : '-- °C';
+  const wSub  = d.waterTemp !== null ? '' : '<span style="font-size:0.72rem;color:var(--text-muted)"> Sensor Di.</span>';
+
+  // Nacht-Absenkung / Tages-Erwärmung
+  const nightStr = d.nightDrop !== null ? (d.nightDrop > 0 ? '+' : '') + d.nightDrop + ' °C' : '-- °C';
+  const dayStr   = d.dayRise   !== null ? (d.dayRise   > 0 ? '+' : '') + d.dayRise   + ' °C' : '-- °C';
+  const nightCol = d.nightDrop !== null ? (d.nightDrop < -2 ? '#ef4444' : '#94a3b8') : 'var(--text-muted)';
+  const dayCol   = d.dayRise   !== null ? (d.dayRise   > 3  ? '#f59e0b' : '#22c55e') : 'var(--text-muted)';
+
+  el.innerHTML =
+    '<div class="card" style="margin-bottom:12px">' +
+    '<div class="card-title" style="justify-content:space-between">' +
+      '<span>🏠 Home Assistant</span>' +
+      (fresh ? '<span style="font-size:0.7rem;color:var(--text-muted)">☀️ ' + fmt(d.sunrise) + ' · 🌙 ' + fmt(d.sunset) + '</span>' : '') +
+    '</div>' +
+
+    // Zeile 1: Luft + Feuchte + Wasser
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">' +
+      _haKachel('🌡️', d.airTemp !== null ? d.airTemp.toFixed(1) + ' °C' : '-- °C', 'Luft', d.airTemp !== null ? '#f1f5f9' : 'var(--text-muted)') +
+      _haKachel('💧', d.humidity !== null ? Math.round(d.humidity) + ' %' : '-- %', 'Feuchte', d.humidity !== null ? '#f1f5f9' : 'var(--text-muted)') +
+      _haKachel('🌊', wStr + (d.waterTemp === null ? '' : ''), 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''), d.waterTemp !== null ? '#f1f5f9' : 'var(--text-muted)') +
+    '</div>' +
+
+    // Filter-Laufzeit
+    '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<span style="font-size:0.78rem;font-weight:700;color:var(--text-secondary)">🔄 Filter heute</span>' +
+        '<span style="font-size:0.88rem;font-weight:800;color:' + fCol + '">' + (d.filterRunMin !== null ? fStr : '--') + ' <span style="font-size:0.72rem;color:var(--text-muted)">/8h</span></span>' +
+      '</div>' +
+      '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">' +
+        '<div style="height:100%;width:' + fPct + '%;background:' + fCol + ';border-radius:3px;transition:width .5s"></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Nacht-Absenkung + Tages-Erwärmung
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">' +
+        '<div style="font-size:1.1rem">🌙</div>' +
+        '<div style="font-size:1rem;font-weight:800;color:' + nightCol + '">' + nightStr + '</div>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted);font-weight:700;margin-top:2px">NACHT-ABSENKUNG</div>' +
+        '<div style="font-size:0.65rem;color:var(--text-muted)">' + fmt(d.sunrise ? new Date(d.sunrise - 86400000*0) : null) + ' SU → SA</div>' +
+      '</div>' +
+      '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">' +
+        '<div style="font-size:1.1rem">☀️</div>' +
+        '<div style="font-size:1rem;font-weight:800;color:' + dayCol + '">' + dayStr + '</div>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted);font-weight:700;margin-top:2px">TAGES-ERWÄRMUNG</div>' +
+        '<div style="font-size:0.65rem;color:var(--text-muted)">SA → SU ' + fmt(d.sunset) + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '</div>';
+}
+
+function _haKachel(icon, val, label, col) {
+  return '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px 6px;text-align:center">' +
+    '<div style="font-size:1.2rem">' + icon + '</div>' +
+    '<div style="font-size:0.95rem;font-weight:800;color:' + col + ';line-height:1.2">' + val + '</div>' +
+    '<div style="font-size:0.65rem;color:var(--text-muted);font-weight:700;margin-top:2px">' + label.toUpperCase() + '</div>' +
+  '</div>';
+}
+
+// ── Einstellungen Badge ────────────────────────────────────────
 function _renderHaLiveBadge(el) {
   if (!haSettings.enabled) { el.innerHTML = ''; return; }
-  const age = haLiveData.fetchedAt ? Math.round((Date.now() - haLiveData.fetchedAt) / 1000) : null;
+  const d   = haLiveData;
+  const age = d.fetchedAt ? Math.round((Date.now() - d.fetchedAt) / 1000) : null;
   const ok  = age !== null && age < 600;
   const parts = [];
-  if (haLiveData.airTemp   !== null) parts.push('🌡 ' + haLiveData.airTemp.toFixed(1) + '°C Luft');
-  if (haLiveData.humidity  !== null) parts.push('💧 ' + Math.round(haLiveData.humidity) + '% Feuchte');
-  if (haLiveData.waterTemp !== null) parts.push('🌊 ' + haLiveData.waterTemp.toFixed(1) + '°C Wasser');
+  if (d.airTemp   !== null) parts.push('🌡 ' + d.airTemp.toFixed(1) + '°C');
+  if (d.humidity  !== null) parts.push('💧 ' + Math.round(d.humidity) + '%');
+  if (d.waterTemp !== null) parts.push('🌊 ' + d.waterTemp.toFixed(1) + '°C');
   el.innerHTML = ok && parts.length
     ? '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;font-size:0.78rem;color:#166534;margin-top:10px">'
       + parts.join(' · ') + ' <span style="color:#86efac;font-size:0.7rem">(vor ' + age + 's)</span></div>'
     : '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">Keine HA-Daten verfügbar</div>';
 }
 
+// ── Einstellungen Render ───────────────────────────────────────
 function renderHaSettings() {
   const el = document.getElementById('ha-settings-section');
   if (!el) return;
   el.innerHTML =
     '<div style="display:grid;gap:12px">' +
-
-    // Enable toggle
     '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
       '<input type="checkbox" id="ha-enabled" ' + (haSettings.enabled ? 'checked' : '') + ' style="width:20px;height:20px;accent-color:var(--pool-blue)">' +
       '<span style="font-weight:700;font-size:0.88rem">Home Assistant aktivieren</span>' +
     '</label>' +
-
-    // URL + Token
     '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px;display:grid;gap:10px">' +
-      '<div style="font-size:0.78rem;color:#0369a1;font-weight:700">🏠 Verbindung</div>' +
-      '<div style="font-size:0.75rem;color:#0369a1">Token: HA → Profil (unten links) → Sicherheit → Token erstellen</div>' +
-      '<div>' +
-        '<div class="form-label">HA URL</div>' +
-        '<input type="text" id="ha-url" value="' + haSettings.url + '" placeholder="http://homeassistant.local:8123" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
-      '</div>' +
-      '<div>' +
-        '<div class="form-label">Long-Lived Access Token</div>' +
-        '<input type="password" id="ha-token" value="' + haSettings.token + '" placeholder="ey..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
-      '</div>' +
+      '<div style="font-size:0.78rem;color:#0369a1;font-weight:700">🏠 Verbindung (Nabu Casa)</div>' +
+      '<div style="font-size:0.75rem;color:#0369a1">Token: HA → Profil → Sicherheit → Token erstellen</div>' +
+      '<div><div class="form-label">HA URL</div>' +
+        '<input type="text" id="ha-url" value="' + haSettings.url + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+      '<div><div class="form-label">Long-Lived Access Token</div>' +
+        '<input type="password" id="ha-token" value="' + haSettings.token + '" placeholder="ey..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
     '</div>' +
-
-    // Entities
     '<div style="background:#fafafa;border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:10px">' +
       '<div style="font-size:0.78rem;font-weight:700;color:var(--text-secondary)">📡 Sensor Entity-IDs</div>' +
-      '<div>' +
-        '<div class="form-label">Lufttemperatur</div>' +
-        '<input type="text" id="ha-air-temp" value="' + haSettings.airTempEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
-      '</div>' +
-      '<div>' +
-        '<div class="form-label">Luftfeuchtigkeit</div>' +
-        '<input type="text" id="ha-humidity" value="' + haSettings.humidityEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
-      '</div>' +
-      '<div>' +
-        '<div class="form-label">Wassertemperatur <span style="font-weight:400;color:var(--text-muted)">(Sensor folgt Di.)</span></div>' +
-        '<input type="text" id="ha-water-temp" value="' + (haSettings.waterTempEntity || '') + '" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace">' +
-      '</div>' +
+      '<div><div class="form-label">Lufttemperatur</div>' +
+        '<input type="text" id="ha-air-temp" value="' + haSettings.airTempEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+      '<div><div class="form-label">Luftfeuchtigkeit</div>' +
+        '<input type="text" id="ha-humidity" value="' + haSettings.humidityEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+      '<div><div class="form-label">Wassertemperatur <span style="font-weight:400;color:var(--text-muted)">(Sensor folgt Di.)</span></div>' +
+        '<input type="text" id="ha-water-temp" value="' + (haSettings.waterTempEntity||'') + '" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+      '<div><div class="form-label">Shelly Leistung (für Filter-Laufzeit)</div>' +
+        '<input type="text" id="ha-shelly-power" value="' + (haSettings.shellyPowerEntity||'') + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
     '</div>' +
-
-    // Live badge
     '<div id="ha-live-badge"></div>' +
-
-    // Buttons
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
       '<button class="btn btn-primary btn-sm" onclick="saveHaSettings()">💾 Speichern</button>' +
       '<button class="btn btn-outline btn-sm" onclick="haTestConnection()">🔌 Verbindung testen</button>' +
     '</div>' +
     '<div id="ha-test-result" style="font-size:0.8rem;min-height:18px"></div>' +
     '</div>';
-
   _renderHaLiveBadge(document.getElementById('ha-live-badge'));
 }
 
 function saveHaSettings() {
-  haSettings.enabled          = document.getElementById('ha-enabled')?.checked || false;
-  haSettings.url              = (document.getElementById('ha-url')?.value || '').trim().replace(/\/$/, '');
-  haSettings.token            = (document.getElementById('ha-token')?.value || '').trim();
-  haSettings.airTempEntity    = (document.getElementById('ha-air-temp')?.value || '').trim();
-  haSettings.humidityEntity   = (document.getElementById('ha-humidity')?.value || '').trim();
-  haSettings.waterTempEntity  = (document.getElementById('ha-water-temp')?.value || '').trim();
+  haSettings.enabled           = document.getElementById('ha-enabled')?.checked||false;
+  haSettings.url               = (document.getElementById('ha-url')?.value||'').trim().replace(/\/$/,'');
+  haSettings.token             = (document.getElementById('ha-token')?.value||'').trim();
+  haSettings.airTempEntity     = (document.getElementById('ha-air-temp')?.value||'').trim();
+  haSettings.humidityEntity    = (document.getElementById('ha-humidity')?.value||'').trim();
+  haSettings.waterTempEntity   = (document.getElementById('ha-water-temp')?.value||'').trim();
+  haSettings.shellyPowerEntity = (document.getElementById('ha-shelly-power')?.value||'').trim();
   sd('ha_settings', haSettings);
   if (typeof toast === 'function') toast('✅ HA-Einstellungen gespeichert', 'success', 2500);
   haFetchSensors();
@@ -10941,24 +11110,20 @@ function saveHaSettings() {
 
 async function haTestConnection() {
   const el = document.getElementById('ha-test-result');
-  if (el) el.innerHTML = '⏳ Verbinde...';
-  const url   = (document.getElementById('ha-url')?.value || '').trim().replace(/\/$/, '');
-  const token = (document.getElementById('ha-token')?.value || '').trim();
-  if (!url || !token) { if (el) el.innerHTML = '⚠️ URL und Token eingeben'; return; }
+  if (el) el.innerHTML = '⏳ Verbinde…';
+  const url   = (document.getElementById('ha-url')?.value||'').trim().replace(/\/$/,'');
+  const token = (document.getElementById('ha-token')?.value||'').trim();
+  if (!url || !token) { if(el) el.innerHTML='⚠️ URL und Token eingeben'; return; }
   try {
-    const r = await fetch(url + '/api/', { headers: { 'Authorization': 'Bearer ' + token } });
-    if (r.ok) {
-      if (el) el.innerHTML = '<span style="color:#16a34a">✅ Verbindung erfolgreich</span>';
-    } else {
-      if (el) el.innerHTML = '<span style="color:#dc2626">❌ Fehler ' + r.status + ' – Token prüfen</span>';
-    }
-  } catch (e) {
-    if (el) el.innerHTML = '<span style="color:#dc2626">❌ Nicht erreichbar – URL und Netzwerk prüfen</span>';
-  }
+    const r = await fetch(url+'/api/', { headers:{'Authorization':'Bearer '+token} });
+    if (r.ok) { if(el) el.innerHTML='<span style="color:#16a34a">✅ Verbindung erfolgreich</span>'; }
+    else       { if(el) el.innerHTML='<span style="color:#dc2626">❌ Fehler '+r.status+' – Token prüfen</span>'; }
+  } catch(e) { if(el) el.innerHTML='<span style="color:#dc2626">❌ Nicht erreichbar – URL und Netzwerk prüfen</span>'; }
 }
 
 // Auto-fetch every 5 minutes
 setInterval(haFetchSensors, 300000);
+
 
 // ══════════════════════════════════════════════════════════════
 // SHELLY 1PM MINI – FILTER-INTEGRATION (Cloud + Lokal)
