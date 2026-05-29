@@ -10829,7 +10829,7 @@ const HA_DEFAULTS = {
   humidityEntity:  'sensor.gtb_klima_luftfeuchtigkeit',
   waterTempEntity: '',  // Sensor folgt Dienstag
   shellyPowerEntity: 'sensor.shelly1pmminig3_e4b063f25a98_leistung',
-  powerThreshold:  150,
+  powerThreshold:  50,
 };
 
 let haSettings = Object.assign({}, HA_DEFAULTS, ld('ha_settings', {}));
