@@ -11627,6 +11627,12 @@ async function shellySondermodus(){
 function renderShellySettings(){
   const el = document.getElementById('shelly-settings-section');
   if(!el) return;
+  // Wenn HA aktiv: Shelly-Einstellungen ausblenden (HA übernimmt Steuerung)
+  if(haSettings.enabled && haSettings.url && haSettings.token){
+    el.closest('.card').style.display = 'none';
+    return;
+  }
+  el.closest('.card').style.display = '';
   const isCloud = shellySettings.mode !== 'local';
 
   el.innerHTML =
