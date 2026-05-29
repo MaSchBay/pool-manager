@@ -11153,6 +11153,8 @@ function renderHaSettings() {
         '<input type="text" id="ha-water-temp" value="' + (haSettings.waterTempEntity||'') + '" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
       '<div><div class="form-label">Shelly Leistung (für Filter-Laufzeit)</div>' +
         '<input type="text" id="ha-shelly-power" value="' + (haSettings.shellyPowerEntity||'') + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+      '<div><div class="form-label">Schwellwert Filter läuft ab (Watt)</div>' +
+        '<input type="number" id="ha-power-threshold" value="' + (haSettings.powerThreshold||50) + '" min="5" max="500" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem"></div>' +
     '</div>' +
     '<div id="ha-live-badge"></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
@@ -11172,6 +11174,7 @@ function saveHaSettings() {
   haSettings.humidityEntity    = (document.getElementById('ha-humidity')?.value||'').trim();
   haSettings.waterTempEntity   = (document.getElementById('ha-water-temp')?.value||'').trim();
   haSettings.shellyPowerEntity = (document.getElementById('ha-shelly-power')?.value||'').trim();
+  haSettings.powerThreshold = parseInt(document.getElementById('ha-power-threshold')?.value||'50')||50;
   sd('ha_settings', haSettings);
   if (typeof toast === 'function') toast('✅ HA-Einstellungen gespeichert', 'success', 2500);
   haFetchSensors();
