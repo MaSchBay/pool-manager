@@ -3184,6 +3184,17 @@ function confirmTask(){
     sd('chem_stock_v2',chemStock);
     renderStockDashboard();
   }
+  // Skimmer-Tab-Prognose automatisch aktualisieren wenn Chlortabs-Aufgabe abgehakt
+  if(_dualTask && typeof skimmerTabState !== 'undefined' && qty > 0){
+    skimmerTabState.tabsEingelegt = qty;
+    skimmerTabState.eingelgtAm = task.lastDone;
+    skimmerTabState.tabWeightG = 20;
+    skimmerTabState.facKorrFaktor = 1.0;
+    skimmerTabState.facKorrAm = null;
+    saveSkimmerTabState();
+    if(typeof renderSkimmerTabPrognose==='function') setTimeout(renderSkimmerTabPrognose, 100);
+    if(typeof renderFacTabPrognose==='function') setTimeout(renderFacTabPrognose, 100);
+  }
   // Badeverbot: nur Chlor Plus Granulat → 30 min (bestätigt)
   const TASK_BAN_MAP={
     chlorplus: {hours:0.5,name:'Chlor Plus Granulat'},
@@ -7249,6 +7260,7 @@ function collectAllData(){
     wuensche:(typeof wuensche!=='undefined'?wuensche:[]),
     kinderBan:ld('kinder_ban',{}),
     poolParties:ld('pool_parties',[]),
+    skimmerTabState:(typeof skimmerTabState!=='undefined'?skimmerTabState:null),
     exportedAt:new Date().toISOString(),
     schemaVersion:3,
     deviceId:ld('device_id',(function(){var id='dev_'+Date.now();sd('device_id',id);return id;})())
@@ -7481,6 +7493,20 @@ function applyImportedData(d,mergeMode){
       poolParties=d.poolParties;
     }
     sd('pool_parties',poolParties);
+  }
+  // skimmerTabState: neueres eingelgtAm gewinnt
+  if(d.skimmerTabState && typeof skimmerTabState !== 'undefined'){
+    if(mergeMode && skimmerTabState && skimmerTabState.eingelgtAm && d.skimmerTabState.eingelgtAm){
+      if(new Date(d.skimmerTabState.eingelgtAm) > new Date(skimmerTabState.eingelgtAm)){
+        skimmerTabState = d.skimmerTabState;
+        sd('skimmerTabState', skimmerTabState);
+        if(typeof renderSkimmerTabPrognose==='function') renderSkimmerTabPrognose();
+      }
+    } else if(d.skimmerTabState.eingelgtAm) {
+      skimmerTabState = d.skimmerTabState;
+      sd('skimmerTabState', skimmerTabState);
+      if(typeof renderSkimmerTabPrognose==='function') renderSkimmerTabPrognose();
+    }
   }
 }
 
@@ -9913,7 +9939,12 @@ function confirmSkimmerTabsJetzt(){
   const anzahl=inp?(parseInt(inp.value)||Math.round(4*POOL_VOLUME/10)):Math.round(4*POOL_VOLUME/10);
   registerSkimmerTabs(anzahl, new Date());
   const lzStock=chemStock&&chemStock['Langzeit-Chlortabs'];
-  if(lzStock&&lzStock.qty>=anzahl){lzStock.qty=Math.max(0,lzStock.qty-anzahl);sd('chem_stock_v2',chemStock);if(typeof renderStockDashboard==='function')renderStockDashboard();}
+  if(lzStock&&lzStock.qty>=anzahl){
+    lzStock.qty=Math.max(0,lzStock.qty-anzahl);
+    chemStock._lastChange=Date.now();
+    sd('chem_stock_v2',chemStock);
+    if(typeof renderStockDashboard==='function')renderStockDashboard();
+  }
   logHistory({type:'wartung',time:new Date().toISOString(),note:'🕐 '+anzahl+' Langzeit-Chlortabs in Skimmer eingelegt'});
   if(typeof toast==='function') toast('🕐 '+anzahl+' Langzeit-Tabs eingetragen!','success',3000);
   if(typeof queueAutoSync==='function') queueAutoSync();
