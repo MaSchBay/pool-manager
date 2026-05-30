@@ -566,9 +566,9 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 }
 
 /* ===== KI TESTSTREIFEN ===== */
-.ki-scan-btn{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;border:none;border-radius:10px;padding:10px 18px;font-family:Nunito,sans-serif;font-weight:900;font-size:0.9rem;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all 0.2s}
-.ki-scan-btn:hover{transform:scale(1.03);box-shadow:0 4px 12px rgba(124,58,237,0.4)}
-.ki-scan-btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+
+
+
 .ki-result-box{background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:2px solid #7c3aed;border-radius:12px;padding:14px;margin-top:12px}
 .ki-result-title{font-family:Nunito,sans-serif;font-weight:900;font-size:0.85rem;color:#5b21b6;margin-bottom:8px}
 .ki-result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -694,7 +694,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <div class="fab-items" id="fab-items">
     <button class="fab-sub" onclick="closeFab();openQMess()"><div class="fab-sub-icon" style="background:#dbeafe">🧪</div>Schnell messen</button>
     <button class="fab-sub" onclick="closeFab();openTempQuick()"><div class="fab-sub-icon" style="background:#ffe4e6">🌡️</div>Temperatur</button>
-    <button class="fab-sub" onclick="closeFab();openKITeststreifenFAB()"><div class="fab-sub-icon" style="background:#f3e8ff">🤖</div>KI-Teststreifen</button>
+    
     <button class="fab-sub" onclick="closeFab();showBoard('dosierung')"><div class="fab-sub-icon" style="background:#fce7f3">⚗️</div>Dosierung</button>
     <button class="fab-sub" onclick="closeFab();openDruckModal()"><div class="fab-sub-icon" style="background:#fed7aa">🟤</div>Filterdruck</button>
     <button class="fab-sub" onclick="closeFab();showBoard('hilfe')"><div class="fab-sub-icon" style="background:#dcfce7">❓</div>Problem lösen</button>
@@ -852,6 +852,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 <div class="board active" id="board-dashboard"><div id="hibernation-overlay" style="display:none"></div>
   <div class="page-header" style="position:relative;overflow:hidden">
     <div style="position:absolute;right:-20px;top:-20px;font-size:8rem;opacity:0.07;pointer-events:none">🏊</div>
+  <div id="pool-avatar-wrap"></div>
     <h1>🏊 Pool Manager</h1>
     <p id="dash-datetime"></p>
     <div id="dash-season-progress" style="margin-top:10px"></div>
@@ -1063,7 +1064,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <label class="form-label" id="tds-label">💧 Wasserbelastung (TDS) ppm <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
           <button class="spin-btn" onclick="adjustInput('input-tds',-1,0)">−</button>
-          <input type="number" id="input-tds" step="1" min="0" max="5000" style="text-align:center" placeholder="z.B. 800">
+          <input type="number" id="input-tds" step="1" max="5000" style="text-align:center" placeholder="z.B. 800">
           <button class="spin-btn" onclick="adjustInput('input-tds',1,0)">+</button>
         </div>
         <div id="tds-hint" style="font-size:0.76rem;margin-top:3px"></div>
@@ -1072,7 +1073,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <label class="form-label" id="orp-label">⚡ Desinfektionskraft (ORP) mV <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
           <button class="spin-btn" onclick="adjustInput('input-orp',-1,0)">−</button>
-          <input type="number" id="input-orp" step="1" min="0" max="1000" style="text-align:center" placeholder="z.B. 700">
+          <input type="number" id="input-orp" step="1" max="1000" style="text-align:center" placeholder="z.B. 700">
           <button class="spin-btn" onclick="adjustInput('input-orp',1,0)">+</button>
         </div>
         <div id="orp-hint" style="font-size:0.76rem;margin-top:3px"></div>
@@ -1837,6 +1838,7 @@ let timerTodos    = ld('timer_todos',[]); // [{id,title,dueAt,todoId,stepIdx}]
 let editIndex     = -1;
 let editMaintId   = null;
 var selProduct    = null;
+var poolAvatarEnabled = (function(){ try{return localStorage.getItem('pool_avatarEnabled')==='true';}catch(e){return false;} })();
 
 // ── Skimmer-Tab Prognose State ────────────────────────────────
 var skimmerTabState = (function(){
@@ -1916,6 +1918,38 @@ function toggleNavMore(){
   btn.classList.toggle('open',open);
   if(arr)arr.style.transform=open?'rotate(180deg)':'';
 }
+function togglePoolAvatarSetting(val){
+  poolAvatarEnabled = val;
+  try{localStorage.setItem('pool_avatarEnabled', val ? 'true' : 'false');}catch(e){}
+  updateAvatarToggleUI();
+  renderPoolAvatar();
+}
+function updateAvatarToggleUI(){
+  const cb = document.getElementById('toggle-pool-avatar');
+  const track = document.getElementById('toggle-pool-avatar-track');
+  const thumb = document.getElementById('toggle-pool-avatar-thumb');
+  if(cb) cb.checked = poolAvatarEnabled;
+  if(track) track.style.background = poolAvatarEnabled ? '#0ea5e9' : '#e2e8f0';
+  if(thumb) thumb.style.left = poolAvatarEnabled ? '22px' : '2px';
+}
+function renderPoolAvatar(){
+  const el = document.getElementById('pool-avatar-wrap');
+  if(!el) return;
+  if(!poolAvatarEnabled){ el.innerHTML=''; return; }
+  const last = (typeof getLastMeasurement==='function') ? getLastMeasurement() : null;
+  const score = (function(){ try{ return calcPoolScore(); }catch(e){ return null; } })();
+  const covered = typeof coverState!=='undefined' && coverState.covered;
+  const ban = typeof window.ban!=='undefined' && window.ban && new Date(window.ban.until) > new Date();
+  const waterColor = ban ? '#ef4444' : score===null ? '#7dd3fc' : score>=80 ? '#0ea5e9' : score>=60 ? '#38bdf8' : score>=40 ? '#f59e0b' : '#ef4444';
+  const sunEmoji = (function(){ try{ return isDaytime() ? '☀️' : '🌙'; }catch(e){ return '☀️'; } })();
+  el.innerHTML = '<div style="background:linear-gradient(180deg,#bae6fd 0%,'+waterColor+'80 40%,'+waterColor+' 100%);border-radius:16px;height:80px;position:relative;overflow:hidden;margin-bottom:10px">'
+    + '<div style="position:absolute;top:6px;right:10px;font-size:1.4rem">'+sunEmoji+'</div>'
+    + (covered ? '<div style="position:absolute;inset:0;background:rgba(30,58,138,0.5);display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#bfdbfe;font-weight:700">🏖️ Plane drauf</div>' : '')
+    + '<div style="position:absolute;bottom:8px;left:14px;font-size:1.8rem">🏊</div>'
+    + (ban ? '<div style="position:absolute;bottom:8px;right:10px;font-size:1.1rem">🚫</div>' : '')
+    + '</div>';
+  updateAvatarToggleUI();
+}
 function closeNavMore(){
   const dd=document.getElementById('nav-more-dropdown');
   if(dd)dd.classList.remove('open');
@@ -1936,7 +1970,7 @@ async function fetchWeather(){
   const now=Date.now();
   if(weatherCache&&(now-weatherCacheT)<30*60*1000){weatherData=weatherCache;return weatherData}
   try{
-    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=48.83&longitude=12.96&current=temperature_2m,weathercode,windspeed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weathercode,precipitation_probability,precipitation&daily=weathercode,temperature_2m_max,temperature_2m_min,sunset,sunrise&timezone=Europe%2FBerlin&forecast_days=8&past_days=1');
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=48.83&longitude=12.96&current=temperature_2m,weathercode,windspeed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weathercode,precipitation_probability,precipitation&daily=weathercode,temperature_2m_max,temperature_2m_min,sunset,sunrise&timezone=Europe%2FBerlin&forecast_days=7&past_days=1');
     weatherData=await r.json();weatherCache=weatherData;weatherCacheT=now;
     sd('weather_cache',weatherCache);sd('weather_cache_time',weatherCacheT);return weatherData;
   }catch{return null}
@@ -1955,6 +1989,7 @@ function renderEinstellungen(){
   });
   renderBackupSection();
   updateAnthropicKeyStatus();
+  setTimeout(function(){if(typeof updateAvatarToggleUI==='function')updateAvatarToggleUI();},50);
   const el=document.getElementById('settings-targets');if(!el)return;
   const params=[
     {key:'ph',     label:'🔵 pH-Wert',   unit:'',    desc:'medi pool: 7,0 – 7,6 | Ziel 7,3'},
@@ -2512,6 +2547,8 @@ async function renderDashboard(){
   if(typeof renderRainReminder==='function')renderRainReminder(w);
   if(typeof renderChlorDecayCard==='function')renderChlorDecayCard();
   if(typeof renderSkimmerTabPrognose==='function')renderSkimmerTabPrognose();
+  if(typeof renderPoolAvatar==='function')renderPoolAvatar();
+  if(typeof updateAvatarToggleUI==='function')updateAvatarToggleUI();
   if(typeof renderShellyCard==='function')renderShellyCard();
 }
 
@@ -3085,9 +3122,7 @@ function confirmTask(){
   }
   // Badeverbot: produziert immer eine explizite Bestätigung wenn Verbot vorgesehen
   const TASK_BAN_MAP={
-    algischutz:{hours:2,name:'Algenschutz'},
-    poolklar:  {hours:2,name:'Poolklar'},
-    chlorplus: {hours:0.5,name:'Chlor Plus (Normaldosierung / Stoßchlorung)'},
+    chlorplus: {hours:0.5,name:'Chlor Plus – Schockchlorung'},
     // pH-Minus and pH-Plus: no ban per confirmed settings
     // phminus:   {hours:0,name:'pH-Minus'},
     // phplus:    {hours:0,name:'pH-Plus'},
@@ -4136,6 +4171,7 @@ function selectProduct(key,card){
     PRODUCTS[key].fields.forEach(function(f){if(f.type==='select'){var _el=document.getElementById('dosi-'+f.id);if(_el)_prevVals[f.id]=_el.value;}});
   }
   selProduct=key;
+  try{localStorage.setItem('pool_lastSelProduct',key);}catch(e){}
   const p=PRODUCTS[key];document.getElementById('dosi-title').textContent=`📊 ${p.name}`;
   const banH=BAN_H[key];
   let _banLabel='';if(banH>0){
@@ -6129,8 +6165,33 @@ function updateGebindeQty(stockKey,gebindeId,qty){
 
 function openAddGebindeModal(stockKey){
   const sp=STOCK_PRODUCTS[stockKey];if(!sp)return;
-  const qty=parseFloat(prompt(`Menge des neuen Gebindes (${sp.unit}):`,sp.pkgDefault||1000));
-  if(!isNaN(qty)&&qty>0)addGebinde(stockKey,qty);
+  // Inline input instead of prompt()
+  const existingInput=document.getElementById('add-gebinde-inline-'+stockKey);
+  if(existingInput){existingInput.remove();return;}
+  const wrap=document.createElement('div');
+  wrap.id='add-gebinde-inline-'+stockKey;
+  wrap.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;background:#f0f9ff;border-radius:8px;padding:8px 10px;border:1px solid #bae6fd';
+  const def=sp.pkgDefault||1000;
+  wrap.innerHTML='<span style="font-size:0.82rem;font-weight:700">Menge ('+sp.unit+'):</span>'
+    +'<input type="number" id="add-gebinde-qty-'+stockKey+'" value="'+def+'" min="1" step="1" style="width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem">'
+    +'<button onclick="confirmNeuesGebinde(''+stockKey+'')" class="btn btn-primary btn-sm">✅ Hinzufügen</button>'
+    +'<button onclick="document.getElementById('add-gebinde-inline-'+stockKey+'').remove()" class="btn btn-outline btn-sm">✕</button>';
+  // Insert after the + button
+  const triggerBtn=document.querySelector('[onclick*="openAddGebindeModal(''+stockKey+'')"]');
+  if(triggerBtn&&triggerBtn.parentNode){triggerBtn.parentNode.insertBefore(wrap,triggerBtn.nextSibling);}
+  const qtyInput=document.getElementById('add-gebinde-qty-'+stockKey);
+  if(qtyInput)qtyInput.focus();
+}
+
+function confirmNeuesGebinde(stockKey){
+  const sp=STOCK_PRODUCTS[stockKey];if(!sp)return;
+  const qtyEl=document.getElementById('add-gebinde-qty-'+stockKey);
+  if(!qtyEl)return;
+  const qty=parseFloat(qtyEl.value);
+  if(isNaN(qty)||qty<=0){if(typeof toast==='function')toast('Bitte gültige Menge eingeben','warn',2000);return;}
+  addGebinde(stockKey,qty);
+  const wrap=document.getElementById('add-gebinde-inline-'+stockKey);
+  if(wrap)wrap.remove();
 }
 
 
@@ -10915,20 +10976,6 @@ function saveTempQuick(){
 // ============================================================
 // KI-TESTSTREIFEN aus FAB starten
 // ============================================================
-function openKITeststreifenFAB(){
-  const key = typeof getAnthropicKey === 'function' ? getAnthropicKey() : null;
-  if(!key){
-    if(typeof toast === 'function') toast('❗ Bitte zuerst API-Key in Einstellungen hinterlegen', 'warn', 4000);
-    showBoard('einstellungen');
-    return;
-  }
-  // Navigate to messung board so results are visible there
-  showBoard('messung');
-  // Slight delay to let board render, then trigger scan
-  setTimeout(function(){
-    if(typeof scanTeststreifen === 'function') scanTeststreifen();
-  }, 300);
-}
 
 
 // ============================================================
