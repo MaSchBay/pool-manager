@@ -6717,8 +6717,10 @@ function _renderHaLiveBadge(el) {
 // ── Einstellungen Render ───────────────────────────────────────
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function renderHaSettings() {
+  console.log('[PM] renderHaSettings called, el=', document.getElementById('ha-settings-section'));
+  try{
   const el = document.getElementById('ha-settings-section');
-  if (!el) return;
+  if (!el) { console.error('ha-settings-section NOT FOUND'); return; }
   el.innerHTML =
     '<div style="display:grid;gap:12px">' +
     '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
@@ -6754,6 +6756,7 @@ function renderHaSettings() {
     '<div id="ha-test-result" style="font-size:0.8rem;min-height:18px"></div>' +
     '</div>';
   _renderHaLiveBadge(document.getElementById('ha-live-badge'));
+  }catch(err){document.getElementById('ha-settings-section').textContent='FEHLER IN renderHaSettings: '+err.message;}
 }
 
 function saveHaSettings() {
