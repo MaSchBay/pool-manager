@@ -1927,7 +1927,7 @@ function showBoard(id){
   }
   closeNavMore();
   if(id==='einstellungen'){
-    try{renderEinstellungen();}catch(e){console.warn('[PM] renderEinstellungen:',e);}
+    try{renderEinstellungen();}catch(e){console.warn('[PM] renderEinstellungen:',e);document.getElementById('ha-settings-section').innerHTML='<p style="color:red;padding:8px">FEHLER: '+e.message+'</p>';}
     // Verzögerter Nachrender als Absicherung
     setTimeout(function(){
       try{if(typeof renderHaSettings==='function')renderHaSettings();}catch(e){}
