@@ -1926,7 +1926,16 @@ function showBoard(id){
     document.getElementById('bnav-more')?.classList.add('active');
   }
   closeNavMore();
-  if(id==='einstellungen'){try{renderEinstellungen();}catch(e){console.warn('[PM] renderEinstellungen:',e);}return;}
+  if(id==='einstellungen'){
+    try{renderEinstellungen();}catch(e){console.warn('[PM] renderEinstellungen:',e);}
+    // Verzögerter Nachrender als Absicherung
+    setTimeout(function(){
+      try{if(typeof renderHaSettings==='function')renderHaSettings();}catch(e){}
+      try{if(typeof renderShellySettings==='function')renderShellySettings();}catch(e){}
+      try{renderTapWaterSettings();}catch(e){}
+    },150);
+    return;
+  }
   ({dashboard:renderDashboard,wetter:renderWetter,
     messung:renderMessung,wartung:renderWartung,charts:renderCharts,historie:renderHistorie,
     hilfe:renderHilfe,wuensche:renderWuensche,erklaerung:renderErklaerung}[id]||(() => {}))();
@@ -6706,6 +6715,7 @@ function _renderHaLiveBadge(el) {
 }
 
 // ── Einstellungen Render ───────────────────────────────────────
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function renderHaSettings() {
   const el = document.getElementById('ha-settings-section');
   if (!el) return;
@@ -6719,22 +6729,22 @@ function renderHaSettings() {
       '<div style="font-size:0.78rem;color:#0369a1;font-weight:700">🏠 Verbindung (Nabu Casa)</div>' +
       '<div style="font-size:0.75rem;color:#0369a1">Token: HA → Profil → Sicherheit → Token erstellen</div>' +
       '<div><div class="form-label">HA URL</div>' +
-        '<input type="text" id="ha-url" value="' + haSettings.url + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+        '<input type="text" id="ha-url" value="' + _esc(haSettings.url) + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
       '<div><div class="form-label">Long-Lived Access Token</div>' +
-        '<input type="password" id="ha-token" value="' + haSettings.token + '" placeholder="ey..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+        '<input type="password" id="ha-token" value="' + _esc(haSettings.token) + '" placeholder="ey..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
     '</div>' +
     '<div style="background:#fafafa;border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:10px">' +
       '<div style="font-size:0.78rem;font-weight:700;color:var(--text-secondary)">📡 Sensor Entity-IDs</div>' +
       '<div><div class="form-label">Lufttemperatur</div>' +
-        '<input type="text" id="ha-air-temp" value="' + haSettings.airTempEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+        '<input type="text" id="ha-air-temp" value="' + _esc(haSettings.airTempEntity) + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
       '<div><div class="form-label">Luftfeuchtigkeit</div>' +
-        '<input type="text" id="ha-humidity" value="' + haSettings.humidityEntity + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+        '<input type="text" id="ha-humidity" value="' + _esc(haSettings.humidityEntity) + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
       '<div><div class="form-label">Wassertemperatur <span style="font-weight:400;color:var(--text-muted)">(Sensor folgt Di.)</span></div>' +
-        '<input type="text" id="ha-water-temp" value="' + (haSettings.waterTempEntity||'') + '" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+        '<input type="text" id="ha-water-temp" value="' + _esc(haSettings.waterTempEntity||'') + '" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
       '<div><div class="form-label">Shelly Leistung (für Filter-Laufzeit)</div>' +
-        '<input type="text" id="ha-shelly-power" value="' + (haSettings.shellyPowerEntity||'') + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
+        '<input type="text" id="ha-shelly-power" value="' + _esc(haSettings.shellyPowerEntity||'') + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
       '<div><div class="form-label">Schwellwert Filter läuft ab (Watt)</div>' +
-        '<input type="number" id="ha-power-threshold" value="' + (haSettings.powerThreshold||50) + '" min="5" max="500" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem"></div>' +
+        '<input type="number" id="ha-power-threshold" value="' + _esc(haSettings.powerThreshold||50) + '" min="5" max="500" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem"></div>' +
     '</div>' +
     '<div id="ha-live-badge"></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
