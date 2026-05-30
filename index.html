@@ -675,7 +675,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <div class="fab-items" id="fab-items">
     <button class="fab-sub" onclick="closeFab();openQMess()"><div class="fab-sub-icon" style="background:#dbeafe">🧪</div>Schnell messen</button>
     <button class="fab-sub" onclick="closeFab();openTempQuick()"><div class="fab-sub-icon" style="background:#ffe4e6">🌡️</div>Temperatur</button>
-    <button class="fab-sub" onclick="closeFab();openKITeststreifenFAB()"><div class="fab-sub-icon" style="background:#f3e8ff">🤖</div>KI-Teststreifen</button>
+
     <button class="fab-sub" onclick="closeFab();showBoard('dosierung')"><div class="fab-sub-icon" style="background:#fce7f3">⚗️</div>Dosierung</button>
     <button class="fab-sub" onclick="closeFab();openDruckModal()"><div class="fab-sub-icon" style="background:#fed7aa">🟤</div>Filterdruck</button>
     <button class="fab-sub" onclick="closeFab();showBoard('hilfe')"><div class="fab-sub-icon" style="background:#dcfce7">❓</div>Problem lösen</button>
@@ -752,6 +752,25 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <span style="font-weight:700;color:var(--text-muted)">Stk</span>
       </div>
     </div>
+    <!-- Restgebinde aufgebraucht -->
+    <div id="task-confirm-restgebinde-row" style="display:none;margin-bottom:14px;background:#fefce8;border-radius:10px;padding:10px 12px;border:1px solid #fde68a">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#92400e;margin-bottom:0">
+        <input type="checkbox" id="task-confirm-restgebinde-check" onchange="toggleRestgebindeFelder()" style="width:18px;height:18px;cursor:pointer">
+        📦 Restgebinde aufgebraucht
+      </label>
+      <div id="task-confirm-restgebinde-felder" style="display:none;margin-top:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:0.82rem;color:#78350f;width:160px">Davon aus altem Gebinde:</span>
+          <input type="number" id="task-confirm-restgebinde-alt" min="0" step="1" style="width:80px;text-align:center;border:1px solid #f59e0b;border-radius:6px;padding:4px 6px;font-weight:700" placeholder="z.B. 40" oninput="updateRestgebindeNeu()">
+          <span id="task-confirm-restgebinde-unit-alt" style="font-size:0.82rem;color:#78350f">g</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:0.82rem;color:#78350f;width:160px">Aus neuem Gebinde:</span>
+          <span id="task-confirm-restgebinde-neu" style="font-weight:800;color:#d97706;font-size:0.9rem">–</span>
+          <span id="task-confirm-restgebinde-unit-neu" style="font-size:0.82rem;color:#78350f">g</span>
+        </div>
+      </div>
+    </div>
     <div class="form-group">
       <label class="form-label">Notiz (optional)</label>
       <input type="text" id="task-confirm-note" placeholder="z.B. 4 Tabs statt 3">
@@ -821,6 +840,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <h1>🏊 Pool Manager</h1>
     <p id="dash-datetime"></p>
     <div id="dash-season-progress" style="margin-top:10px"></div>
+    <div id="pool-avatar-dashboard"></div>
   </div>
   <div id="ban-banner-main"></div>
   <div id="nachmess-timer-banner"></div>
@@ -847,6 +867,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div id="kinder-ban-panel"></div>
   </div>
   <div id="skimmer-tab-prognose"></div>
+  <div id="fac-tab-prognose"></div>
   <div id="chlor-decay-dashboard"></div>
   <div id="backup-reminder-main"></div>
   <div id="dash-stock-warning"></div>
@@ -1129,7 +1150,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <label class="form-label" id="tds-label">💧 Wasserbelastung (TDS) ppm <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
           <button class="spin-btn" onclick="adjustInput('input-tds',-1,0)">−</button>
-          <input type="number" id="input-tds" step="1" min="0" max="5000" style="text-align:center" placeholder="z.B. 800">
+          <input type="number" id="input-tds" step="1" max="5000" style="text-align:center" placeholder="z.B. 800">
           <button class="spin-btn" onclick="adjustInput('input-tds',1,0)">+</button>
         </div>
         <div id="tds-hint" style="font-size:0.76rem;margin-top:3px"></div>
@@ -1138,7 +1159,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <label class="form-label" id="orp-label">⚡ Desinfektionskraft (ORP) mV <span style="font-size:0.72rem;color:var(--text-muted)">GIDIGI</span></label>
         <div style="display:flex;align-items:center;gap:6px">
           <button class="spin-btn" onclick="adjustInput('input-orp',-1,0)">−</button>
-          <input type="number" id="input-orp" step="1" min="0" max="1000" style="text-align:center" placeholder="z.B. 700">
+          <input type="number" id="input-orp" step="1" max="1000" style="text-align:center" placeholder="z.B. 700">
           <button class="spin-btn" onclick="adjustInput('input-orp',1,0)">+</button>
         </div>
         <div id="orp-hint" style="font-size:0.76rem;margin-top:3px"></div>
@@ -1451,6 +1472,22 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div id="settings-targets"></div>
     <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="saveSettings()">💾 Einstellungen speichern</button>
     <button class="btn btn-outline btn-sm" style="margin-top:12px;margin-left:8px" onclick="resetSettings()">↩️ Zurücksetzen</button>
+  </div>
+  <div class="card">
+    <div class="card-title">🎨 Darstellung</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0">
+      <div>
+        <div style="font-weight:700;font-size:0.9rem">🏊 Pool-Avatar</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">Animierte Pool-Visualisierung im Dashboard (reagiert auf Wasserqualität & Cover-Status)</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px">
+        <input type="checkbox" id="toggle-pool-avatar" onchange="togglePoolAvatarSetting(this.checked)" style="opacity:0;width:0;height:0">
+        <span id="toggle-pool-avatar-knob" style="position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:24px;transition:.3s">
+          <span style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s;display:block" id="toggle-pool-avatar-thumb"></span>
+        </span>
+      </label>
+    </div>
+    <div id="pool-avatar-preview" style="display:none;margin-top:8px"></div>
   </div>
   <div class="card">
     <div class="card-title">ℹ️ Pool-Infos</div>
@@ -1921,6 +1958,18 @@ function defaultMaintenance(){
 function showBoard(id){
   document.querySelectorAll('.board').forEach(b=>b.classList.remove('active'));
   if(id==='produkte')setTimeout(renderProduktBoard,0);
+  // Dosierung: letzte Produktauswahl wiederherstellen
+  if(id==='dosierung'){
+    setTimeout(function(){
+      try{
+        const last=localStorage.getItem('lastSelProduct');
+        if(last){
+          const card=document.querySelector(`.product-card[onclick*="selectProduct('${last}'"]`);
+          if(card)card.click();
+        }
+      }catch(e){}
+    },50);
+  }
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.nav-mobile-item').forEach(b=>b.classList.remove('active'));
   document.getElementById('board-'+id).classList.add('active');
@@ -1952,7 +2001,7 @@ async function fetchWeather(){
   const now=Date.now();
   if(weatherCache&&(now-weatherCacheT)<30*60*1000){weatherData=weatherCache;return weatherData}
   try{
-    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=48.83&longitude=12.96&current=temperature_2m,weathercode,windspeed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weathercode,precipitation_probability,precipitation&daily=weathercode,temperature_2m_max,temperature_2m_min,sunset,sunrise&timezone=Europe%2FBerlin&forecast_days=8&past_days=1');
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=48.83&longitude=12.96&current=temperature_2m,weathercode,windspeed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weathercode,precipitation_probability,precipitation&daily=weathercode,temperature_2m_max,temperature_2m_min,sunset,sunrise&timezone=Europe%2FBerlin&forecast_days=7&past_days=0');
     weatherData=await r.json();weatherCache=weatherData;weatherCacheT=now;
     sd('weather_cache',weatherCache);sd('weather_cache_time',weatherCacheT);return weatherData;
   }catch{return null}
@@ -1971,6 +2020,7 @@ function renderEinstellungen(){
   });
   renderBackupSection();
   updateAnthropicKeyStatus();
+  setTimeout(function(){if(typeof updateAvatarToggleUI==='function')updateAvatarToggleUI();},50);
   const el=document.getElementById('settings-targets');if(!el)return;
   const params=[
     {key:'ph',     label:'🔵 pH-Wert',   unit:'',    desc:'medi pool: 7,0 – 7,6 | Ziel 7,3'},
@@ -2298,7 +2348,6 @@ function saveTimerMeasure(){
     measurements.push(entry);sd('measurements',measurements);
     logHistory({type:'messung',time:entry.time,...entry,note:'Nach Timer-Erinnerung gemessen'});
     checkAutoBan(entry);
-    if(typeof updateSkimmerTabFacKorr==='function')updateSkimmerTabFacKorr();
   }
   // Mark timer done
   const t=timerTodos.find(x=>x.id===id);if(t){t.done=true;sd('timer_todos',timerTodos);}
@@ -2389,11 +2438,6 @@ function saveMeasurement(){
   if(!isNaN(ph)||!isNaN(chlor)){
     const taskTest=maintenanceTasks.find(t=>t.id==='test');
     if(taskTest){taskTest.lastDone=entry.time;sd('maintenance',maintenanceTasks);applyCovertIntervals();}
-    // Teststreifen Bestand abziehen
-    if(chemStock['Teststreifen']){
-      chemStock['Teststreifen'].qty=Math.max(0,chemStock['Teststreifen'].qty-1);
-      sd('chem_stock_v2',chemStock);
-    }
   }
   // Mark druck_check done if druck was measured
   if(!isNaN(druck)){
@@ -2404,8 +2448,6 @@ function saveMeasurement(){
   setTimeout(()=>{document.getElementById('mess-feedback').innerHTML=''},3000);
   if(typeof toast==='function')toast('Messung gespeichert','success',2000);
   if(navigator.vibrate)navigator.vibrate(60);
-  // FAC-basierte Kalibrierung der Tab-Prognose
-  if(typeof updateSkimmerTabFacKorr==='function')updateSkimmerTabFacKorr();
   clearMeasurementForm();
 }
 
@@ -3019,16 +3061,50 @@ function quickCompleteTask(id){
       qtyRow.style.display='none';
     }
   }
+  // Restgebinde-Zeile: anzeigen wenn Produkt mit Menge vorhanden
+  const restRow = document.getElementById('task-confirm-restgebinde-row');
+  const stockName2 = TASK_STOCK_MAP[id];
+  const p2 = stockName2 ? STOCK_PRODUCTS[stockName2] : null;
+  if(restRow){
+    if(p2 && (id !== 'chlor_tabs' && id !== 'langzeit_chlor')){
+      restRow.style.display = 'block';
+      document.getElementById('task-confirm-restgebinde-check').checked = false;
+      document.getElementById('task-confirm-restgebinde-felder').style.display = 'none';
+      document.getElementById('task-confirm-restgebinde-alt').value = '';
+      document.getElementById('task-confirm-restgebinde-neu').textContent = '–';
+      const unitEl = document.getElementById('task-confirm-restgebinde-unit-alt');
+      const unitEl2 = document.getElementById('task-confirm-restgebinde-unit-neu');
+      if(unitEl) unitEl.textContent = p2.unit;
+      if(unitEl2) unitEl2.textContent = p2.unit;
+    } else {
+      restRow.style.display = 'none';
+    }
+  }
   document.getElementById('modal-task-confirm').classList.add('open');
 }
 
 function adjustTaskQty(d){
   const el=document.getElementById('task-confirm-qty');
   el.value=Math.max(0,(parseInt(el.value)||0)+d);
+  updateRestgebindeNeu();
 }
 function adjustTaskQty2(d){
   const el=document.getElementById('task-confirm-qty2');
   el.value=Math.max(0,(parseInt(el.value)||0)+d);
+}
+
+function toggleRestgebindeFelder(){
+  const checked = document.getElementById('task-confirm-restgebinde-check').checked;
+  document.getElementById('task-confirm-restgebinde-felder').style.display = checked ? 'block' : 'none';
+  if(checked) updateRestgebindeNeu();
+}
+
+function updateRestgebindeNeu(){
+  const gesamt = parseFloat(document.getElementById('task-confirm-qty')?.value) || 0;
+  const alt = parseFloat(document.getElementById('task-confirm-restgebinde-alt')?.value) || 0;
+  const neu = Math.max(0, gesamt - alt);
+  const el = document.getElementById('task-confirm-restgebinde-neu');
+  if(el) el.textContent = neu > 0 ? neu.toFixed(gesamt % 1 !== 0 ? 1 : 0) : '0';
 }
 
 
@@ -3062,6 +3138,13 @@ function confirmTask(){
   const p=stockName?STOCK_PRODUCTS[stockName]:null;
   let histNote=`Erledigt: ${task.name}`;
   if(p&&qty>0)histNote+=` (${qty} ${p.unit} ${p===STOCK_PRODUCTS['Langzeit-Chlortabs']?'Langzeit-Tabs':'verwendet'})`;
+  // Restgebinde-Aufteilung im Log vermerken
+  const restCheck = document.getElementById('task-confirm-restgebinde-check');
+  const restAlt = parseFloat(document.getElementById('task-confirm-restgebinde-alt')?.value)||0;
+  if(restCheck&&restCheck.checked&&restAlt>0){
+    const restNeu = Math.max(0, qty - restAlt);
+    histNote += ` 📦 Restgebinde: ${restAlt} ${p?p.unit:''} aus altem + ${restNeu} ${p?p.unit:''} aus neuem Gebinde`;
+  }
   // Für chlor_tabs: zweite Menge (Schnell-Tabs) auslesen
   const qty2Row=document.getElementById('task-confirm-qty2-row');
   const _dualTask=(id==='chlor_tabs'||id==='langzeit_chlor');
@@ -3101,16 +3184,11 @@ function confirmTask(){
     sd('chem_stock_v2',chemStock);
     renderStockDashboard();
   }
-  // Badeverbot: produziert immer eine explizite Bestätigung wenn Verbot vorgesehen
+  // Badeverbot: nur Chlor Plus Granulat → 30 min (bestätigt)
   const TASK_BAN_MAP={
-    algischutz:{hours:2,name:'Algenschutz'},
-    poolklar:  {hours:2,name:'Poolklar'},
-    chlorplus: {hours:0.5,name:'Chlor Plus (Normaldosierung / Stoßchlorung)'},
-    // pH-Minus and pH-Plus: no ban per confirmed settings
-    // phminus:   {hours:0,name:'pH-Minus'},
-    // phplus:    {hours:0,name:'pH-Plus'},
+    chlorplus: {hours:0.5,name:'Chlor Plus Granulat'},
   };
-  const banInfo=TASK_BAN_MAP[id]||getBanHoursForTask(id);
+  const banInfo=TASK_BAN_MAP[id];
   closeModal('modal-task-confirm');
   if(banInfo&&banInfo.hours>0){
     // Open the explicit ban-confirm modal
@@ -3233,6 +3311,7 @@ function getWaterIssues(m){
 // iPHONE
 // ============================================================
 async function renderIphone(){
+  try {
   console.log('[PM] renderIphone start');
   const now=new Date();
   document.getElementById('iphone-datetime').textContent=now.toLocaleString('de-DE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -3397,6 +3476,18 @@ async function renderIphone(){
         });
         ctx.fillStyle='#94a3b8';ctx.font='9px Nunito Sans';ctx.textAlign='left';ctx.fillText('7 Tage',4,10);
       }
+    }
+  }
+
+  } catch(e) {
+    console.error('[PM] renderIphone Fehler:', e);
+    const root = document.getElementById('iphone-root');
+    if(root && !root.querySelector('.iphone-crash-hint')) {
+      const hint = document.createElement('div');
+      hint.className = 'iphone-crash-hint';
+      hint.style.cssText = 'background:#fee2e2;border-radius:12px;padding:12px;margin:12px;font-size:0.8rem;color:#b91c1c';
+      hint.textContent = '⚠️ Fehler beim Laden: ' + e.message;
+      root.prepend(hint);
     }
   }
 
@@ -3851,7 +3942,7 @@ async function renderWetter(){
   const tbody=document.getElementById('week-tbody');let tb='';
   // Fetch sunrise from API for each day
   const todayMidnight=new Date();todayMidnight.setHours(0,0,0,0);
-  for(let i=0;i<Math.min(8,w.daily.time.length);i++){
+  for(let i=0;i<Math.min(7,w.daily.time.length);i++){
     const date=new Date(w.daily.time[i]),wd=wmo(w.daily.weathercode[i]);
     if(date<todayMidnight)continue; // vergangene Tage überspringen
     const max=Math.round(w.daily.temperature_2m_max[i]),min2=Math.round(w.daily.temperature_2m_min[i]);
@@ -3977,7 +4068,7 @@ function poolTempEstimate(idx,airMax,airMin,wmoCode){
 // ============================================================
 // DOSIERUNG
 // ============================================================
-const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0.5,chlorplus:0.5,flockmittel:0,poolklar:0,algenschutz:2,phminus:0,phplus:0,alcaplus:0};
+const BAN_H={langzeittabs:0,schnellchlor:0,mischdosi:0,chlorplus:0.5,flockmittel:0,poolklar:0,algenschutz:0,phminus:0,phplus:0,alcaplus:0};
 const PRODUCTS={
   schnellchlor:{name:'Schnell-Chlortabs 20g',
     fields:[{id:'mode',label:'Modus',type:'select',opts:['Regelbetrieb (alle 3 Tage)','Stoßbehandlung']}],
@@ -4124,6 +4215,8 @@ const PRODUCTS={
 };
 function selectProduct(key,card){
   document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');
+  // Auswahl merken (pH-Rechner bleibt auf letzter Auswahl)
+  try{localStorage.setItem('lastSelProduct',key);}catch(e){}
   // Auswahl nur beibehalten wenn gleiche Produktkarte nochmal geklickt wird
   const _sameProduct=(selProduct===key);
   // Alcaplus: letzten KH-Wert vorausfüllen
@@ -5809,7 +5902,6 @@ const STOCK_PRODUCTS = {
   'Flockmittel':       {unit:'ml',  pkgDefault:1000, type:'fluessigkeit', perUse:Math.round(12*POOL_VOLUME/10),        useName:'Kontinuierlich'},
   'Poolklar':          {unit:'ml',  pkgDefault:1000, type:'fluessigkeit', perUse:Math.round(50*POOL_VOLUME/10),        useName:'Wöchentlich'},
   'Algenschutz':       {unit:'ml',  pkgDefault:1000, type:'fluessigkeit', perUse:Math.round(100*POOL_VOLUME/10),       useName:'Grunddosierung'},
-  'Teststreifen':      {unit:'Stk', pkgDefault:50,   type:'streifen',    perUse:1,                                     useName:'Pro Messung 1 Streifen'},
   'Alca-Plus':         {unit:'g',   pkgDefault:5000, type:'granulat',    perUse:Math.round(190*POOL_VOLUME/10),        useName:'TA-Wert heben (+10 ppm)'},
 };
 
@@ -6241,7 +6333,6 @@ function saveQMess(){
   if(ph!==undefined||chlor!==undefined){
     const taskTest=maintenanceTasks.find(t=>t.id==='test');
     if(taskTest){taskTest.lastDone=entry.time;sd('maintenance',maintenanceTasks);applyCovertIntervals();}
-    if(chemStock['Teststreifen']){chemStock['Teststreifen'].qty=Math.max(0,chemStock['Teststreifen'].qty-1);sd('chem_stock_v2',chemStock);}
   }
   // Handle druck
   if(entry.druck!==undefined){
@@ -9521,10 +9612,9 @@ renderChlorDecayCard=function(){
   const dateStr=p.date.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'});
   const coverHint=p.adjusted?' <span style="font-weight:800;color:#b45309">(Pool offen – Abbau beschleunigt)</span>':
     coverState.covered?' <span style="font-size:0.78rem;opacity:0.8">(Plane drauf)</span>':'';
-  const tempHint=p.tempAdjusted?' <span style="font-size:0.78rem;color:#b45309">🌡️ '+p.tempC.toFixed(1)+'°C – Verbrauch temperaturbedingt erhöht</span>':'';
   el.innerHTML='<div class="chlor-decay-card">'
     +'<div style="font-size:1.4rem">📉</div>'
-    +'<div style="flex:1">Chlor fällt voraussichtlich '+when+' ('+dateStr+') unter Minimum ('+settings.chlor.min+' ppm) – Verbrauch: ~'+Math.abs(p.ratePerDay).toFixed(2)+' ppm pro Tag'+coverHint+tempHint+'</div>'
+    +'<div style="flex:1">Chlor fällt voraussichtlich '+when+' ('+dateStr+') unter Minimum ('+settings.chlor.min+' ppm) – Verbrauch: ~'+Math.abs(p.ratePerDay).toFixed(2)+' ppm pro Tag'+coverHint+'</div>'
     +'</div>';
 };
 
@@ -9533,347 +9623,405 @@ const _origRenderDashboard=renderDashboard;
 renderDashboard=async function(){
   await _origRenderDashboard();
   if(typeof renderCoverStatusCard==='function')renderCoverStatusCard();
+  if(typeof renderFacTabPrognose==='function')renderFacTabPrognose();
+  if(typeof renderSkimmerTabPrognose==='function')renderSkimmerTabPrognose();
+  if(typeof renderPoolAvatar==='function')renderPoolAvatar();
 };
 
 // ============================================================
-// LANGZEIT-TAB PROGNOSE (Skimmer-Tabs + Temperaturabhängiger Verbrauch)
+// FAC-PROGNOSE AUS TAB-RESTGEWICHT
+// Berechnet: wann fällt FAC unter Minimum wenn keine neuen Tabs kommen?
+// Berücksichtigt: Cover-Status (aufgedeckt = +80% Abbau), Wassertemperatur, gemessene Abbaurate
 // ============================================================
 
-// --- State: Skimmer-Tab-Tracking ---
-// skimmerTabState: { tabsEingelegt: number, eingelgtAm: ISO-string, tabWeightG: 20 }
-let skimmerTabState = ld('skimmerTabState', {
-  tabsEingelegt: 0,
-  eingelgtAm: null,
-  tabWeightG: 20
-});
+function calcFacTabPrognose(){
+  const s = typeof skimmerTabState !== 'undefined' ? skimmerTabState : null;
+  if(!s||!s.eingelgtAm||s.tabsEingelegt<=0) return null;
 
-function saveSkimmerTabState() {
-  sd('skimmerTabState', skimmerTabState);
-}
-
-// Registriert, dass Langzeit-Tabs in den Skimmer gelegt wurden
-function registerSkimmerTabs(anzahl, zeitpunkt) {
-  skimmerTabState.tabsEingelegt = anzahl;
-  skimmerTabState.eingelgtAm = (zeitpunkt || new Date()).toISOString();
-  skimmerTabState.tabWeightG = 20;
-  // Korrekturfaktor zurücksetzen – neue Tabs, neuer Lernzyklus
-  skimmerTabState.facKorrFaktor = 1.0;
-  skimmerTabState.facKorrAm = null;
-  skimmerTabState.facKorrBasis = null;
-  saveSkimmerTabState();
-  renderSkimmerTabPrognose();
-}
-
-// Holt Wassertemperatur: zuerst aus HA-Live, sonst letzte Messung
-function getWaterTemp() {
-  if (typeof haLiveData !== 'undefined' && haLiveData && haLiveData.waterTemp !== null && haLiveData.waterTemp !== undefined) {
-    return haLiveData.waterTemp;
-  }
   const last = getLastMeasurement();
-  return (last && last.temp !== undefined) ? last.temp : null;
-}
+  if(!last||last.chlor===undefined) return null;
 
-// Auflösungsrate in Tage pro Tab (20g) als Funktion der Temperatur
-// Basis: 7 Tage bei 25°C (medi pool Angabe ca. 4 Tabs/10.000L/Woche)
-// Chemische Faustregel: je 10°C Erhöhung ~doppelte Reaktionsrate (van't Hoff)
-// Vereinfacht: Lösungsdauer = 7 × 2^((25 - T) / 10) Tage, begrenzt auf [2, 14]
-function tabDissolutionDaysPerTab(tempC) {
-  const t = (tempC !== null && tempC !== undefined) ? tempC : 25;
-  const days = 7 * Math.pow(2, (25 - t) / 10);
-  return Math.max(2, Math.min(14, days));
-}
+  // Aktueller FAC-Istwert (aus letzter Messung)
+  const facAktuell = last.chlor;
+  const facMin = settings.chlor ? settings.chlor.min : 1.0;
 
-// Temperatur-Faktor für den Chlor-Verbrauch im Wasser
-// Basis: 1.0 bei 20°C; +~15% je 5°C Erhöhung (kombiniert: UV, Biologie, Oxidation)
-function tempDecayFactor(tempC) {
-  const t = (tempC !== null && tempC !== undefined) ? tempC : 20;
-  return Math.pow(1.15, (t - 20) / 5);
-}
-
-// FAC-basierte Kalibrierung der Tab-Auflösungsrate
-// Wird nach jeder Messung aufgerufen (min. 4h nach Einlegen, max. 5 Tage alt)
-// Vergleicht: erwarteter FAC-Beitrag der Tabs vs. gemessener FAC-Delta
-// Ergebnis: facKorrFaktor in skimmerTabState (< 1.0 = schneller verbraucht, > 1.0 = langsamer)
-function updateSkimmerTabFacKorr() {
-  const s = skimmerTabState;
-  if (!s.eingelgtAm || s.tabsEingelegt <= 0) return;
-
-  const eingelgtAt = new Date(s.eingelgtAm).getTime();
-  const seitStunden = (Date.now() - eingelgtAt) / 3600000;
-
-  // Nur zwischen 4h und 5 Tagen nach Einlegen kalibrieren (sinnvoller Zeitraum)
-  if (seitStunden < 4 || seitStunden > 120) return;
-
-  // Letzte Messung MIT FAC-Wert, die NACH dem Einlegen liegt
-  const messNachEinlegen = measurements
-    .filter(function(m) { return m.chlor !== undefined && m.time && new Date(m.time).getTime() > eingelgtAt + 4*3600000; })
-    .sort(function(a,b) { return new Date(b.time) - new Date(a.time); });
-
-  if (messNachEinlegen.length === 0) return;
-  const neueste = messNachEinlegen[0];
-
-  // Messung vor dem Einlegen (Basiswert)
-  const messVorher = measurements
-    .filter(function(m) { return m.chlor !== undefined && m.time && new Date(m.time).getTime() < eingelgtAt; })
-    .sort(function(a,b) { return new Date(b.time) - new Date(a.time); });
-
-  const facVorher = messVorher.length > 0 ? messVorher[0].chlor : (settings.chlor ? settings.chlor.target : 2.0);
-  const facGemessen = neueste.chlor;
-
-  // Erwarteter FAC nach Tabs: 4 Tabs à 20g à ~56% Aktivchlor / 10.520L ≈ +0.42 ppm
-  // Aber: Ein Teil löst sich erst über die Woche → nach X Stunden erst anteilig
-  const temp = getWaterTemp();
-  const tageProTab = tabDissolutionDaysPerTab(temp);
-  const gesamtTage = s.tabsEingelegt * tageProTab;
-  const seitTage = seitStunden / 24;
-  const anteilAufgeloest = Math.min(1, seitTage / gesamtTage);
-
-  // Chlorbeitrag: 20g Tab × 56% Aktivchlor = 11.2g Cl₂ pro Tab
-  // ppm in 10.520L: 11.2g / 10.52m³ = ~1.06 ppm pro Tab (gesamt)
-  const chlorProTabGesamt = (s.tabWeightG * 0.56) / POOL_VOLUME / 1000 * 1000; // ppm
-  const erwarteterChlorBeitrag = s.tabsEingelegt * chlorProTabGesamt * anteilAufgeloest;
-
-  // Tatsächlicher FAC-Delta (kann durch UV/Verbrauch auch negativ sein)
-  const facDelta = facGemessen - facVorher;
-
-  // Natürlicher Abbau ohne Tabs: aus predictChlorDecay Basisrate schätzen
-  // Fallback: 0.2 ppm/Tag Abbau (konservativ)
-  const chlorDecay = predictChlorDecay ? predictChlorDecay() : null;
-  const abbauRateProTag = chlorDecay && chlorDecay.ratePerDay < 0 ? Math.abs(chlorDecay.ratePerDay) : 0.2;
-  const erwarteterAbbau = abbauRateProTag * seitTage;
-
-  // Netto-erwarteter Chlorwert: Beitrag der Tabs minus natürlicher Abbau
-  const nettoErwartet = erwarteterChlorBeitrag - erwarteterAbbau;
-  if (nettoErwartet <= 0.05) return; // Zu wenig Signal – nicht kalibrieren
-
-  // Korrekturfaktor: wie gut stimmt der tatsächliche Delta mit dem erwarteten überein?
-  // facDelta = tatsächlicher Netto-Effekt; nettoErwartet = theoretischer Netto-Effekt
-  // Faktor > 1: Tabs wirken besser/länger als erwartet
-  // Faktor < 1: Tabs werden schneller verbraucht (höhere Badenutzung, UV, etc.)
-  const rohFaktor = (facDelta + erwarteterAbbau) / erwarteterChlorBeitrag;
-  // Begrenzen auf [0.3, 2.0] und mit gleitendem Mittel dämpfen
-  const clampedFaktor = Math.max(0.3, Math.min(2.0, rohFaktor));
-  const alterFaktor = s.facKorrFaktor || 1.0;
-  // 70% neuer Wert, 30% alter Wert (Dämpfung gegen Ausreißer)
-  const neuerFaktor = Math.round((0.7 * clampedFaktor + 0.3 * alterFaktor) * 100) / 100;
-
-  if (Math.abs(neuerFaktor - alterFaktor) > 0.05) {
-    skimmerTabState.facKorrFaktor = neuerFaktor;
-    skimmerTabState.facKorrAm = neueste.time;
-    skimmerTabState.facKorrBasis = { facVorher: facVorher, facGemessen: facGemessen, erwartet: Math.round(nettoErwartet*100)/100 };
-    saveSkimmerTabState();
-  }
-}
-
-// Berechnet: Restgewicht Tabs im Skimmer (g), Prognose Leerung
-function calcSkimmerTabPrognose() {
-  const s = skimmerTabState;
-  if (!s.eingelgtAm || s.tabsEingelegt <= 0) return null;
-
-  const temp = getWaterTemp();
-  const tageRoh = tabDissolutionDaysPerTab(temp);   // Auflösungszeit pro Tab in Tagen (temperaturkorrigiert)
-
-  // FAC-Korrekturfaktor anwenden: Faktor < 1 → Tabs lösen sich schneller → weniger Tage
+  // Täglicher Chlorbeitrag der verbleibenden Tabs
+  const temp = (typeof getWaterTemp === 'function') ? getWaterTemp() : null;
+  const tageProTab = (typeof tabDissolutionDaysPerTab === 'function') ? tabDissolutionDaysPerTab(temp) : 7;
   const facKorr = s.facKorrFaktor || 1.0;
-  const tage = tageRoh * facKorr;
+  const tageEffektiv = tageProTab * facKorr;
 
-  const gesamtGramm = s.tabsEingelegt * s.tabWeightG;  // z.B. 4×20 = 80g
-  const gesamtTage = s.tabsEingelegt * tage;     // Gesamtlaufzeit (Tabs lösen sich sequenziell)
-  const seit = (Date.now() - new Date(s.eingelgtAm).getTime()) / 86400000; // Tage seit Einlegen
-  const verbrauchteGramm = Math.min(gesamtGramm, (seit / gesamtTage) * gesamtGramm);
-  const restGramm = Math.max(0, gesamtGramm - verbrauchteGramm);
+  // Chlorbeitrag pro Tab gesamt (ppm): 20g × 56% Aktivchlor / 10.52 m³ = ~1.06 ppm/Tab
+  const chlorProTabGesamt = (s.tabWeightG * 0.56) / (typeof POOL_VOLUME !== 'undefined' ? POOL_VOLUME : 10.52) / 1000 * 1000;
+
+  // Tagesrestgewicht hochrechnen
+  const seit = (Date.now() - new Date(s.eingelgtAm).getTime()) / 86400000;
+  const gesamtTage = s.tabsEingelegt * tageEffektiv;
   const restTage = Math.max(0, gesamtTage - seit);
-  const leerDatum = new Date(new Date(s.eingelgtAm).getTime() + gesamtTage * 86400000);
-  const restProzent = gesamtGramm > 0 ? Math.round(restGramm / gesamtGramm * 100) : 0;
+  if(restTage <= 0) return null; // Tabs leer
 
-  // Temperaturhinweis für Chlorverbrauch
-  const tempFactor = tempDecayFactor(temp);
-  const tempHinweis = temp !== null && temp > 25
-    ? `⚠️ Wassertemp. ${temp.toFixed(1)}°C – Chlorverbrauch ~${Math.round((tempFactor-1)*100)}% erhöht`
-    : (temp !== null && temp > 22
-      ? `🌡️ Wassertemp. ${temp.toFixed(1)}°C – Verbrauch leicht erhöht`
-      : null);
+  // Chlorbeitrag pro Tag der Tabs (linear): gesamter Chlorbeitrag / gesamtTage
+  const chlorBeitragProTag = (s.tabsEingelegt * chlorProTabGesamt) / gesamtTage;
 
-  // FAC-Kalibrierungs-Hinweis
-  let facKorrHinweis = null;
-  if (facKorr < 0.85) {
-    facKorrHinweis = `📊 FAC-Messung: Tabs werden ~${Math.round((1-facKorr)*100)}% schneller verbraucht als erwartet – Prognose angepasst`;
-  } else if (facKorr > 1.15) {
-    facKorrHinweis = `📊 FAC-Messung: Tabs halten ~${Math.round((facKorr-1)*100)}% länger als erwartet – Prognose angepasst`;
+  // Natürlicher Chlorabbau pro Tag (aus letzten Messungen)
+  const decay = (typeof predictChlorDecay === 'function') ? predictChlorDecay() : null;
+  let abbauProTag = decay && decay.ratePerDay < 0 ? Math.abs(decay.ratePerDay) : 0.3;
+
+  // Cover-Faktor: ohne Abdeckung UV-Abbau ×1.8
+  const cover = (typeof coverState !== 'undefined') ? coverState : null;
+  const coverFaktor = (cover && !cover.covered) ? 1.8 : 1.0;
+  abbauProTag = abbauProTag * coverFaktor;
+
+  // Temperatur-Faktor auf Abbaurate
+  if(temp !== null && (typeof tempDecayFactor === 'function')){
+    abbauProTag = abbauProTag * Math.min(tempDecayFactor(temp), 1.4);
   }
+
+  // Netto: FAC steigt/fällt pro Tag
+  const nettoProTag = chlorBeitragProTag - abbauProTag;
+
+  let tageVisFac;
+  if(nettoProTag >= 0){
+    // Tabs halten den FAC stabil oder steigend – keine Warnung nötig
+    tageVisFac = restTage; // "hält mindestens so lange wie die Tabs"
+  } else {
+    // FAC fällt: wann unterschreitet er facMin?
+    tageVisFac = (facAktuell - facMin) / (-nettoProTag);
+  }
+
+  if(tageVisFac <= 0) return null;
+
+  // Limitiert durch: Tabs leer ODER FAC unter Minimum
+  const kritischeTage = Math.min(tageVisFac, restTage);
+  const kritischDatum = new Date(Date.now() + kritischeTage * 86400000);
 
   return {
-    restGramm: Math.round(restGramm),
-    restTage: restTage,
-    leerDatum: leerDatum,
-    restProzent: restProzent,
-    gesamtGramm: gesamtGramm,
-    tabsEingelegt: s.tabsEingelegt,
-    eingelgtAm: s.eingelgtAm,
+    tage: kritischeTage,
+    datum: kritischDatum,
+    facAktuell: facAktuell,
+    facMin: facMin,
+    nettoProTag: nettoProTag,
+    coverFaktor: coverFaktor,
     temp: temp,
-    tempFactor: tempFactor,
-    tempHinweis: tempHinweis,
-    facKorr: facKorr,
-    facKorrHinweis: facKorrHinweis,
-    auflösungTageProTab: Math.round(tage * 10) / 10
+    grund: tageVisFac <= restTage ? 'fac' : 'tabs' // was kommt zuerst
   };
 }
 
-// Rendert die Skimmer-Tab-Prognose-Karte im Dashboard
-function renderSkimmerTabPrognose() {
-  const el = document.getElementById('skimmer-tab-prognose');
-  if (!el) return;
-  el.innerHTML = '';
+function renderFacTabPrognose(){
+  const el = document.getElementById('fac-tab-prognose');
+  if(!el) return;
+  const p = calcFacTabPrognose();
+  if(!p || p.tage > 14){el.innerHTML='';return;}
 
-  const p = calcSkimmerTabPrognose();
+  const when = p.tage < 1 ? 'heute' : p.tage < 2 ? 'morgen' : 'in ~' + Math.round(p.tage) + ' Tagen';
+  const dateStr = p.datum.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'});
+  const dringend = p.tage <= 2;
+  const color = dringend ? '#dc2626' : p.tage <= 5 ? '#d97706' : '#0284c7';
+  const icon = dringend ? '🚨' : '⚠️';
 
-  // --- Input-Bereich: immer sichtbar (kompakt) ---
-  const lastDone = skimmerTabState.eingelgtAm
-    ? new Date(skimmerTabState.eingelgtAm).toLocaleDateString('de-DE', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})
-    : '–';
-
-  // Standard: 4 Tabs (gerundet auf Pool-Volumen)
-  const stdTabs = Math.round(4 * POOL_VOLUME / 10);
-
-  let progHtml = '';
-  if (p && p.restProzent > 0) {
-    const when = p.restTage < 1 ? 'heute' : p.restTage < 2 ? 'morgen' : 'in ' + Math.round(p.restTage) + ' Tagen';
-    const dateStr = p.leerDatum.toLocaleDateString('de-DE', {weekday:'short', day:'numeric', month:'short'});
-
-    // Farb-Kodierung nach Füllstand
-    const barColor = p.restProzent > 60 ? '#16a34a' : p.restProzent > 30 ? '#d97706' : '#dc2626';
-    const statusIcon = p.restProzent > 60 ? '🟢' : p.restProzent > 30 ? '🟡' : '🔴';
-    const dringend = p.restProzent <= 30;
-
-    progHtml =
-      '<div style="margin-top:10px">' +
-        // Fortschrittsbalken
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-          '<div style="flex:1;background:rgba(0,0,0,0.1);border-radius:99px;height:8px;overflow:hidden">' +
-            '<div style="width:' + p.restProzent + '%;height:100%;background:' + barColor + ';border-radius:99px;transition:width 0.4s"></div>' +
-          '</div>' +
-          '<span style="font-size:0.8rem;font-weight:700;color:' + barColor + '">' + p.restProzent + '%</span>' +
-        '</div>' +
-        // Prognose-Zeile
-        '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:4px">' +
-          statusIcon + ' <strong>~' + p.restGramm + 'g</strong> Restgewicht – Tabs verbraucht ' + when + ' (' + dateStr + ')' +
-          ' · Auflösungsrate: ~' + p.auflösungTageProTab + ' Tage/Tab' +
-        '</div>' +
-        // Temperaturhinweis
-        (p.tempHinweis ? '<div style="font-size:0.78rem;color:#b45309;margin-bottom:4px">' + p.tempHinweis + '</div>' : '') +
-        (p.facKorrHinweis ? '<div style="font-size:0.78rem;color:#6d28d9;margin-bottom:4px">' + p.facKorrHinweis + '</div>' : '') +
-        // Dringende Warnung
-        (dringend ? '<div style="font-size:0.82rem;color:#dc2626;font-weight:700;margin-bottom:6px">🚨 Tabs jetzt nachfüllen!</div>' : '') +
-      '</div>';
-  } else if (p && p.restProzent === 0) {
-    progHtml = '<div style="margin-top:8px;font-size:0.82rem;color:#dc2626;font-weight:700">🔴 Skimmer leer – Tabs sofort nachfüllen!</div>';
-  } else {
-    progHtml = '<div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Noch keine Tabs eingetragen – bitte beim nächsten Nachfüllen eintragen.</div>';
-  }
+  let hinweise = [];
+  if(p.coverFaktor > 1) hinweise.push('Pool offen – UV beschleunigt Abbau');
+  if(p.temp !== null && p.temp > 25) hinweise.push(`${p.temp.toFixed(1)}°C Wassertemp.`);
+  if(p.grund === 'tabs') hinweise.push('Tabs erschöpft');
 
   el.innerHTML =
-    '<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-left:4px solid #16a34a;border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-        '<div style="font-size:0.88rem;font-weight:700;color:#15803d">🕐 Langzeit-Tabs im Skimmer</div>' +
-        (skimmerTabState.eingelgtAm ? '<div style="font-size:0.74rem;color:var(--text-muted)">Eingelegt: ' + lastDone + '</div>' : '') +
-      '</div>' +
-      progHtml +
-      // Eingabe-Zeile
-      '<div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap">' +
-        '<span style="font-size:0.8rem;color:var(--text-muted)">Tabs eingelegt:</span>' +
-        '<button onclick="adjustSkimmerTabInput(-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid #16a34a;background:white;font-size:1rem;cursor:pointer;color:#16a34a;font-weight:700;line-height:1">−</button>' +
-        '<input id="skimmer-tab-input" type="number" min="1" max="20" value="' + stdTabs + '" style="width:48px;text-align:center;border:1px solid #16a34a;border-radius:6px;padding:4px;font-size:0.9rem">' +
-        '<button onclick="adjustSkimmerTabInput(1)" style="width:28px;height:28px;border-radius:6px;border:1px solid #16a34a;background:white;font-size:1rem;cursor:pointer;color:#16a34a;font-weight:700;line-height:1">+</button>' +
-        '<button onclick="confirmSkimmerTabsJetzt()" style="padding:5px 12px;background:#16a34a;color:white;border:none;border-radius:7px;font-size:0.8rem;cursor:pointer;font-weight:600">✅ Jetzt eingelegt</button>' +
+    '<div style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border-left:4px solid '+color+';border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">' +
+      '<div style="font-size:1.3rem;line-height:1.3">' + icon + '</div>' +
+      '<div style="flex:1;font-size:0.83rem">' +
+        '<strong style="color:'+color+'">FAC fällt '+when+' unter Minimum</strong> ('+dateStr+')' +
+        '<div style="color:var(--text-muted);margin-top:2px">Aktuell '+p.facAktuell+' ppm · Netto ~'+(p.nettoProTag>0?'+':'')+p.nettoProTag.toFixed(2)+' ppm/Tag' +
+        (hinweise.length ? ' · ' + hinweise.join(', ') : '') + '</div>' +
       '</div>' +
     '</div>';
 }
 
-function adjustSkimmerTabInput(delta) {
-  const inp = document.getElementById('skimmer-tab-input');
-  if (!inp) return;
-  const val = parseInt(inp.value) || 4;
-  inp.value = Math.max(1, Math.min(20, val + delta));
+
+
+// ============================================================
+// LANGZEIT-TAB PROGNOSE
+// ============================================================
+let skimmerTabState = ld('skimmerTabState', {tabsEingelegt:0, eingelgtAm:null, tabWeightG:20, facKorrFaktor:1.0, facKorrAm:null});
+function saveSkimmerTabState(){sd('skimmerTabState', skimmerTabState);}
+
+function getWaterTemp(){
+  if(typeof haLiveData!=='undefined'&&haLiveData&&haLiveData.waterTemp!=null) return haLiveData.waterTemp;
+  const last=getLastMeasurement();
+  return(last&&last.temp!==undefined)?last.temp:null;
+}
+function tabDissolutionDaysPerTab(tempC){
+  const t=(tempC!=null)?tempC:25;
+  return Math.max(2,Math.min(14,7*Math.pow(2,(25-t)/10)));
+}
+function tempDecayFactor(tempC){
+  const t=(tempC!=null)?tempC:20;
+  return Math.pow(1.15,(t-20)/5);
 }
 
-function confirmSkimmerTabsJetzt() {
-  const inp = document.getElementById('skimmer-tab-input');
-  const anzahl = inp ? (parseInt(inp.value) || Math.round(4 * POOL_VOLUME / 10)) : Math.round(4 * POOL_VOLUME / 10);
-  registerSkimmerTabs(anzahl, new Date());
+function registerSkimmerTabs(anzahl, zeitpunkt){
+  skimmerTabState.tabsEingelegt=anzahl;
+  skimmerTabState.eingelgtAm=(zeitpunkt||new Date()).toISOString();
+  skimmerTabState.tabWeightG=20;
+  skimmerTabState.facKorrFaktor=1.0;
+  skimmerTabState.facKorrAm=null;
+  saveSkimmerTabState();
+  renderSkimmerTabPrognose();
+}
 
-  // Chlor-Tabs-Aufgabe als erledigt markieren
-  const ct = maintenanceTasks.find(function(t){return t.id==='chlor_tabs'||t.id==='langzeit_chlor';});
-  if(ct){ct.lastDone=new Date().toISOString();sd('maintenance',maintenanceTasks);}
+function updateSkimmerTabFacKorr(){
+  const s=skimmerTabState;
+  if(!s.eingelgtAm||s.tabsEingelegt<=0) return;
+  const eingelgtAt=new Date(s.eingelgtAm).getTime();
+  const seitStunden=(Date.now()-eingelgtAt)/3600000;
+  if(seitStunden<4||seitStunden>120) return;
+  const messNach=measurements.filter(function(m){return m.chlor!==undefined&&m.time&&new Date(m.time).getTime()>eingelgtAt+4*3600000;}).sort(function(a,b){return new Date(b.time)-new Date(a.time);});
+  if(!messNach.length) return;
+  const neueste=messNach[0];
+  const messVor=measurements.filter(function(m){return m.chlor!==undefined&&m.time&&new Date(m.time).getTime()<eingelgtAt;}).sort(function(a,b){return new Date(b.time)-new Date(a.time);});
+  const facVorher=messVor.length>0?messVor[0].chlor:(settings.chlor?settings.chlor.target:2.0);
+  const facGemessen=neueste.chlor;
+  const temp=getWaterTemp();
+  const tageProTab=tabDissolutionDaysPerTab(temp);
+  const gesamtTage=s.tabsEingelegt*tageProTab;
+  const seitTage=seitStunden/24;
+  const anteil=Math.min(1,seitTage/gesamtTage);
+  const chlorProTabGesamt=(s.tabWeightG*0.56)/POOL_VOLUME/1000*1000;
+  const erwartetBeitrag=s.tabsEingelegt*chlorProTabGesamt*anteil;
+  const facDelta=facGemessen-facVorher;
+  const decay=predictChlorDecay?predictChlorDecay():null;
+  const abbau=decay&&decay.ratePerDay<0?Math.abs(decay.ratePerDay)*seitTage:0.2*seitTage;
+  const nettoErwartet=erwartetBeitrag-abbau;
+  if(nettoErwartet<=0.05) return;
+  const rohFaktor=(facDelta+abbau)/erwartetBeitrag;
+  const clamped=Math.max(0.3,Math.min(2.0,rohFaktor));
+  const alter=s.facKorrFaktor||1.0;
+  const neu=Math.round((0.7*clamped+0.3*alter)*100)/100;
+  if(Math.abs(neu-alter)>0.05){skimmerTabState.facKorrFaktor=neu;skimmerTabState.facKorrAm=neueste.time;saveSkimmerTabState();}
+}
 
+function calcSkimmerTabPrognose(){
+  const s=skimmerTabState;
+  if(!s.eingelgtAm||s.tabsEingelegt<=0) return null;
+  const temp=getWaterTemp();
+  const tage=tabDissolutionDaysPerTab(temp)*(s.facKorrFaktor||1.0);
+  const gesamtGramm=s.tabsEingelegt*s.tabWeightG;
+  const gesamtTage=s.tabsEingelegt*tage;
+  const seit=(Date.now()-new Date(s.eingelgtAm).getTime())/86400000;
+  const restGramm=Math.max(0,gesamtGramm-Math.min(gesamtGramm,(seit/gesamtTage)*gesamtGramm));
+  const restTage=Math.max(0,gesamtTage-seit);
+  const leerDatum=new Date(new Date(s.eingelgtAm).getTime()+gesamtTage*86400000);
+  const restProzent=gesamtGramm>0?Math.round(restGramm/gesamtGramm*100):0;
+  const tempFactor=tempDecayFactor(temp);
+  const facKorr=s.facKorrFaktor||1.0;
+  return{
+    restGramm:Math.round(restGramm),restTage,leerDatum,restProzent,gesamtGramm,
+    tabsEingelegt:s.tabsEingelegt,eingelgtAm:s.eingelgtAm,temp,tempFactor,
+    facKorr,
+    tempHinweis:temp>25?`⚠️ ${temp.toFixed(1)}°C – Chlorverbrauch erhöht`:temp>22?`🌡️ ${temp.toFixed(1)}°C – Verbrauch leicht erhöht`:null,
+    facKorrHinweis:facKorr<0.85?`📊 Tabs ~${Math.round((1-facKorr)*100)}% schneller verbraucht (FAC-Messung)`:facKorr>1.15?`📊 Tabs ~${Math.round((facKorr-1)*100)}% langsamer verbraucht`:null,
+    auflösungTageProTab:Math.round(tage*10)/10
+  };
+}
+
+function renderSkimmerTabPrognose(){
+  const el=document.getElementById('skimmer-tab-prognose');
+  if(!el) return;
+  const p=calcSkimmerTabPrognose();
+  const stdTabs=Math.round(4*POOL_VOLUME/10);
+  const lastDone=skimmerTabState.eingelgtAm?new Date(skimmerTabState.eingelgtAm).toLocaleDateString('de-DE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'–';
+  let progHtml='';
+  if(p&&p.restProzent>0){
+    const when=p.restTage<1?'heute':p.restTage<2?'morgen':'in '+Math.round(p.restTage)+' Tagen';
+    const dateStr=p.leerDatum.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short'});
+    const barColor=p.restProzent>60?'#16a34a':p.restProzent>30?'#d97706':'#dc2626';
+    const statusIcon=p.restProzent>60?'🟢':p.restProzent>30?'🟡':'🔴';
+    progHtml='<div style="margin-top:10px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<div style="flex:1;background:rgba(0,0,0,0.1);border-radius:99px;height:8px;overflow:hidden">'
+          +'<div style="width:'+p.restProzent+'%;height:100%;background:'+barColor+';border-radius:99px;transition:width 0.4s"></div>'
+        +'</div>'
+        +'<span style="font-size:0.8rem;font-weight:700;color:'+barColor+'">'+p.restProzent+'%</span>'
+      +'</div>'
+      +'<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:4px">'+statusIcon+' <strong>~'+p.restGramm+'g</strong> Rest – leer '+when+' ('+dateStr+') · '+p.auflösungTageProTab+' Tage/Tab</div>'
+      +(p.tempHinweis?'<div style="font-size:0.78rem;color:#b45309;margin-bottom:4px">'+p.tempHinweis+'</div>':'')
+      +(p.facKorrHinweis?'<div style="font-size:0.78rem;color:#6d28d9;margin-bottom:4px">'+p.facKorrHinweis+'</div>':'')
+      +(p.restProzent<=25?'<div style="font-size:0.82rem;color:#dc2626;font-weight:700;margin-bottom:6px">🚨 Tabs jetzt nachfüllen!</div>':'')
+    +'</div>';
+  } else if(p&&p.restProzent===0){
+    progHtml='<div style="margin-top:8px;font-size:0.82rem;color:#dc2626;font-weight:700">🔴 Skimmer leer – sofort nachfüllen!</div>';
+  } else {
+    progHtml='<div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Noch keine Tabs eingetragen.</div>';
+  }
+  // Schnell-Dosierlog Buttons (Punkt 13)
+  const schnellDosierHtml=
+    '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.08)">'
+      +'<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:6px">Schnell hinzufügen:</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        +'<button onclick="quickDosierLog(\'schnellchlor\',1,\'Stk\')" style="padding:4px 10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:7px;font-size:0.77rem;cursor:pointer;font-weight:700;color:#92400e">⚡ +1 Schnell-Tab</button>'
+        +'<button onclick="quickDosierLog(\'schnellchlor\',2,\'Stk\')" style="padding:4px 10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:7px;font-size:0.77rem;cursor:pointer;font-weight:700;color:#92400e">⚡ +2 Schnell-Tabs</button>'
+        +'<button onclick="quickDosierLog(\'chlorplus\',Math.round(175*POOL_VOLUME/10),\'g\')" style="padding:4px 10px;background:#fee2e2;border:1px solid #ef4444;border-radius:7px;font-size:0.77rem;cursor:pointer;font-weight:700;color:#991b1b">☠️ Schockchlorung</button>'
+      +'</div>'
+    +'</div>';
+  el.innerHTML=
+    '<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-left:4px solid #16a34a;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+        +'<div style="font-size:0.88rem;font-weight:700;color:#15803d">🕐 Langzeit-Tabs im Skimmer</div>'
+        +(skimmerTabState.eingelgtAm?'<div style="font-size:0.74rem;color:var(--text-muted)">Eingelegt: '+lastDone+'</div>':'')
+      +'</div>'
+      +progHtml
+      +schnellDosierHtml
+      +'<div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap">'
+        +'<span style="font-size:0.8rem;color:var(--text-muted)">Neue Tabs eingelegt:</span>'
+        +'<button onclick="adjustSkimmerTabInput(-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid #16a34a;background:white;font-size:1rem;cursor:pointer;color:#16a34a;font-weight:700;line-height:1">−</button>'
+        +'<input id="skimmer-tab-input" type="number" min="1" max="20" value="'+stdTabs+'" style="width:48px;text-align:center;border:1px solid #16a34a;border-radius:6px;padding:4px;font-size:0.9rem">'
+        +'<button onclick="adjustSkimmerTabInput(1)" style="width:28px;height:28px;border-radius:6px;border:1px solid #16a34a;background:white;font-size:1rem;cursor:pointer;color:#16a34a;font-weight:700;line-height:1">+</button>'
+        +'<button onclick="confirmSkimmerTabsJetzt()" style="padding:5px 12px;background:#16a34a;color:white;border:none;border-radius:7px;font-size:0.8rem;cursor:pointer;font-weight:600">✅ Jetzt eingelegt</button>'
+      +'</div>'
+    +'</div>';
+}
+
+// Schnell-Dosierlog direkt von der Tab-Karte (Punkt 13)
+function quickDosierLog(produktKey, menge, einheit){
+  const prod = poolProdukte.find(function(p){return p.poolId===produktKey||p.name&&p.name.toLowerCase().indexOf(produktKey.replace('schnellchlor','schnell').replace('chlorplus','chlor plus'))>=0;});
+  const name = prod ? prod.name : (produktKey==='schnellchlor'?'Schnell-Chlortabs':'Chlor Plus Granulat');
+  const mengeVal = typeof menge === 'string' && menge.includes('Math') ? eval(menge) : menge;
+  logHistory({type:'dosierung',time:new Date().toISOString(),note:`📝 ${name}: ${mengeVal} ${einheit} (Schnelleintrag von Tab-Karte)`});
   // Vorrat abziehen
-  const lzStock = chemStock && chemStock['chlortabs'];
-  if(lzStock && lzStock.qty >= anzahl){
-    lzStock.qty = Math.max(0, lzStock.qty - anzahl);
-    sd('chem_stock_v2', chemStock);
+  const stockKey = produktKey==='schnellchlor'?'Schnell-Chlortabs':'Chlor Plus Granulat';
+  if(chemStock&&chemStock[stockKey]&&mengeVal>0){
+    chemStock[stockKey].qty=Math.max(0,(chemStock[stockKey].qty||0)-mengeVal);
+    sd('chem_stock_v2',chemStock);
     if(typeof renderStockDashboard==='function') renderStockDashboard();
   }
+  // Badeverbot bei Schockchlorung
+  if(produktKey==='chlorplus'){
+    const until=new Date(Date.now()+0.5*3600000);
+    const newBan={until:until.toISOString(),reason:'Chlor Plus Granulat angewendet',setAt:new Date().toISOString()};
+    if(typeof setOrKeepLongerBan==='function') setOrKeepLongerBan(newBan);
+  }
+  if(typeof toast==='function') toast('📝 '+name+' ('+mengeVal+' '+einheit+') eingetragen','success',2500);
+  if(typeof queueAutoSync==='function') queueAutoSync();
+}
 
-  logHistory({type:'wartung', time:new Date().toISOString(), note:'🕐 '+anzahl+' Langzeit-Chlortabs in Skimmer eingelegt'});
-  if(typeof toast==='function') toast('🕐 '+anzahl+' Langzeit-Tabs eingetragen – Prognose aktualisiert!','success',3000);
+function adjustSkimmerTabInput(delta){
+  const inp=document.getElementById('skimmer-tab-input');
+  if(!inp) return;
+  inp.value=Math.max(1,Math.min(20,(parseInt(inp.value)||4)+delta));
+}
+
+function confirmSkimmerTabsJetzt(){
+  const inp=document.getElementById('skimmer-tab-input');
+  const anzahl=inp?(parseInt(inp.value)||Math.round(4*POOL_VOLUME/10)):Math.round(4*POOL_VOLUME/10);
+  registerSkimmerTabs(anzahl, new Date());
+  const lzStock=chemStock&&chemStock['Langzeit-Chlortabs'];
+  if(lzStock&&lzStock.qty>=anzahl){lzStock.qty=Math.max(0,lzStock.qty-anzahl);sd('chem_stock_v2',chemStock);if(typeof renderStockDashboard==='function')renderStockDashboard();}
+  logHistory({type:'wartung',time:new Date().toISOString(),note:'🕐 '+anzahl+' Langzeit-Chlortabs in Skimmer eingelegt'});
+  if(typeof toast==='function') toast('🕐 '+anzahl+' Langzeit-Tabs eingetragen!','success',3000);
   if(typeof queueAutoSync==='function') queueAutoSync();
   renderSkimmerTabPrognose();
   if(typeof renderTasksDashboard==='function') renderTasksDashboard();
 }
 
-// Prüft ob eine Nachfüll-Erinnerung fällig ist (dynamisch, nicht nur 7-Tage-Zyklus)
-function checkSkimmerTabReminder() {
-  const p = calcSkimmerTabPrognose();
-  if (!p) return null;
-  if (p.restProzent === 0) return {level:'danger', msg:'Skimmer-Tabs vollständig aufgelöst – sofort nachfüllen!'};
-  if (p.restProzent <= 25) return {level:'danger', msg:'Nur noch '+p.restProzent+'% Tab-Restgewicht ('+p.restGramm+'g) – bald nachfüllen!'};
-  if (p.restTage <= 2) return {level:'warn', msg:'Tabs reichen noch ~'+Math.round(p.restTage*24)+'h – nachfüllen!'};
-  return null;
+// Init
+(function(){
+  function _initTabs(){setTimeout(function(){if(typeof renderSkimmerTabPrognose==='function')renderSkimmerTabPrognose();},300);}
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_initTabs);}else{_initTabs();}
+})();
+
+// ============================================================
+// POOL AVATAR (Punkt 17)
+// ============================================================
+let poolAvatarEnabled = ld('poolAvatarEnabled', false);
+
+function togglePoolAvatarSetting(val){
+  poolAvatarEnabled = val;
+  sd('poolAvatarEnabled', val);
+  updateAvatarToggleUI();
+  renderPoolAvatar();
+  if(typeof toast==='function') toast(val?'🏊 Pool-Avatar aktiviert':'Pool-Avatar ausgeblendet','info',2000);
 }
 
-// Erweitert predictChlorDecay um Temperatur-Faktor
-const _origPredictChlorDecayTemp = predictChlorDecay;
-predictChlorDecay = function() {
-  const base = _origPredictChlorDecayTemp();
-  if (!base) return null;
-  const temp = getWaterTemp();
-  if (temp !== null && temp !== undefined) {
-    const factor = tempDecayFactor(temp);
-    if (factor > 1.05) {
-      // Beschleunigter Abbau durch Temperatur – historische Rate mit Faktor anpassen
-      // (vorsichtig: nur wenn Temp-Sensor verfügbar, Einfluss max. 40% um Overreaction zu vermeiden)
-      const adj = Math.min(factor, 1.4);
-      base.ratePerDay = base.ratePerDay * adj;
-      base.days = (base.lastChlor - settings.chlor.min) / (-base.ratePerDay);
-      base.date = new Date(
-        new Date(measurements.filter(function(m){return m.chlor!==undefined;}).slice(-1)[0].time).getTime()
-        + base.days * 86400000
-      );
-      base.tempAdjusted = true;
-      base.tempC = temp;
-    }
-  }
-  return base;
-};
+function updateAvatarToggleUI(){
+  const cb = document.getElementById('toggle-pool-avatar');
+  const knob = document.getElementById('toggle-pool-avatar-knob');
+  const thumb = document.getElementById('toggle-pool-avatar-thumb');
+  if(cb) cb.checked = poolAvatarEnabled;
+  if(knob) knob.style.background = poolAvatarEnabled ? '#16a34a' : '#cbd5e1';
+  if(thumb) thumb.style.transform = poolAvatarEnabled ? 'translateX(20px)' : 'translateX(0)';
+  const preview = document.getElementById('pool-avatar-preview');
+  if(preview) preview.style.display = poolAvatarEnabled ? 'block' : 'none';
+}
 
-// Hook: Skimmer-Tab-Prognose beim Dashboard-Render aufrufen
-// (wird nach dem cover-hook eingehängt)
-const _origRenderDashboardTabs = renderDashboard;
-renderDashboard = async function() {
-  await _origRenderDashboardTabs();
-  if(typeof renderSkimmerTabPrognose==='function') renderSkimmerTabPrognose();
-};
+function renderPoolAvatar(){
+  const el = document.getElementById('pool-avatar-dashboard');
+  if(!el) return;
+  if(!poolAvatarEnabled){el.innerHTML='';return;}
 
-// Beim Start direkt rendern
-(function initSkimmerTabPrognose(){
-  // Warten bis DOM bereit
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded', function(){
-      setTimeout(renderSkimmerTabPrognose, 200);
-    });
+  const score = (typeof calcPoolScore==='function') ? calcPoolScore() : null;
+  const cover = (typeof coverState!=='undefined') ? coverState : null;
+  const ban = (typeof window.ban!=='undefined'&&window.ban&&new Date(window.ban.until)>new Date()) ? window.ban : null;
+
+  // Status bestimmen
+  let status, waterGrad, waveColor, emoji, swimEmoji, showBubbles;
+  if(cover&&cover.covered){
+    status='abgedeckt'; waterGrad='linear-gradient(180deg,#38bdf8,#0284c7)'; waveColor='#7dd3fc';
+    emoji='😴'; swimEmoji=''; showBubbles=false;
+  } else if(ban){
+    status='verbot'; waterGrad='linear-gradient(180deg,#fca5a5,#ef4444)'; waveColor='#fecaca';
+    emoji='🚫'; swimEmoji=''; showBubbles=false;
+  } else if(score===null){
+    status='unbekannt'; waterGrad='linear-gradient(180deg,#94a3b8,#64748b)'; waveColor='#cbd5e1';
+    emoji='❓'; swimEmoji='🏊'; showBubbles=false;
+  } else if(score>=80){
+    status='gut'; waterGrad='linear-gradient(180deg,#38bdf8,#0284c7)'; waveColor='#7dd3fc';
+    emoji='😊'; swimEmoji='🏊'; showBubbles=false;
+  } else if(score>=60){
+    status='ok'; waterGrad='linear-gradient(180deg,#fbbf24,#d97706)'; waveColor='#fde68a';
+    emoji='😐'; swimEmoji='🏊'; showBubbles=false;
+  } else if(score>=40){
+    status='warn'; waterGrad='linear-gradient(180deg,#fb923c,#ea580c)'; waveColor='#fed7aa';
+    emoji='😟'; swimEmoji='🤢'; showBubbles=true;
   } else {
-    setTimeout(renderSkimmerTabPrognose, 200);
+    status='kritisch'; waterGrad='linear-gradient(180deg,#86efac,#16a34a)'; waveColor='#bbf7d0';
+    emoji='😱'; swimEmoji=''; showBubbles=true;
   }
-})();
+
+  const scoreLabel = score!==null ? score+' Punkte' : 'Keine Messung';
+  const coverLabel = cover&&cover.covered ? '🛡️ Abgedeckt' : '';
+  const banLabel = ban ? '🚫 Badeverbot' : '';
+  const subLabel = banLabel||coverLabel||(status==='gut'?'Ausgezeichnet':status==='ok'?'OK – prüfen':status==='warn'?'Handlung empfohlen':status==='kritisch'?'Sofort handeln!':'');
+
+  el.innerHTML =
+    '<div style="margin-top:10px;display:flex;justify-content:center">' +
+      '<div style="position:relative;width:200px;height:200px">' +
+        // Emoji oben
+        '<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);font-size:2rem;z-index:2;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2))">' + emoji + '</div>' +
+        // Pool Becken
+        '<div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:160px;height:120px;border-radius:50% 50% 40% 40%/30% 30% 50% 50%;overflow:hidden;box-shadow:0 8px 24px rgba(0,100,200,0.2)">' +
+          '<div style="position:absolute;inset:0;background:'+waterGrad+';transition:background 1.5s">' +
+            // Welle 1
+            '<div style="position:absolute;bottom:55%;left:-50%;width:200%;height:50px;border-radius:40%;opacity:0.4;background:'+waveColor+';animation:poolWave 3s infinite linear"></div>' +
+            // Welle 2
+            '<div style="position:absolute;bottom:50%;left:-50%;width:200%;height:50px;border-radius:40%;opacity:0.25;background:'+waveColor+';animation:poolWave 4.5s infinite linear reverse"></div>' +
+            // Schwimmer
+            (swimEmoji?'<div style="position:absolute;bottom:52%;font-size:1.2rem;animation:poolSwim 5s infinite ease-in-out">'+swimEmoji+'</div>':'') +
+            // Blasen
+            (showBubbles?'<div style="position:absolute;bottom:10%;left:25%;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.6);animation:poolBubble 2.5s infinite ease-in"></div><div style="position:absolute;bottom:5%;left:60%;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.5);animation:poolBubble 3.5s infinite ease-in 1s"></div>':'') +
+          '</div>' +
+        '</div>' +
+        // Cover overlay
+        (cover&&cover.covered?'<div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:160px;height:120px;border-radius:50% 50% 40% 40%/30% 30% 50% 50%;background:repeating-linear-gradient(45deg,#475569 0px,#475569 6px,#64748b 6px,#64748b 12px);z-index:3;opacity:0.9;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:white;letter-spacing:1px">ABGEDECKT</div>':'') +
+        // Score Badge
+        '<div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.65);color:white;border-radius:99px;padding:3px 10px;font-size:0.7rem;font-weight:800;white-space:nowrap;z-index:4">' +
+          scoreLabel + (subLabel?' · '+subLabel:'') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<style>' +
+      '@keyframes poolWave{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}' +
+      '@keyframes poolSwim{0%,100%{left:10%}50%{left:60%}}' +
+      '@keyframes poolBubble{0%{opacity:0;transform:translateY(0)}20%{opacity:1}100%{opacity:0;transform:translateY(-60px)}}' +
+    '</style>';
+}
 
 // ============================================================
 // ÄNDERUNGSWÜNSCHE-BOARD
