@@ -1399,7 +1399,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   </div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">🏠 Home Assistant Integration</div>
-    <div id="ha-settings-section"><p id="ha-section-debug" style="color:red;font-size:0.8rem;padding:8px">⚠️ renderHaSettings wurde noch nicht aufgerufen</p></div>
+    <div id="ha-settings-section"></div>
   </div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">🔌 Shelly Filter-Steuerung</div>
@@ -1927,7 +1927,7 @@ function showBoard(id){
   }
   closeNavMore();
   if(id==='einstellungen'){
-    try{renderEinstellungen();}catch(e){console.warn('[PM] renderEinstellungen:',e);document.getElementById('ha-settings-section').innerHTML='<p style="color:red;padding:8px">FEHLER: '+e.message+'</p>';}
+    try{renderEinstellungen();}catch(e){console.warn('[PM] renderEinstellungen:',e);}
     // Verzögerter Nachrender als Absicherung
     setTimeout(function(){
       try{if(typeof renderHaSettings==='function')renderHaSettings();}catch(e){}
@@ -6413,9 +6413,9 @@ const HA_DEFAULTS = {
   powerThreshold:  50,
 };
 
-let haSettings = Object.assign({}, HA_DEFAULTS, ld('ha_settings', {}));
+var haSettings = Object.assign({}, HA_DEFAULTS, ld('ha_settings', {}));
 
-let haLiveData = {
+var haLiveData = {
   airTemp:      null,
   humidity:     null,
   waterTemp:    null,
@@ -6717,10 +6717,8 @@ function _renderHaLiveBadge(el) {
 // ── Einstellungen Render ───────────────────────────────────────
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function renderHaSettings() {
-  console.log('[PM] renderHaSettings called, el=', document.getElementById('ha-settings-section'));
-  try{
   const el = document.getElementById('ha-settings-section');
-  if (!el) { console.error('ha-settings-section NOT FOUND'); return; }
+  if (!el) return;
   el.innerHTML =
     '<div style="display:grid;gap:12px">' +
     '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
@@ -6756,7 +6754,6 @@ function renderHaSettings() {
     '<div id="ha-test-result" style="font-size:0.8rem;min-height:18px"></div>' +
     '</div>';
   _renderHaLiveBadge(document.getElementById('ha-live-badge'));
-  }catch(err){document.getElementById('ha-settings-section').textContent='FEHLER IN renderHaSettings: '+err.message;}
 }
 
 function saveHaSettings() {
@@ -6812,7 +6809,7 @@ const SHELLY_DEFAULTS = {
   sondermodus24h: false
 };
 
-let shellySettings = Object.assign({}, SHELLY_DEFAULTS, ld('shelly_settings', {}));
+var shellySettings = Object.assign({}, SHELLY_DEFAULTS, ld('shelly_settings', {}));
 let _shellyState = {
   online: false,
   output: null,
