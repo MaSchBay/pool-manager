@@ -1851,6 +1851,30 @@ var skimmerTabState = (function(){
   };
   return saved ? Object.assign({}, def, saved) : def;
 })();
+// FAC-basierte Kalibrierung der Skimmer-Tab-Prognose
+// Wenn ein FAC-Messwert vorliegt, wird der Korrekturfaktor angepasst
+function updateSkimmerTabFacKorr(measuredFac){
+  if(!skimmerTabState.eingelgtAm || skimmerTabState.tabsEingelegt <= 0) return;
+  var last = (typeof getLastMeasurement==='function') ? getLastMeasurement() : null;
+  var temp = (last && last.temp) || 22;
+  var daysTabsIn = (Date.now() - new Date(skimmerTabState.eingelgtAm).getTime()) / 86400000;
+  var totalTabDays = tabDissolutionDays(temp);
+  if(daysTabsIn < 0.5 || totalTabDays <= 0) return; // zu frisch für Kalibrierung
+  // Erwarteter Tab-Anteil am FAC (grob: 4 Tabs bei 10.52m³ liefern ~7.6 ppm gesamt)
+  var tabsRemaining = Math.max(0, 1 - daysTabsIn / totalTabDays);
+  var expectedTabContrib = (skimmerTabState.tabsEingelegt / 4) * 7.6 * tabsRemaining;
+  var naturalDecay = 0.04 * daysTabsIn;
+  var expectedFac = Math.max(0.1, (expectedTabContrib - naturalDecay));
+  if(expectedFac > 0.1){
+    var rawFactor = measuredFac / expectedFac;
+    // 70/30 Dämpfung
+    skimmerTabState.facKorr = Math.min(2.0, Math.max(0.3,
+      skimmerTabState.facKorr * 0.7 + rawFactor * 0.3
+    ));
+    saveSkimmerTabState();
+  }
+}
+
 function saveSkimmerTabState(){
   try{localStorage.setItem('pool_skimmer_tab_state', JSON.stringify(skimmerTabState));}catch(e){}
 }
@@ -6474,6 +6498,10 @@ function saveQMess(){
       taskRein.lastDone=new Date(Date.now()-taskRein.interval*86400000-1).toISOString();
       sd('maintenance',maintenanceTasks);
     }
+  }
+  // FAC-Kalibrierung Skimmer-Tab-Prognose
+  if(entry.chlor !== undefined && typeof updateSkimmerTabFacKorr === 'function'){
+    try{ updateSkimmerTabFacKorr(entry.chlor); }catch(e){}
   }
   _onMeasurementSaved(entry); closeModal('modal-qmess');
   renderDashboard();
