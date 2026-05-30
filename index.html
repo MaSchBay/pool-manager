@@ -1965,7 +1965,7 @@ function renderPoolAvatar(){
   const covered = typeof coverState!=='undefined' && coverState.covered;
   const ban = typeof window.ban!=='undefined' && window.ban && new Date(window.ban.until) > new Date();
   const waterColor = ban ? '#ef4444' : score===null ? '#7dd3fc' : score>=80 ? '#0ea5e9' : score>=60 ? '#38bdf8' : score>=40 ? '#f59e0b' : '#ef4444';
-  const sunEmoji = (function(){ try{ return isDaytime() ? '☀️' : '🌙'; }catch(e){ return '☀️'; } })();
+  const sunEmoji = (function(){ var h=new Date().getHours(); return (h>=7&&h<=20)?'☀️':'🌙'; })();
   el.innerHTML = '<div style="background:linear-gradient(180deg,#bae6fd 0%,'+waterColor+'80 40%,'+waterColor+' 100%);border-radius:16px;height:80px;position:relative;overflow:hidden;margin-bottom:10px">'
     + '<div style="position:absolute;top:6px;right:10px;font-size:1.4rem">'+sunEmoji+'</div>'
     + (covered ? '<div style="position:absolute;inset:0;background:rgba(30,58,138,0.5);display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#bfdbfe;font-weight:700">🏖️ Plane drauf</div>' : '')
@@ -5669,9 +5669,6 @@ function tabChlorRatePerDay(tempC){
   return 7.6 / totalDays;
 }
 
-function saveSkimmerTabState(){
-  try{localStorage.setItem('pool_skimmer_tab_state', JSON.stringify(skimmerTabState));}catch(e){}
-}
 
 // FAC-Prognose: wann fällt FAC unter Minimum?
 function calcTabFacPrognose(){
