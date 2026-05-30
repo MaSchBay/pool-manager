@@ -827,16 +827,16 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
     <div class="nav-more-dropdown" id="nav-more-dropdown">
       <div class="nav-dd-section">
         <div class="nav-dd-label">Analyse</div>
-        <button class="nav-dd-item" onclick="showBoard('charts');closeNavMore()" id="nav-charts">📊 Auswertung</button>
-        <button class="nav-dd-item" onclick="showBoard('historie');closeNavMore()" id="nav-historie">📋 Historie</button>
-        <button class="nav-dd-item" onclick="showBoard('produkte');closeNavMore()" id="nav-produkte">🛒 Produkte</button>
+        <button class="nav-dd-item" onclick="event.stopPropagation();closeNavMore();showBoard('charts')" id="nav-charts">📊 Auswertung</button>
+        <button class="nav-dd-item" onclick="event.stopPropagation();closeNavMore();showBoard('historie')" id="nav-historie">📋 Historie</button>
+        <button class="nav-dd-item" onclick="event.stopPropagation();closeNavMore();showBoard('produkte')" id="nav-produkte">🛒 Produkte</button>
       </div>
       <div class="nav-dd-section">
         <div class="nav-dd-label">App</div>
-        <button class="nav-dd-item" onclick="showBoard('hilfe');closeNavMore()" id="nav-hilfe">❓ Hilfe</button>
-        <button class="nav-dd-item" onclick="showBoard('wuensche');closeNavMore()" id="nav-wuensche">💡 Wünsche</button>
-        <button class="nav-dd-item" onclick="showBoard('einstellungen');closeNavMore()" id="nav-einstellungen">⚙️ Einstellungen</button>
-        <button class="nav-dd-item" onclick="showBoard('erklaerung');closeNavMore()" id="nav-erklaerung">📖 Erklärung</button>
+        <button class="nav-dd-item" onclick="event.stopPropagation();closeNavMore();showBoard('hilfe')" id="nav-hilfe">❓ Hilfe</button>
+        <button class="nav-dd-item" onclick="event.stopPropagation();closeNavMore();showBoard('wuensche')" id="nav-wuensche">💡 Wünsche</button>
+        <button class="nav-dd-item" onclick="event.stopPropagation();closeNavMore();showBoard('einstellungen')" id="nav-einstellungen">⚙️ Einstellungen</button>
+        <button class="nav-dd-item" onclick="event.stopPropagation();closeNavMore();showBoard('erklaerung')" id="nav-erklaerung">📖 Erklärung</button>
       </div>
     </div>
   </div>
@@ -1926,9 +1926,10 @@ function showBoard(id){
     document.getElementById('bnav-more')?.classList.add('active');
   }
   closeNavMore();
+  if(id==='einstellungen'){try{renderEinstellungen();}catch(e){console.warn('[PM] renderEinstellungen:',e);}return;}
   ({dashboard:renderDashboard,wetter:renderWetter,
     messung:renderMessung,wartung:renderWartung,charts:renderCharts,historie:renderHistorie,
-    hilfe:renderHilfe,wuensche:renderWuensche,einstellungen:renderEinstellungen,erklaerung:renderErklaerung}[id]||(() => {}))();
+    hilfe:renderHilfe,wuensche:renderWuensche,erklaerung:renderErklaerung}[id]||(() => {}))();
 }
 
 function toggleMobileMenu(){
@@ -2037,9 +2038,9 @@ function renderEinstellungen(){
   document.getElementById('settings-current-vals').innerHTML=
     '<p style="font-weight:700;margin-bottom:4px">Letzte Messung</p>'
     +'<p style="font-size:0.85rem;color:var(--text-secondary)">'+measStr+'</p>';
-  if(typeof renderShellySettings==='function')renderShellySettings();
-  if(typeof renderHaSettings==='function')renderHaSettings();
-  renderTapWaterSettings();
+  if(typeof renderShellySettings==='function'){try{renderShellySettings();}catch(e){console.warn('[PM] renderShellySettings:',e);}}
+  if(typeof renderHaSettings==='function'){try{renderHaSettings();}catch(e){console.warn('[PM] renderHaSettings:',e);}}
+  try{renderTapWaterSettings();}catch(e){console.warn('[PM] renderTapWaterSettings:',e);}
 }
 
 function renderBackupSection(){
