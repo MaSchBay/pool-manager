@@ -1399,7 +1399,41 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   </div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">🏠 Home Assistant Integration</div>
-    <div id="ha-settings-section"></div>
+    <div id="ha-settings-section">
+    <div style="display:grid;gap:12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="ha-enabled" style="width:20px;height:20px;accent-color:var(--pool-blue)">
+        <span style="font-weight:700;font-size:0.88rem">Home Assistant aktivieren</span>
+      </label>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px;display:grid;gap:10px">
+        <div style="font-size:0.78rem;color:#0369a1;font-weight:700">🏠 Verbindung (Nabu Casa)</div>
+        <div style="font-size:0.75rem;color:#0369a1">Token: HA → Profil → Sicherheit → Token erstellen</div>
+        <div><div class="form-label">HA URL</div>
+          <input type="text" id="ha-url" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>
+        <div><div class="form-label">Long-Lived Access Token</div>
+          <input type="password" id="ha-token" placeholder="ey..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>
+      </div>
+      <div style="background:#fafafa;border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:10px">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text-secondary)">📡 Sensor Entity-IDs</div>
+        <div><div class="form-label">Lufttemperatur</div>
+          <input type="text" id="ha-air-temp" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>
+        <div><div class="form-label">Luftfeuchtigkeit</div>
+          <input type="text" id="ha-humidity" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>
+        <div><div class="form-label">Wassertemperatur <span style="font-weight:400;color:var(--text-muted)">(Sensor folgt Di.)</span></div>
+          <input type="text" id="ha-water-temp" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>
+        <div><div class="form-label">Shelly Leistung (für Filter-Laufzeit)</div>
+          <input type="text" id="ha-shelly-power" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>
+        <div><div class="form-label">Schwellwert Filter läuft ab (Watt)</div>
+          <input type="number" id="ha-power-threshold" min="5" max="500" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem"></div>
+      </div>
+      <div id="ha-live-badge"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="saveHaSettings()">💾 Speichern</button>
+        <button class="btn btn-outline btn-sm" onclick="haTestConnection()">🔌 Verbindung testen</button>
+      </div>
+      <div id="ha-test-result" style="font-size:0.8rem;min-height:18px"></div>
+    </div>
+  </div>
   </div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">🔌 Shelly Filter-Steuerung</div>
@@ -6717,42 +6751,23 @@ function _renderHaLiveBadge(el) {
 // ── Einstellungen Render ───────────────────────────────────────
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function renderHaSettings() {
-  const el = document.getElementById('ha-settings-section');
-  if (!el) return;
-  el.innerHTML =
-    '<div style="display:grid;gap:12px">' +
-    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
-      '<input type="checkbox" id="ha-enabled" ' + (haSettings.enabled ? 'checked' : '') + ' style="width:20px;height:20px;accent-color:var(--pool-blue)">' +
-      '<span style="font-weight:700;font-size:0.88rem">Home Assistant aktivieren</span>' +
-    '</label>' +
-    '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px;display:grid;gap:10px">' +
-      '<div style="font-size:0.78rem;color:#0369a1;font-weight:700">🏠 Verbindung (Nabu Casa)</div>' +
-      '<div style="font-size:0.75rem;color:#0369a1">Token: HA → Profil → Sicherheit → Token erstellen</div>' +
-      '<div><div class="form-label">HA URL</div>' +
-        '<input type="text" id="ha-url" value="' + _esc(haSettings.url) + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
-      '<div><div class="form-label">Long-Lived Access Token</div>' +
-        '<input type="password" id="ha-token" value="' + _esc(haSettings.token) + '" placeholder="ey..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
-    '</div>' +
-    '<div style="background:#fafafa;border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:10px">' +
-      '<div style="font-size:0.78rem;font-weight:700;color:var(--text-secondary)">📡 Sensor Entity-IDs</div>' +
-      '<div><div class="form-label">Lufttemperatur</div>' +
-        '<input type="text" id="ha-air-temp" value="' + _esc(haSettings.airTempEntity) + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
-      '<div><div class="form-label">Luftfeuchtigkeit</div>' +
-        '<input type="text" id="ha-humidity" value="' + _esc(haSettings.humidityEntity) + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
-      '<div><div class="form-label">Wassertemperatur <span style="font-weight:400;color:var(--text-muted)">(Sensor folgt Di.)</span></div>' +
-        '<input type="text" id="ha-water-temp" value="' + _esc(haSettings.waterTempEntity||'') + '" placeholder="sensor.pool_wassertemperatur" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
-      '<div><div class="form-label">Shelly Leistung (für Filter-Laufzeit)</div>' +
-        '<input type="text" id="ha-shelly-power" value="' + _esc(haSettings.shellyPowerEntity||'') + '" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:monospace"></div>' +
-      '<div><div class="form-label">Schwellwert Filter läuft ab (Watt)</div>' +
-        '<input type="number" id="ha-power-threshold" value="' + _esc(haSettings.powerThreshold||50) + '" min="5" max="500" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem"></div>' +
-    '</div>' +
-    '<div id="ha-live-badge"></div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-primary btn-sm" onclick="saveHaSettings()">💾 Speichern</button>' +
-      '<button class="btn btn-outline btn-sm" onclick="haTestConnection()">🔌 Verbindung testen</button>' +
-    '</div>' +
-    '<div id="ha-test-result" style="font-size:0.8rem;min-height:18px"></div>' +
-    '</div>';
+  // Form is static in HTML - just populate values from haSettings
+  const cb = document.getElementById('ha-enabled');
+  if (cb) cb.checked = haSettings.enabled;
+  const url = document.getElementById('ha-url');
+  if (url) url.value = haSettings.url || '';
+  const token = document.getElementById('ha-token');
+  if (token) token.value = haSettings.token || '';
+  const air = document.getElementById('ha-air-temp');
+  if (air) air.value = haSettings.airTempEntity || '';
+  const hum = document.getElementById('ha-humidity');
+  if (hum) hum.value = haSettings.humidityEntity || '';
+  const wt = document.getElementById('ha-water-temp');
+  if (wt) wt.value = haSettings.waterTempEntity || '';
+  const sp = document.getElementById('ha-shelly-power');
+  if (sp) sp.value = haSettings.shellyPowerEntity || '';
+  const pt = document.getElementById('ha-power-threshold');
+  if (pt) pt.value = haSettings.powerThreshold || 50;
   _renderHaLiveBadge(document.getElementById('ha-live-badge'));
 }
 
