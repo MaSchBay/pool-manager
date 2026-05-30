@@ -1415,6 +1415,22 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div id="ha-test-result" style="font-size:0.8rem;min-height:18px"></div>
     </div>
   </div>
+  <script>
+  (function(){
+    try{
+      var s=JSON.parse(localStorage.getItem('pool_ha_settings')||'{}');
+      var el;
+      el=document.getElementById('ha-enabled'); if(el) el.checked=!!s.enabled;
+      el=document.getElementById('ha-url'); if(el&&s.url) el.value=s.url;
+      el=document.getElementById('ha-token'); if(el&&s.token) el.value=s.token;
+      el=document.getElementById('ha-air-temp'); if(el&&s.airTempEntity) el.value=s.airTempEntity;
+      el=document.getElementById('ha-humidity'); if(el&&s.humidityEntity) el.value=s.humidityEntity;
+      el=document.getElementById('ha-water-temp'); if(el&&s.waterTempEntity) el.value=s.waterTempEntity;
+      el=document.getElementById('ha-shelly-power'); if(el&&s.shellyPowerEntity) el.value=s.shellyPowerEntity;
+      el=document.getElementById('ha-power-threshold'); if(el&&s.powerThreshold) el.value=s.powerThreshold;
+    }catch(e){}
+  })();
+  </script>
   </div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">🔌 Shelly Filter-Steuerung</div>
