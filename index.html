@@ -3113,6 +3113,13 @@ function confirmTask(){
   }
   // Dosierung-Pending setzen
   if(id==='chlor_tabs') addDosierungPending('chlor', 6);
+  // Langzeit-Tabs → Skimmer-Tab-Prognose aktualisieren
+  if(_dualTask && qty > 0 && typeof skimmerTabState !== 'undefined'){
+    skimmerTabState.tabsEingelegt = (skimmerTabState.tabsEingelegt||0) + qty;
+    skimmerTabState.eingelgtAm = new Date().toISOString();
+    skimmerTabState.facKorr = 1.0;
+    saveSkimmerTabState();
+  }
   renderDashboard();
   renderMaintenanceList&&renderMaintenanceList();
   checkNachmessTimer&&checkNachmessTimer();
@@ -5581,56 +5588,92 @@ function calcPoolScore(){
 }
 
 // ============================================================
-// SKIMMER-TAB PROGNOSE
+// SKIMMER-TAB PROGNOSE – Smart FAC-basiert
+// Logik: Tabs lösen sich temperaturabhängig auf → FAC sinkt
+// App zeigt wann FAC unter Minimum fällt → dann nachfüllen
 // ============================================================
-function tabDissolutionDaysPerTab(tempC){
-  // Basis: 7 Tage bei 25°C, Q10=2 (doppelt so schnell je 10°C)
-  var days = 7 * Math.pow(2, (25 - (tempC||22)) / 10);
-  return Math.max(2, Math.min(14, days));
+
+// Auflösungsrate: Tage bis 4 Tabs komplett aufgelöst bei Temperatur T
+function tabDissolutionDays(tempC){
+  // Basis: 4 Tabs halten ~9 Tage bei 22°C
+  // Q10=2: bei 32°C halbiert sich die Zeit, bei 12°C verdoppelt
+  var days = 9 * Math.pow(2, (22 - (tempC||22)) / 10);
+  return Math.max(3, Math.min(18, days));
 }
 
-function updateSkimmerTabFacKorr(measuredFac){
-  // FAC-basierte Kalibrierung: nach Messung Korrekturfaktor anpassen
-  if(!skimmerTabState.eingelgtAm || skimmerTabState.tabsEingelegt <= 0) return;
-  var now = Date.now();
-  var daysSince = (now - new Date(skimmerTabState.eingelgtAm).getTime()) / 86400000;
-  if(daysSince < 0.1) return;
-  var temp = (function(){ try{ var l=getLastMeasurement&&getLastMeasurement(); return (l&&l.temp)||22; }catch(e){return 22;} })();
-  var daysPerTab = tabDissolutionDaysPerTab(temp);
-  var totalDays = skimmerTabState.tabsEingelegt * daysPerTab;
-  var expectedPct = Math.max(0, 1 - daysSince / totalDays);
-  // Kalibrierung: Chlor-Messung als Proxy für Tab-Restmenge
-  // Grob: 4 Tabs = ~2.0 ppm FAC bei frischer Einlage
-  var expectedFac = expectedPct * 2.0;
-  if(expectedFac > 0.1){
-    var rawFactor = measuredFac / expectedFac;
-    // 70/30 Dämpfung: neuer Faktor zu 30% aus Messung
-    skimmerTabState.facKorr = Math.min(2.0, Math.max(0.3,
-      skimmerTabState.facKorr * 0.7 + rawFactor * 0.3
-    ));
-    skimmerTabState.lastFacKorrAt = new Date().toISOString();
-    saveSkimmerTabState();
+// Wie viel FAC liefern 4 frische Tabs (ppm/Tag)
+function tabChlorRatePerDay(tempC){
+  var totalDays = tabDissolutionDays(tempC);
+  // 4 Tabs à 20g = ~80g aktives Chlor → bei 10.52m³ → ~7.6 ppm gesamt
+  // Aufgeteilt über totalDays → ppm/Tag
+  return 7.6 / totalDays;
+}
+
+function saveSkimmerTabState(){
+  try{localStorage.setItem('pool_skimmer_tab_state', JSON.stringify(skimmerTabState));}catch(e){}
+}
+
+// FAC-Prognose: wann fällt FAC unter Minimum?
+function calcTabFacPrognose(){
+  var last = (typeof getLastMeasurement==='function') ? getLastMeasurement() : null;
+  if(!last || last.chlor===undefined) return null;
+  
+  var currentFac = last.chlor;
+  var temp = last.temp || 22;
+  var minFac = (settings&&settings.chlor&&settings.chlor.min) || 1.0;
+  var targetFac = (settings&&settings.chlor&&settings.chlor.target) || 2.0;
+  
+  // Tage seit letzter Messung
+  var measuredAt = last.time ? new Date(last.time).getTime() : Date.now();
+  var daysSinceMeas = (Date.now() - measuredAt) / 86400000;
+  
+  // Abbaurate: natürlicher Chlorabbau + Verbrauch durch Tabs-Auflösung
+  // Netto-Abbau = natürlicher Abbau - Chlorzufuhr durch Tabs
+  var naturalDecay = 0.04; // ppm/Tag (Pool offen, Sonne)
+  
+  // Zufuhr durch Tabs im Skimmer (falls eingelegt)
+  var tabSupply = 0;
+  if(skimmerTabState.eingelgtAm && skimmerTabState.tabsEingelegt > 0){
+    var daysTabsIn = (Date.now() - new Date(skimmerTabState.eingelgtAm).getTime()) / 86400000;
+    var totalTabDays = tabDissolutionDays(temp);
+    // Tabs noch aktiv?
+    if(daysTabsIn < totalTabDays){
+      // Chlorzufuhr anteilig zur noch verbleibenden Auflösung
+      var tabsRemaining = Math.max(0, 1 - daysTabsIn / totalTabDays);
+      tabSupply = tabChlorRatePerDay(temp) * tabsRemaining * skimmerTabState.facKorr;
+    }
   }
-}
-
-function calcSkimmerTabPrognose(){
-  if(!skimmerTabState.eingelgtAm || skimmerTabState.tabsEingelegt <= 0) return null;
-  var temp = (function(){ try{ var l=getLastMeasurement&&getLastMeasurement(); return (l&&l.temp)||22; }catch(e){return 22;} })();
-  var daysPerTab = tabDissolutionDaysPerTab(temp);
-  var totalDays = skimmerTabState.tabsEingelegt * daysPerTab * skimmerTabState.facKorr;
-  var now = Date.now();
-  var daysSince = (now - new Date(skimmerTabState.eingelgtAm).getTime()) / 86400000;
-  var remainPct = Math.max(0, 1 - daysSince / totalDays);
-  var daysLeft = Math.max(0, totalDays - daysSince);
-  var emptyDate = new Date(now + daysLeft * 86400000);
+  
+  var netDecay = naturalDecay - tabSupply; // kann negativ sein (FAC steigt)
+  
+  // FAC jetzt (extrapoliert seit Messung)
+  var facNow = currentFac - netDecay * daysSinceMeas;
+  
+  // Wann fällt FAC unter Minimum?
+  var daysToMin = null;
+  if(netDecay > 0.001){
+    daysToMin = (facNow - minFac) / netDecay;
+  } else if(netDecay <= 0){
+    daysToMin = 999; // FAC steigt/stabil
+  }
+  
+  // Wann sollte nachgefüllt werden? (wenn FAC in 2 Tagen unter Target fällt)
+  var daysToRefill = null;
+  if(netDecay > 0.001){
+    daysToRefill = (facNow - targetFac) / netDecay;
+  }
+  
   return {
-    pct: Math.round(remainPct * 100),
-    daysLeft: Math.round(daysLeft * 10) / 10,
-    emptyDate: emptyDate,
-    totalDays: Math.round(totalDays),
-    daysSince: Math.round(daysSince * 10) / 10,
+    facNow: Math.max(0, Math.round(facNow * 10) / 10),
+    netDecay: Math.round(netDecay * 100) / 100,
+    daysToMin: daysToMin !== null ? Math.round(daysToMin * 10) / 10 : null,
+    daysToRefill: daysToRefill !== null ? Math.round(daysToRefill * 10) / 10 : null,
+    tabSupply: Math.round(tabSupply * 100) / 100,
     temp: temp,
-    tabs: skimmerTabState.tabsEingelegt,
+    minFac: minFac,
+    targetFac: targetFac,
+    tabsActive: tabSupply > 0,
+    tabsEingelegt: skimmerTabState.tabsEingelegt,
     eingelgtAm: skimmerTabState.eingelgtAm
   };
 }
@@ -5638,59 +5681,69 @@ function calcSkimmerTabPrognose(){
 function renderSkimmerTabPrognose(){
   var el = document.getElementById('skimmer-tab-dashboard');
   if(!el) return;
-
-  var prog = calcSkimmerTabPrognose();
-
-  // If no tabs entered yet: show entry form
-  if(!prog){
-    el.innerHTML = '<div class="card" style="margin-top:10px">' +
-      '<div class="card-title">🕐 Langzeit-Chlortabs im Skimmer</div>' +
-      '<div style="font-size:0.83rem;color:var(--text-muted);margin-bottom:12px">Wann hast du zuletzt Tabs eingelegt?</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-        '<label style="font-size:0.82rem;font-weight:700">Anzahl Tabs:</label>' +
-        '<div style="display:flex;align-items:center;gap:6px">' +
-          '<button onclick="skimmerTabBtnAdj(-1)" style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-size:1rem;font-weight:700">−</button>' +
-          '<span id="skimmer-tab-count" style="font-weight:900;font-size:1.1rem;min-width:24px;text-align:center">4</span>' +
-          '<button onclick="skimmerTabBtnAdj(1)" style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-size:1rem;font-weight:700">+</button>' +
-        '</div>' +
-        '<button onclick="confirmSkimmerTabsJetzt()" class="btn btn-primary btn-sm">✅ Tabs einlegen (jetzt)</button>' +
-      '</div>' +
-    '</div>';
+  
+  var p = calcTabFacPrognose();
+  var last = (typeof getLastMeasurement==='function') ? getLastMeasurement() : null;
+  
+  // No measurement yet
+  if(!p || !last){
+    el.innerHTML = '';
     return;
   }
-
-  // Color based on remaining %
-  var barColor = prog.pct > 50 ? '#16a34a' : prog.pct > 25 ? '#d97706' : '#dc2626';
-  var daysLeftStr = prog.daysLeft < 1 ? Math.round(prog.daysLeft * 24) + 'h' : prog.daysLeft.toFixed(1) + 'd';
-  var emptyStr = prog.emptyDate.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'});
-  var eingelgtStr = new Date(prog.eingelgtAm).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'});
-
-  el.innerHTML = '<div class="card" style="margin-top:10px">' +
-    '<div class="card-title" style="justify-content:space-between;display:flex">' +
-      '<span>🕐 Langzeit-Chlortabs im Skimmer</span>' +
-      '<button onclick="resetSkimmerTabs()" style="font-size:0.7rem;color:var(--text-muted);background:none;border:none;cursor:pointer">↺ Neu einlegen</button>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center">' +
-      // Progress ring
-      '<div style="position:relative;width:64px;height:64px">' +
-        '<svg viewBox="0 0 64 64" style="width:64px;height:64px;transform:rotate(-90deg)">' +
-          '<circle cx="32" cy="32" r="26" fill="none" stroke="#e2e8f0" stroke-width="6"/>' +
-          '<circle cx="32" cy="32" r="26" fill="none" stroke="'+barColor+'" stroke-width="6" stroke-linecap="round"' +
-            ' stroke-dasharray="'+(prog.pct/100*163.4).toFixed(1)+' 163.4"/>' +
-        '</svg>' +
-        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Nunito,sans-serif;font-weight:900;font-size:0.85rem;color:'+barColor+'">'+prog.pct+'%</div>' +
-      '</div>' +
-      '<div>' +
-        '<div style="font-size:0.82rem"><strong>'+prog.tabs+' Tabs</strong> eingelegt am '+eingelgtStr+'</div>' +
-        '<div style="font-size:0.82rem;margin-top:3px">Leer in ca. <strong>'+daysLeftStr+'</strong> ('+emptyStr+')</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">'+prog.temp.toFixed(1)+'°C Wassertemp · '+prog.totalDays+'d Gesamtlaufzeit</div>' +
-        (prog.pct <= 20 ? '<div style="color:#dc2626;font-size:0.78rem;font-weight:700;margin-top:4px">⚠️ Tabs bald leer – jetzt nachfüllen!</div>' : '') +
-      '</div>' +
-    '</div>' +
-    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button onclick="confirmSkimmerTabsJetzt()" class="btn btn-primary btn-sm">🔄 Neue Tabs einlegen</button>' +
-    '</div>' +
+  
+  var eingelgtStr = skimmerTabState.eingelgtAm ? 
+    new Date(skimmerTabState.eingelgtAm).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) + 
+    ' ' + new Date(skimmerTabState.eingelgtAm).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) : null;
+  
+  // Status + Farbe
+  var statusColor, statusText, urgency;
+  if(p.daysToMin !== null && p.daysToMin <= 0){
+    statusColor = '#dc2626'; statusText = '⚠️ FAC unter Minimum – jetzt Tabs nachfüllen!'; urgency = 'danger';
+  } else if(p.daysToMin !== null && p.daysToMin <= 1){
+    statusColor = '#dc2626'; statusText = '⚠️ Heute oder morgen Tabs nachfüllen!'; urgency = 'danger';
+  } else if(p.daysToRefill !== null && p.daysToRefill <= 2){
+    statusColor = '#d97706'; statusText = 'In ' + p.daysToRefill.toFixed(1) + 'd Tabs nachfüllen empfohlen'; urgency = 'warn';
+  } else if(p.daysToMin === 999 || (p.daysToMin !== null && p.daysToMin > 7)){
+    statusColor = '#16a34a'; statusText = 'Chlorversorgung gut'; urgency = 'ok';
+  } else {
+    statusColor = '#0369a1'; 
+    statusText = p.daysToMin !== null ? 'FAC fällt in ~' + p.daysToMin + 'd unter Minimum' : 'Chlorversorgung stabil';
+    urgency = 'info';
+  }
+  
+  var bgColor = urgency==='danger'?'#fef2f2':urgency==='warn'?'#fffbeb':urgency==='ok'?'#f0fdf4':'#f0f9ff';
+  var borderColor = urgency==='danger'?'#fca5a5':urgency==='warn'?'#fde68a':urgency==='ok'?'#bbf7d0':'#bae6fd';
+  
+  var tabInfo = eingelgtStr ? 
+    '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:3px">'+
+      skimmerTabState.tabsEingelegt+' Tabs eingelegt am '+eingelgtStr+
+      (p.tabsActive?' · aktiv':'· aufgelöst')+
+    '</div>' : 
+    '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:3px">Noch keine Tabs erfasst</div>';
+  
+  var decayInfo = '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">'+
+    'FAC jetzt: ~'+p.facNow+' ppm · '+
+    (p.netDecay > 0 ? 'Abbau: '+p.netDecay+' ppm/Tag' : 'Stabil/steigend')+
+    (p.tabSupply > 0 ? ' · Tab-Zufuhr: +'+p.tabSupply+' ppm/Tag' : '')+
   '</div>';
+  
+  el.innerHTML = 
+    '<div class="card" style="margin-top:10px;background:'+bgColor+';border:1px solid '+borderColor+'">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div class="card-title" style="margin-bottom:0">🕐 Langzeit-Chlortabs</div>' +
+      '</div>' +
+      '<div style="font-size:0.85rem;font-weight:700;color:'+statusColor+'">'+statusText+'</div>' +
+      tabInfo + decayInfo +
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        '<label style="font-size:0.82rem;font-weight:700">Tabs nachfüllen:</label>' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<button onclick="skimmerTabBtnAdj(-1)" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-weight:700">−</button>' +
+          '<span id="skimmer-tab-count" style="font-weight:900;font-size:1rem;min-width:22px;text-align:center">4</span>' +
+          '<button onclick="skimmerTabBtnAdj(1)" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-weight:700">+</button>' +
+        '</div>' +
+        '<button onclick="confirmSkimmerTabsJetzt()" class="btn btn-primary btn-sm">✅ '+_skimmerTabCount+' Tabs eingelegt</button>' +
+      '</div>' +
+    '</div>';
 }
 
 var _skimmerTabCount = 4;
@@ -5698,11 +5751,15 @@ function skimmerTabBtnAdj(delta){
   _skimmerTabCount = Math.max(1, Math.min(12, (_skimmerTabCount||4) + delta));
   var el = document.getElementById('skimmer-tab-count');
   if(el) el.textContent = _skimmerTabCount;
+  // Update button label
+  var btns = document.querySelectorAll('#skimmer-tab-dashboard button');
+  btns.forEach(function(b){ if(b.textContent.indexOf('Tabs eingelegt')>-1) b.textContent='✅ '+_skimmerTabCount+' Tabs eingelegt'; });
 }
 
 function confirmSkimmerTabsJetzt(){
   var count = _skimmerTabCount || 4;
-  skimmerTabState.tabsEingelegt = count;
+  // Tabs hinzufügen (nicht ersetzen – auf alte drauflegen)
+  skimmerTabState.tabsEingelegt = (skimmerTabState.tabsEingelegt||0) + count;
   skimmerTabState.eingelgtAm = new Date().toISOString();
   skimmerTabState.facKorr = 1.0;
   saveSkimmerTabState();
@@ -5714,26 +5771,18 @@ function confirmSkimmerTabsJetzt(){
   // Historie
   try{
     logHistory({type:'wartung', time: new Date().toISOString(),
-      note: '🕐 '+count+' Langzeit-Chlortabs in Skimmer eingelegt'});
+      note: '🕐 '+count+' Langzeit-Chlortabs in Skimmer nachgefüllt (gesamt: '+skimmerTabState.tabsEingelegt+')'});
   }catch(e){}
   try{
     var task = maintenanceTasks.find(function(t){return t.id==='chlor_tabs';});
     if(task){ task.lastDone = new Date().toISOString(); sd('maintenance', maintenanceTasks); }
   }catch(e){}
-  if(typeof toast==='function') toast('🕐 '+count+' Tabs eingetragen!', 'success', 3000);
+  if(typeof toast==='function') toast('✅ '+count+' Tabs nachgefüllt – gesamt: '+skimmerTabState.tabsEingelegt, 'success', 3000);
   if(typeof queueAutoSync==='function') queueAutoSync();
   renderSkimmerTabPrognose();
   if(typeof renderTasksDashboard==='function') renderTasksDashboard();
 }
 
-function resetSkimmerTabs(){
-  skimmerTabState.tabsEingelegt = 0;
-  skimmerTabState.eingelgtAm = null;
-  skimmerTabState.facKorr = 1.0;
-  _skimmerTabCount = 4;
-  saveSkimmerTabState();
-  renderSkimmerTabPrognose();
-}
 
 
 function renderPoolGauge(){
