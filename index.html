@@ -6030,10 +6030,36 @@ function addGebinde(stockKey,qty){
   initGebinde(stockKey);
   s.gebinde.push({id:Date.now(),qty:Math.max(0,qty),status:'verschlossen'});
   s.qty=s.gebinde.filter(g=>g.status!=='verbraucht').reduce((a,g)=>a+g.qty,0);
+  chemStock._lastChange=Date.now();
   sd('chem_stock_v2',chemStock);
   renderStockDashboard();
   if(typeof toast==='function')toast('📦 Neues Gebinde hinzugefügt','success',2000);
+  if(typeof queueAutoSync==='function')queueAutoSync();
 }
+
+function toggleNeuesGebindeRow(poolId){
+  const row=document.getElementById('neues-gebinde-row-'+poolId);
+  if(!row)return;
+  const visible=row.style.display!=='none';
+  row.style.display=visible?'none':'block';
+  if(!visible){
+    const inp=document.getElementById('neues-gebinde-qty-'+poolId);
+    if(inp)setTimeout(()=>inp.focus(),50);
+  }
+}
+
+function confirmNeuesGebinde(stockKey,poolId){
+  const inp=document.getElementById('neues-gebinde-qty-'+poolId);
+  const qty=inp?parseFloat(inp.value):0;
+  if(!qty||qty<=0){if(typeof toast==='function')toast('Bitte Menge eingeben','warn',2000);return;}
+  addGebinde(stockKey,qty);
+  const row=document.getElementById('neues-gebinde-row-'+poolId);
+  if(row)row.style.display='none';
+  // Produktdetail neu rendern damit Gebinde-Liste aktuell ist
+  if(typeof openProduktDetail==='function')setTimeout(()=>openProduktDetail(poolId),100);
+}
+
+
 
 function markGebindeVerbraucht(stockKey,gebindeId){
   const s=chemStock[stockKey];if(!s||!s.gebinde)return;
@@ -6141,6 +6167,7 @@ function renderStockDashboard(){
   });
   if(_peakDirty) sd('stock_peak_qty', _peakMap);
 
+  el.style.cssText='overflow:hidden;max-width:100%;width:100%';
   el.innerHTML=Object.entries(chemStock).map(([name,s])=>{
     const p=STOCK_PRODUCTS[name];if(!p)return'';
     // Balken: qty / peakQty (wie viel vom Maximalbestand bleibt)
@@ -10941,7 +10968,16 @@ function openProduktDetail(poolId){
   const stockHtml=stockKey&&stockProd?`<div class="card" style="margin-bottom:8px;background:var(--pool-surface)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div class="card-title" style="font-size:0.78rem;margin:0">📦 Vorrat & Gebinde (${stockProd.unit})</div>
-      <button onclick="(function(){const qty=parseFloat(prompt('Menge neues Gebinde (${stockProd.unit}):','${stockProd.pkgDefault||1000}'));if(!isNaN(qty)&&qty>0){addGebinde('${stockKey}',qty);openProduktDetail('${poolId}');}})()" style="font-size:0.72rem;padding:3px 10px;border-radius:6px;background:var(--pool-blue);color:white;border:none;cursor:pointer">+ Gebinde</button>
+      <button onclick="toggleNeuesGebindeRow('${poolId}')" style="font-size:0.72rem;padding:3px 10px;border-radius:6px;background:var(--pool-blue);color:white;border:none;cursor:pointer">+ Gebinde</button>
+    </div>
+    <div id="neues-gebinde-row-${poolId}" style="display:none;margin-bottom:8px;background:#f0f9ff;border-radius:8px;padding:8px 10px">
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px">Neues Gebinde (${stockProd.unit}):</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="neues-gebinde-qty-${poolId}" value="${stockProd.pkgDefault||1000}" min="1" step="1" style="width:90px;border:1px solid var(--border);border-radius:7px;padding:5px 8px;font-size:0.88rem;font-weight:700;text-align:center">
+        <span style="font-size:0.82rem;color:var(--text-muted)">${stockProd.unit}</span>
+        <button onclick="confirmNeuesGebinde('${stockKey}','${poolId}')" style="padding:5px 12px;background:#16a34a;color:white;border:none;border-radius:7px;font-size:0.78rem;cursor:pointer;font-weight:700">✅ Hinzufügen</button>
+        <button onclick="toggleNeuesGebindeRow('${poolId}')" style="padding:5px 10px;background:none;border:1px solid var(--border);border-radius:7px;font-size:0.78rem;cursor:pointer;color:var(--text-muted)">✕</button>
+      </div>
     </div>
     <div id="pd-gebinde-list-${poolId}">${renderGebindeRows()}</div>
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:6px;display:flex;justify-content:space-between;align-items:center">
