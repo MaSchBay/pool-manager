@@ -6318,11 +6318,13 @@ function closeFab(){
 
 // ----- SCHNELL-MESSUNG -----
 const QMESS_PARAMS=[
-  {key:'ph',    label:'🔵 pH',              step:0.5,  dec:1, min:0,  max:14},
-  {key:'chlor', label:'🟡 FAC / Chlor ppm', step:0.5,  dec:1, min:0,  max:20},
-  {key:'temp',  label:'🌡️ Temp °C',         step:0.5,  dec:1, min:0,  max:50},
-  {key:'kh',    label:'🟠 KH °dKH (Tropfen zählen)', step:1,   dec:0, min:0, max:30},
-  {key:'druck', label:'🟤 Filterdruck Bar', step:0.01, dec:2, min:0,  max:3},
+  {key:'temp',  label:'🌡️ Temp °C',                    step:0.1, dec:1, min:0,   max:50},
+  {key:'ph',    label:'🔵 pH-Wert',                     step:0.1, dec:1, min:0,   max:14},
+  {key:'tds',   label:'💧 Wasserbelastung (TDS) ppm',   step:1,   dec:0, min:0,   max:3000},
+  {key:'orp',   label:'⚡ Desinfektionskraft (ORP) mV', step:1,   dec:0, min:0,   max:1200},
+  {key:'chlor', label:'🟡 FAC / Chlor ppm',             step:0.1, dec:1, min:0,   max:20},
+  {key:'kh',    label:'🟠 KH °dKH (Tropfen zählen)',    step:1,   dec:0, min:0,   max:30},
+  {key:'druck', label:'🟤 Filterdruck Bar',              step:0.1, dec:2, min:0,   max:3},
 ];
 let qmessVals={};
 
@@ -6367,8 +6369,17 @@ function renderQMessRows(){
 }
 
 function adjustQMess(key,delta,dec,minV,maxV){
-  const current=qmessVals[key]??settings[key]?.target??0;
-  qmessVals[key]=Math.round(Math.max(minV,Math.min(maxV,current+delta))*Math.pow(10,dec))/Math.pow(10,dec);
+  // If null, start from last measurement or target value
+  let current = qmessVals[key];
+  if(current === null){
+    const last = getLastMeasurement();
+    current = (last && last[key] !== undefined) ? last[key] :
+              (settings[key]?.target ?? (key==='druck'?0.3:key==='temp'?22:key==='tds'?400:key==='orp'?650:0));
+    // For + button: start from sensible default. For - button on null: do nothing.
+    if(delta < 0){ return; }
+  }
+  const factor = Math.pow(10, dec);
+  qmessVals[key] = Math.round(Math.max(minV, Math.min(maxV, current + delta)) * factor) / factor;
   renderQMessRows();
 }
 
@@ -7700,7 +7711,7 @@ function renderRainReminder(w){
   if(rainLast12h<8)return;
   // Check last measurement - if after the rain, no reminder needed
   const last=getLastMeasurement();
-  if(last&&new Date(last.time).getTime()>now-6*3600000)return;
+  if(last&&new Date(last.time).getTime()>now-12*3600000)return; // 12h: Messung nach Regen genügt
   el.innerHTML='<div class="rain-warning-card">'
     +'<div style="font-size:1.6rem">🌧️</div>'
     +'<div style="flex:1">Starkregen erkannt ('+rainLast12h.toFixed(1)+' mm in 12h) – pH &amp; Chlor prüfen!</div>'
