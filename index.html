@@ -2,6 +2,22 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<script>
+window.onerror=function(msg,src,line,col,err){
+  document.body.style.cssText='padding:20px;font-family:monospace;background:#fee2e2';
+  document.body.innerHTML='<h2 style="color:#dc2626">🚨 JS Runtime Error</h2>'
+    +'<p><strong>'+msg+'</strong></p>'
+    +'<p>'+src+' line '+line+'</p>'
+    +'<pre>'+(err&&err.stack||'')+'</pre>';
+  return false;
+};
+window.onunhandledrejection=function(e){
+  document.body.style.cssText='padding:20px;font-family:monospace;background:#fee2e2';
+  document.body.innerHTML='<h2 style="color:#dc2626">🚨 Unhandled Promise Rejection</h2>'
+    +'<p><strong>'+(e.reason||e)+'</strong></p>'
+    +'<pre>'+(e.reason&&e.reason.stack||'')+'</pre>';
+};
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Pool Manager</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6186,22 +6202,31 @@ function updateGebindeQty(stockKey,gebindeId,qty){
 
 function openAddGebindeModal(stockKey){
   const sp=STOCK_PRODUCTS[stockKey];if(!sp)return;
-  // Inline input instead of prompt()
   const existingInput=document.getElementById('add-gebinde-inline-'+stockKey);
   if(existingInput){existingInput.remove();return;}
   const wrap=document.createElement('div');
   wrap.id='add-gebinde-inline-'+stockKey;
   wrap.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;background:#f0f9ff;border-radius:8px;padding:8px 10px;border:1px solid #bae6fd';
   const def=sp.pkgDefault||1000;
-  wrap.innerHTML='<span style="font-size:0.82rem;font-weight:700">Menge ('+sp.unit+'):</span>'
-    +'<input type="number" id="add-gebinde-qty-'+stockKey+'" value="'+def+'" min="1" step="1" style="width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem">'
-    +'<button onclick="confirmNeuesGebinde(''+stockKey+'')" class="btn btn-primary btn-sm">✅ Hinzufügen</button>'
-    +'<button onclick="document.getElementById('add-gebinde-inline-'+stockKey+'').remove()" class="btn btn-outline btn-sm">✕</button>';
-  // Insert after the + button
-  const triggerBtn=document.querySelector('[onclick*="openAddGebindeModal(''+stockKey+'')"]');
+  const inp=document.createElement('input');
+  inp.type='number';inp.id='add-gebinde-qty-'+stockKey;
+  inp.value=def;inp.min=1;inp.step=1;
+  inp.style.cssText='width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem';
+  const lbl=document.createElement('span');
+  lbl.style.cssText='font-size:0.82rem;font-weight:700';
+  lbl.textContent='Menge ('+sp.unit+'):';
+  const btnOk=document.createElement('button');
+  btnOk.className='btn btn-primary btn-sm';
+  btnOk.textContent='✅ Hinzufügen';
+  btnOk.onclick=function(){confirmNeuesGebinde(stockKey);};
+  const btnCancel=document.createElement('button');
+  btnCancel.className='btn btn-outline btn-sm';
+  btnCancel.textContent='✕';
+  btnCancel.onclick=function(){wrap.remove();};
+  wrap.appendChild(lbl);wrap.appendChild(inp);wrap.appendChild(btnOk);wrap.appendChild(btnCancel);
+  const triggerBtn=document.querySelector('[onclick*="openAddGebindeModal"]');
   if(triggerBtn&&triggerBtn.parentNode){triggerBtn.parentNode.insertBefore(wrap,triggerBtn.nextSibling);}
-  const qtyInput=document.getElementById('add-gebinde-qty-'+stockKey);
-  if(qtyInput)qtyInput.focus();
+  inp.focus();
 }
 
 function confirmNeuesGebinde(stockKey){
@@ -6562,9 +6587,10 @@ renderDashboard=async function(){
   updateOverdueBadge();
   renderFilterTimer();
   if(typeof renderHaCard==='function')renderHaCard();
-  const w=await fetchWeather();
-  renderBadeplaner(w);
-  renderSwimAdvice('dash-swim-advice',w);
+  try{const w=await fetchWeather();renderBadeplaner(w);renderSwimAdvice('dash-swim-advice',w);}catch(e){console.warn('[PM] weather:',e);}
+  try{if(typeof renderSkimmerTabPrognose==='function')renderSkimmerTabPrognose();}catch(e){}
+  try{if(typeof renderPoolAvatar==='function')renderPoolAvatar();}catch(e){}
+  try{if(typeof renderFacTabPrognose==='function')renderFacTabPrognose();}catch(e){}
 };
 
 
@@ -9776,8 +9802,8 @@ renderChlorDecayCard=function(){
 // Hook cover card into dashboard render
 const _origRenderDashboard=renderDashboard;
 renderDashboard=async function(){
-  await _origRenderDashboard();
-  if(typeof renderCoverStatusCard==='function')renderCoverStatusCard();
+  try{ await _origRenderDashboard(); }catch(e){ console.warn('[PM] renderDashboard base:',e); }
+  try{ if(typeof renderCoverStatusCard==='function')renderCoverStatusCard(); }catch(e){}
 };
 
 // ============================================================
