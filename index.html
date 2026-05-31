@@ -2847,7 +2847,11 @@ function renderEmpfehlungen(id){
     else if(last.ph<(s.ph.min+0.1)||last.ph>(s.ph.max-0.1))tips.push({type:'warn',msg:`pH nahe Grenzwert (${last.ph}), Optimum ${s.ph.target}`,helpIdx:last.ph<s.ph.target?4:3,btnLabel:'➡ Hilfe starten'});
   }
   if(last.chlor!==undefined){
-    if(last.chlor<s.chlor.min)tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} ppm) → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
+    const _chlorTaskDone = maintenanceTasks.find(t=>t.id==='chlor_tabs')?.lastDone;
+    const _chlorTabsRecent = _chlorTaskDone && (Date.now()-new Date(_chlorTaskDone).getTime()) < 8*3600000;
+    const _measBeforeDose = !_chlorTaskDone || !last.time || new Date(last.time) < new Date(_chlorTaskDone);
+    if(last.chlor<s.chlor.min && !_chlorTabsRecent && !_measBeforeDose)tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} ppm) → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
+    else if(last.chlor<s.chlor.min && (_chlorTabsRecent || _measBeforeDose))tips.push({type:'tip',msg:`Chlor (${last.chlor} ppm) – Tabs bereits eingelegt, Wert steigt noch. Nach 4–6h nachmessen.`});
     else if(last.chlor>s.chlor.max)tips.push({type:'warn',msg:`Chlor zu hoch (${last.chlor} ppm) – Badeverbot bis <${s.chlor.max}`,helpIdx:6,btnLabel:'➡ Hilfe starten'});
     else if(last.chlor>s.chlor.target+0.5){
       const chlorTask=maintenanceTasks.find(t=>t.id==='chlor_tabs');
@@ -4443,15 +4447,19 @@ function nextDue(t){
 
   // Chlor-Smart: NUR triggern wenn KEIN pending (sonst: Dosierung läuft noch)
   if(t.id==='chlor_tabs'){
-    if(!getDosierungPendingForTyp('chlor')){
+    // Nicht überfällig zeigen wenn Aufgabe in letzten 6h erledigt
+    const recentlyDone = t.lastDone && (Date.now()-new Date(t.lastDone).getTime()) < 6*3600000;
+    if(!recentlyDone && !getDosierungPendingForTyp('chlor')){
       const last=getLastMeasurement();
       const sc=settings.chlor||DEFAULT_SETTINGS.chlor;
       if(last&&last.chlor!==undefined){
-        if(last.chlor<sc.min){
+        // Nur triggern wenn Messung NACH letzter Erledigung liegt
+        const measAfterDone = !t.lastDone || new Date(last.time||0) > new Date(t.lastDone);
+        if(measAfterDone && last.chlor<sc.min){
           const overdue=new Date();overdue.setDate(overdue.getDate()-1);
           return overdue;
         }
-        if(last.chlor<sc.target-0.3) return new Date();
+        if(measAfterDone && last.chlor<sc.target-0.3) return new Date();
       }
     }
     return base;
