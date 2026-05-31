@@ -1038,17 +1038,19 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
 
   <div class="card">
     <div class="card-title">📅 7-Tage-Prognose + Pool-Temperatur</div>
-    <table style="width:100%;border-collapse:separate;border-spacing:0 6px">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="width:100%;min-width:320px;border-collapse:separate;border-spacing:0 6px;table-layout:fixed">
       <thead><tr>
-        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 8px">Tag</td>
-        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 8px">☁️</td>
-        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;padding:4px 8px">Beschreibung</td>
-        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 8px">Min/Max</td>
-        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 8px">🌡️ Pool</td>
-        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 8px">🌅</td>
+        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 6px;width:60px">Tag</td>
+        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 4px;width:28px">☁️</td>
+        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;padding:4px 6px">Beschreibung</td>
+        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 6px;width:80px">Min/Max</td>
+        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 6px;width:65px">🌡️ Pool</td>
+        <td style="font-weight:800;color:var(--text-muted);font-size:0.73rem;text-transform:uppercase;text-align:center;padding:4px 6px;width:40px">🌅</td>
       </tr></thead>
       <tbody id="week-tbody"></tbody>
     </table>
+    </div><!-- end overflow-x -->
     <p style="font-size:0.73rem;color:var(--text-muted);margin-top:8px">* Unter grün/schwarzer Plane – Schätzung inkl. Isolierung + letzte Messung</p>
   </div>
 </div>
@@ -3805,10 +3807,21 @@ async function renderWetter(){
   // Use daily sunset from data
   const sunTimes=getSunTimes(w);
 
+  // HA Luft/Feuchte für Wetter-Modul
+  const _haAir = (typeof haSettings!=='undefined' && haSettings.enabled && typeof haLiveData!=='undefined') ? haLiveData : null;
+  const _haAirTemp = (_haAir && _haAir.airTemp !== null) ? _haAir.airTemp.toFixed(1) : null;
+  const _haHumidity = (_haAir && _haAir.humidity !== null) ? Math.round(_haAir.humidity) : null;
+  const _haRow = (_haAirTemp || _haHumidity) ? `
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:7px 10px;background:rgba(14,165,233,0.08);border-radius:8px;border:1px solid rgba(14,165,233,0.2)">
+      <span style="font-size:0.7rem;font-weight:800;color:#0ea5e9;letter-spacing:0.05em">HA</span>
+      ${_haAirTemp ? `<span style="font-size:0.85rem;color:var(--text-secondary)">🌡️ ${_haAirTemp}°C</span>` : ''}
+      ${_haHumidity ? `<span style="font-size:0.85rem;color:var(--text-secondary)">💧 ${_haHumidity}%</span>` : ''}
+      <span style="font-size:0.7rem;color:var(--text-muted)">Sensor innen/nah</span>
+    </div>` : '';
   document.getElementById('wetter-aktuell-detail').innerHTML=`
     <div style="display:flex;align-items:center;gap:16px">
       <div style="font-size:3.8rem">${wmoIcon(curr.weathercode,now.getHours(),sunTimes)}</div>
-      <div>
+      <div style="flex:1;min-width:0">
         <div style="font-family:Nunito,sans-serif;font-weight:900;font-size:2.8rem;color:var(--pool-dark)">${Math.round(curr.temperature_2m)}°C</div>
         <div style="font-size:1rem;color:var(--text-secondary)">${wm.l}</div>
         <div style="display:flex;gap:14px;margin-top:7px;flex-wrap:wrap">
@@ -3817,6 +3830,7 @@ async function renderWetter(){
           <span style="font-size:0.82rem;color:var(--text-muted)">🌧️ ${curr.precipitation} mm</span>
           <span style="font-size:0.82rem;color:var(--text-muted)">${getSunEventStr(w).icon} ${getSunEventStr(w).time}</span>
         </div>
+        ${_haRow}
       </div>
     </div>`;
 
