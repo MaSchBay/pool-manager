@@ -11396,7 +11396,7 @@ function renderHaCard() {
         '<div style="display:flex;gap:5px;margin-left:auto">' +
           '<button onclick="shellyManualOn()" style="padding:4px 11px;border-radius:7px;border:none;background:#16a34a;color:white;font-weight:700;font-size:0.74rem;cursor:pointer">▲ Ein</button>' +
           '<button onclick="shellyManualOff()" style="padding:4px 11px;border-radius:7px;border:none;background:#dc2626;color:white;font-weight:700;font-size:0.74rem;cursor:pointer">▼ Aus</button>' +
-          '<button onclick="shellyBadenNachlauf()" style="padding:4px 9px;border-radius:7px;border:1px solid #0369a1;background:#e0f2fe;color:#0369a1;font-weight:700;font-size:0.72rem;cursor:pointer" title="Filter 1h nach dem Baden laufen lassen">🏊 1h</button>' +
+          '<button onclick="shellyBadenNachlauf()" style="padding:4px 9px;border-radius:7px;border:1px solid #0369a1;background:#e0f2fe;color:#0369a1;font-weight:700;font-size:0.72rem;cursor:pointer" title="Filter nach Baden: mind. 1h oder bis 8h Tagesziel">🏊 Baden beendet</button>' +
           '<button onclick="shellySondermodus()" style="padding:4px 9px;border-radius:7px;border:2px solid ' + (shellySettings&&shellySettings.sondermodus24h?'#dc2626':'#9ca3af') + ';background:' + (shellySettings&&shellySettings.sondermodus24h?'#fee2e2':'transparent') + ';color:' + (shellySettings&&shellySettings.sondermodus24h?'#b91c1c':'#6b7280') + ';font-weight:700;font-size:0.72rem;cursor:pointer">24h ' + (shellySettings&&shellySettings.sondermodus24h?'AN':'AUS') + '</button>' +
         '</div>' +
       '</div>' +
@@ -11986,17 +11986,36 @@ async function shellyManualOff(){
   renderShellyCard();
 }
 
-// 1h Nachlauf nach Baden
+// Baden beendet: Filter läuft mindestens 1h, aber mind. bis 8h-Tagesziel erreicht
 async function shellyBadenNachlauf(){
-  const fireAt = new Date(Date.now() + 3600000); // +1h
+  // Restlaufzeit bis 8h berechnen
+  const targetMin = (shellySettings.dailyTargetH || 8) * 60;
+  const alreadyRun = haLiveData.filterRunMin ?? getShellyRuntime().minutes ?? 0;
+  const remainingToTarget = Math.max(0, targetMin - alreadyRun);
+  // Mindestens 60 min, aber maximal was noch bis 8h fehlt (sofern >60)
+  const nachlaufMin = Math.max(60, remainingToTarget);
+  const nachlaufSek = nachlaufMin * 60;
+  const fireAt = new Date(Date.now() + nachlaufSek * 1000);
   const timeStr = fireAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  const label = nachlaufMin > 60
+    ? nachlaufMin + 'min (bis 8h Tagesziel)'
+    : '1h Nachlauf';
+
   if(haSettings.enabled && haSettings.url && haSettings.token){
     await haSetDatetime('input_datetime.poolfilter_dosier_timer', fireAt);
     await haCallService('switch','turn_on',{entity_id:'switch.shelly1pmminig3_e4b063f25a98'});
-    if(typeof toast==='function') toast('🏊 Filter läuft 1h nach Baden – HA schaltet um '+timeStr+' Uhr ab','info',4000);
+    if(typeof logHistory==='function')
+      logHistory({type:'wartung',time:new Date().toISOString(),
+        note:'🏊 Baden beendet – Filter läuft '+label+', HA schaltet um '+timeStr+' Uhr ab'});
+    if(typeof toast==='function')
+      toast('🏊 Baden beendet – Filter läuft '+label+' (bis '+timeStr+' Uhr)','info',5000);
   } else if(shellySettings.enabled){
-    await shellyCloudControl(true, 3600);
-    if(typeof toast==='function') toast('🏊 Filter läuft 1h – Abschaltung um '+timeStr+' Uhr','info',4000);
+    await shellyCloudControl(true, nachlaufSek);
+    if(typeof logHistory==='function')
+      logHistory({type:'wartung',time:new Date().toISOString(),
+        note:'🏊 Baden beendet – Filter läuft '+label+', Abschaltung um '+timeStr+' Uhr'});
+    if(typeof toast==='function')
+      toast('🏊 Filter läuft '+label+' – Abschaltung um '+timeStr+' Uhr','info',5000);
   }
   setTimeout(haFetchSensors, 2000);
 }
