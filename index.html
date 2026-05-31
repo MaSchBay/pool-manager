@@ -7473,6 +7473,7 @@ function collectAllData(){
     wuensche:(typeof wuensche!=='undefined'?wuensche:[]),
     kinderBan:ld('kinder_ban',{}),
     poolParties:ld('pool_parties',[]),
+    skimmerTabState:(typeof skimmerTabState!=='undefined'?skimmerTabState:null),
     exportedAt:new Date().toISOString(),
     schemaVersion:3,
     deviceId:ld('device_id',(function(){var id='dev_'+Date.now();sd('device_id',id);return id;})())
@@ -7524,6 +7525,14 @@ function applyImportedData(d,mergeMode){
     var ch=ld('cover_history',[]);
     var merged=mergeMode?mergeByTime(ch,d.coverHistory,'time'):d.coverHistory;
     sd('cover_history',merged);
+  }
+  // Skimmer-Tab-Prognose: neuestes eingelgtAm gewinnt
+  if(d.skimmerTabState && typeof skimmerTabState !== 'undefined'){
+    if(!mergeMode || !skimmerTabState.eingelgtAm ||
+       (d.skimmerTabState.eingelgtAm && new Date(d.skimmerTabState.eingelgtAm) > new Date(skimmerTabState.eingelgtAm))){
+      skimmerTabState = Object.assign({}, skimmerTabState, d.skimmerTabState);
+      saveSkimmerTabState();
+    }
   }
 
   // Wartungsaufgaben: smart merge
