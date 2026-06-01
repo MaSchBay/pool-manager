@@ -1899,8 +1899,9 @@ var skimmerTabState = (function(){
   var def = {
     tabsEingelegt: 0,
     eingelgtAm: null,
-    facKorr: 1.0,      // FAC-basierter Korrekturfaktor
-    lastFacKorrAt: null
+    facKorr: 1.0,
+    lastFacKorrAt: null,
+    batches: []  // [{tabs, eingelgtAm}]
   };
   return saved ? Object.assign({}, def, saved) : def;
 })();
@@ -5909,70 +5910,105 @@ function calcTabFacPrognose(){
 function renderSkimmerTabPrognose(){
   var el = document.getElementById('skimmer-tab-dashboard');
   if(!el) return;
-  
   var p = calcTabFacPrognose();
   var last = (typeof getLastMeasurement==='function') ? getLastMeasurement() : null;
-  
-  // No measurement yet
-  if(!p || !last){
-    el.innerHTML = '';
-    return;
-  }
-  
-  var eingelgtStr = skimmerTabState.eingelgtAm ? 
-    new Date(skimmerTabState.eingelgtAm).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}) + 
-    ' ' + new Date(skimmerTabState.eingelgtAm).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) : null;
-  
-  // Status + Farbe
+  if(!p || !last){ el.innerHTML = ''; return; }
+
+  // Status
   var statusColor, statusText, urgency;
   if(p.daysToMin !== null && p.daysToMin <= 0){
-    statusColor = '#dc2626'; statusText = '⚠️ FAC unter Minimum – jetzt Tabs nachfüllen!'; urgency = 'danger';
+    statusColor='#dc2626'; statusText='⚠️ FAC unter Minimum – jetzt Tabs nachfüllen!'; urgency='danger';
   } else if(p.daysToMin !== null && p.daysToMin <= 1){
-    statusColor = '#dc2626'; statusText = '⚠️ Heute oder morgen Tabs nachfüllen!'; urgency = 'danger';
+    statusColor='#dc2626'; statusText='⚠️ Heute oder morgen Tabs nachfüllen!'; urgency='danger';
   } else if(p.daysToRefill !== null && p.daysToRefill <= 2){
-    statusColor = '#d97706'; statusText = 'In ' + p.daysToRefill.toFixed(1) + 'd Tabs nachfüllen empfohlen'; urgency = 'warn';
-  } else if(p.daysToMin === 999 || (p.daysToMin !== null && p.daysToMin > 7)){
-    statusColor = '#16a34a'; statusText = 'Chlorversorgung gut'; urgency = 'ok';
+    statusColor='#d97706'; statusText='In '+p.daysToRefill.toFixed(1)+'d Tabs nachfüllen empfohlen'; urgency='warn';
+  } else if(p.daysToMin===999||(p.daysToMin!==null&&p.daysToMin>7)){
+    statusColor='#16a34a'; statusText='Chlorversorgung gut'; urgency='ok';
   } else {
-    statusColor = '#0369a1'; 
-    statusText = p.daysToMin !== null ? 'FAC fällt in ~' + p.daysToMin + 'd unter Minimum' : 'Chlorversorgung stabil';
-    urgency = 'info';
+    statusColor='#0369a1';
+    statusText=p.daysToMin!==null?'FAC fällt in ~'+p.daysToMin+'d unter Minimum':'Chlorversorgung stabil';
+    urgency='info';
   }
-  
-  var bgColor = urgency==='danger'?'#fef2f2':urgency==='warn'?'#fffbeb':urgency==='ok'?'#f0fdf4':'#f0f9ff';
-  var borderColor = urgency==='danger'?'#fca5a5':urgency==='warn'?'#fde68a':urgency==='ok'?'#bbf7d0':'#bae6fd';
-  
-  var tabInfo = eingelgtStr ? 
-    '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:3px">'+
-      skimmerTabState.tabsEingelegt+' Tabs eingelegt am '+eingelgtStr+
-      (p.tabsActive?' · aktiv':'· aufgelöst')+
-    '</div>' : 
-    '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:3px">Noch keine Tabs erfasst</div>';
-  
+  var bgColor=urgency==='danger'?'#fef2f2':urgency==='warn'?'#fffbeb':urgency==='ok'?'#f0fdf4':'#f0f9ff';
+  var borderColor=urgency==='danger'?'#fca5a5':urgency==='warn'?'#fde68a':urgency==='ok'?'#bbf7d0':'#bae6fd';
+
+  // Batches Fortschrittsbalken
+  var temp = last.temp || 22;
+  var totalDays = tabDissolutionDays(temp);
+  var batchHtml = '';
+  var batches = skimmerTabState.batches||[];
+  if(batches.length === 0 && skimmerTabState.eingelgtAm && skimmerTabState.tabsEingelegt > 0){
+    // Migration: alten State in Batch umwandeln
+    batches = [{tabs: skimmerTabState.tabsEingelegt, eingelgtAm: skimmerTabState.eingelgtAm}];
+  }
+  batches.forEach(function(b, i){
+    var daysIn = (Date.now() - new Date(b.eingelgtAm).getTime()) / 86400000;
+    var pct = Math.max(0, Math.min(100, Math.round((1 - daysIn/totalDays)*100)));
+    var barColor = pct > 60 ? '#16a34a' : pct > 30 ? '#0ea5e9' : '#d97706';
+    var dateStr = new Date(b.eingelgtAm).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
+    batchHtml +=
+      '<div style="margin-bottom:6px">'+
+        '<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-muted);margin-bottom:2px">'+
+          '<span>Batch '+(i+1)+' – '+dateStr+' ('+b.tabs+' Tabs)</span>'+
+          '<span style="font-weight:700;color:'+barColor+'">'+pct+'%</span>'+
+        '</div>'+
+        '<div style="height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden">'+
+          '<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px;transition:width 0.5s"></div>'+
+        '</div>'+
+      '</div>';
+  });
+
   var decayInfo = '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">'+
     'FAC jetzt: ~'+p.facNow+' ppm · '+
-    (p.netDecay > 0 ? 'Abbau: '+p.netDecay+' ppm/Tag' : 'Stabil/steigend')+
-    (p.tabSupply > 0 ? ' · Tab-Zufuhr: +'+p.tabSupply+' ppm/Tag' : '')+
+    (p.netDecay>0?'Abbau: '+p.netDecay+' ppm/Tag':'Stabil/steigend')+
+    (p.tabSupply>0?' · Tab-Zufuhr: +'+p.tabSupply+' ppm/Tag':'')+
   '</div>';
-  
-  el.innerHTML = 
-    '<div class="card" style="margin-top:10px;background:'+bgColor+';border:1px solid '+borderColor+'">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-        '<div class="card-title" style="margin-bottom:0">🕐 Langzeit-Chlortabs</div>' +
-      '</div>' +
-      '<div style="font-size:0.85rem;font-weight:700;color:'+statusColor+'">'+statusText+'</div>' +
-      tabInfo + decayInfo +
-      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-        '<label style="font-size:0.82rem;font-weight:700">Tabs nachfüllen:</label>' +
-        '<div style="display:flex;align-items:center;gap:6px">' +
-          '<button onclick="skimmerTabBtnAdj(-1)" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-weight:700">−</button>' +
-          '<span id="skimmer-tab-count" style="font-weight:900;font-size:1rem;min-width:22px;text-align:center">4</span>' +
-          '<button onclick="skimmerTabBtnAdj(1)" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-weight:700">+</button>' +
-        '</div>' +
-        '<button onclick="confirmSkimmerTabsJetzt()" class="btn btn-primary btn-sm">✅ '+_skimmerTabCount+' Tabs eingelegt</button>' +
-      '</div>' +
+
+  // Bestätigungs-Dialog inline
+  var confirmHtml =
+    '<div id="skimmer-confirm-box" style="display:none;background:white;border:1.5px solid #0ea5e9;border-radius:10px;padding:10px 12px;margin-top:8px">'+
+      '<div style="font-size:0.82rem;font-weight:700;margin-bottom:4px">'+_skimmerTabCount+' Langzeit-Tabs nachfüllen?</div>'+
+      '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px">Bestand wird um '+_skimmerTabCount+' Stk reduziert. Neuer Batch wird angelegt.</div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<button onclick="confirmSkimmerTabsJetzt()" class="btn btn-primary btn-sm" style="flex:1">✅ Ja, eingelegt</button>'+
+        '<button onclick="skimmerHideConfirm()" class="btn btn-outline btn-sm" style="flex:1">Abbrechen</button>'+
+      '</div>'+
+    '</div>';
+
+  el.innerHTML =
+    '<div class="card" style="margin-top:10px;background:'+bgColor+';border:1px solid '+borderColor+'">'+
+      '<div class="card-title" style="margin-bottom:6px">🕐 Langzeit-Chlortabs</div>'+
+      '<div style="font-size:0.85rem;font-weight:700;color:'+statusColor+';margin-bottom:6px">'+statusText+'</div>'+
+      decayInfo+
+      (batchHtml?'<div style="margin-top:8px">'+batchHtml+'</div>':'')+
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+        '<label style="font-size:0.82rem;font-weight:700">Tabs nachfüllen:</label>'+
+        '<div style="display:flex;align-items:center;gap:6px">'+
+          '<button onclick="skimmerTabBtnAdj(-1)" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-weight:700">−</button>'+
+          '<span id="skimmer-tab-count" style="font-weight:900;font-size:1rem;min-width:22px;text-align:center">'+_skimmerTabCount+'</span>'+
+          '<button onclick="skimmerTabBtnAdj(1)" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:white;cursor:pointer;font-weight:700">+</button>'+
+        '</div>'+
+        '<button onclick="skimmerShowConfirm()" class="btn btn-primary btn-sm">✅ '+_skimmerTabCount+' Tabs eingelegt</button>'+
+      '</div>'+
+      confirmHtml+
     '</div>';
 }
+
+function skimmerHideConfirm(){
+  var box = document.getElementById('skimmer-confirm-box');
+  if(box) box.style.display = 'none';
+}
+
+function skimmerShowConfirm(){
+  // Update confirm box text with current count
+  var box = document.getElementById('skimmer-confirm-box');
+  if(!box) return;
+  var count = _skimmerTabCount || 4;
+  box.querySelector('div').textContent = count+' Langzeit-Tabs nachfüllen?';
+  box.querySelector('div+div').textContent = 'Bestand wird um '+count+' Stk reduziert. Neuer Batch wird angelegt.';
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+}
+
 
 var _skimmerTabCount = 4;
 function skimmerTabBtnAdj(delta){
@@ -5986,10 +6022,21 @@ function skimmerTabBtnAdj(delta){
 
 function confirmSkimmerTabsJetzt(){
   var count = _skimmerTabCount || 4;
-  // Tabs hinzufügen (nicht ersetzen – auf alte drauflegen)
+  var now = new Date().toISOString();
+  // Neuen Batch anlegen
+  if(!skimmerTabState.batches) skimmerTabState.batches = [];
+  // Alte abgelaufene Batches entfernen (>14 Tage)
+  skimmerTabState.batches = skimmerTabState.batches.filter(function(b){
+    return (Date.now() - new Date(b.eingelgtAm).getTime()) < 14*86400000;
+  });
+  skimmerTabState.batches.push({tabs: count, eingelgtAm: now});
+  // Gesamt für Kompatibilität
   skimmerTabState.tabsEingelegt = (skimmerTabState.tabsEingelegt||0) + count;
-  skimmerTabState.eingelgtAm = new Date().toISOString();
+  skimmerTabState.eingelgtAm = now;
   skimmerTabState.facKorr = 1.0;
+  // Bestätigungs-Box schließen
+  var box = document.getElementById('skimmer-confirm-box');
+  if(box) box.style.display = 'none';
   saveSkimmerTabState();
   // Vorrat abziehen
   try{
