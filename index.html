@@ -12425,13 +12425,24 @@ function renderInventurStep(){
   let tabHint = '';
   if(p.type==='tabs'&&p.tabWeightG){
     const tabsPerKg = Math.round(1000/p.tabWeightG);
-    tabHint = '<div style="margin-top:6px;font-size:0.75rem;color:#0369a1;background:#e0f2fe;border-radius:8px;padding:6px 10px">'+
-      '💊 1 kg = '+tabsPerKg+' Tabs · 1 Tab = '+p.tabWeightG+'g'+
-      '<br><span style="opacity:0.8">kg eingeben:</span> '+
-      '<input type="number" id="inv-kg-input" placeholder="z.B. 2" step="0.1" min="0" '+
-      'style="width:70px;border:1px solid #0369a1;border-radius:6px;padding:3px 6px;font-size:0.82rem;font-family:Nunito,sans-serif" '+
-      'oninput="invKgToStk()" '+
-
+    const pkgSize = p.pkgDefault || tabsPerKg * 2; // Standard-Packungsgröße in Tabs
+    tabHint = '<div style="margin-top:8px;font-size:0.78rem;color:#0369a1;background:#e0f2fe;border-radius:8px;padding:8px 10px">'+
+      '<div style="font-weight:700;margin-bottom:6px">📦 Schnelleingabe nach Packungen:</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+        '<div style="display:flex;align-items:center;gap:4px">'+
+          '<span style="font-size:0.75rem">Volle Packungen (à '+pkgSize+' Stk):</span>'+
+          '<input type="number" id="inv-pkg-full" placeholder="0" min="0" step="1" '+
+          'style="width:55px;border:1px solid #0369a1;border-radius:6px;padding:3px 6px;font-size:0.85rem;font-weight:700;text-align:center" '+
+          'oninput="invPkgToStk()">'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:4px">'+
+          '<span style="font-size:0.75rem">+ angebrochen (Stk):</span>'+
+          '<input type="number" id="inv-pkg-open" placeholder="0" min="0" step="1" '+
+          'style="width:55px;border:1px solid #0369a1;border-radius:6px;padding:3px 6px;font-size:0.85rem;font-weight:700;text-align:center" '+
+          'oninput="invPkgToStk()">'+
+        '</div>'+
+      '</div>'+
+      '<div style="font-size:0.7rem;color:#64748b;margin-top:4px">1 Tab = '+p.tabWeightG+'g · oder oben direkt Stückzahl eingeben</div>'+
       '</div>';
   }
 
@@ -12514,6 +12525,15 @@ function renderInventurStep(){
           '<div id="inv-tara-total" style="font-size:0.72rem;color:#94a3b8"></div>'+
         '</div>'+
         '<div id="inv-scale-result" style="font-size:0.78rem;color:#64748b;text-align:center;min-height:18px"></div>'+
+        '<div style="margin-top:8px">'+
+          '<button onclick="invToggleEinzel()" style="font-size:0.75rem;color:#0369a1;background:none;border:none;cursor:pointer;text-decoration:underline;padding:2px 0">'+
+            '📦 Packungen einzeln einwiegen'+
+          '</button>'+
+          '<div id="inv-einzel-box" style="display:none;margin-top:8px;display:none">'+
+            '<div id="inv-einzel-inputs"></div>'+
+            '<div id="inv-einzel-sum" style="font-size:0.78rem;color:#16a34a;margin-top:6px;font-weight:700"></div>'+
+          '</div>'+
+        '</div>'+
         (_tara>0?'<div style="font-size:0.7rem;color:#16a34a;margin-top:4px">✅ Leergewicht gespeichert: '+_tara+'g</div>':
           '<div style="font-size:0.7rem;color:#94a3b8;margin-top:4px">ℹ️ Leergewicht wird für nächste Inventur gespeichert</div>')+
       '</div>'+
@@ -12559,13 +12579,106 @@ function invPkgAdj(d){
   const el=document.getElementById('inv-pkg-count');
   if(el) el.value=Math.max(1,(parseInt(el.value)||1)+d);
   invCalcFromScale();
+  // Rebuild einzel inputs if open
+  if(typeof _invEinzelOpen!=='undefined' && _invEinzelOpen) invBuildEinzelInputs();
 }
-function invKgToStk(){
-  const kg=parseFloat(document.getElementById('inv-kg-input')?.value)||0;
-  const tpk=window._invTabsPerKg||50;
-  const el=document.getElementById('inv-qty');
-  if(el) el.value=Math.round(kg*tpk);
+function invPkgToStk(){
+  const p = STOCK_PRODUCTS[_invProducts[_invIndex]];
+  if(!p || p.type!=='tabs') return;
+  const pkgSize = p.pkgDefault || Math.round(1000/p.tabWeightG) * 2;
+  const full = parseInt(document.getElementById('inv-pkg-full')?.value||0) || 0;
+  const open = parseInt(document.getElementById('inv-pkg-open')?.value||0) || 0;
+  const total = full * pkgSize + open;
+  const qtyEl = document.getElementById('inv-qty');
+  if(qtyEl && total > 0) {
+    qtyEl.value = total;
+    // Visual feedback
+    qtyEl.style.borderColor = '#16a34a';
+    setTimeout(() => { if(qtyEl) qtyEl.style.borderColor = 'var(--pool-blue)'; }, 1000);
+  }
 }
+function invKgToStk(){ invPkgToStk(); } // Backwards compat
+// ── Inventur: Einzeln einwiegen ──────────────────────────────
+var _invEinzelOpen = false;
+
+function invToggleEinzel(){
+  _invEinzelOpen = !_invEinzelOpen;
+  const box = document.getElementById('inv-einzel-box');
+  if(box) box.style.display = _invEinzelOpen ? 'block' : 'none';
+  if(_invEinzelOpen) invBuildEinzelInputs();
+}
+
+function invBuildEinzelInputs(){
+  const pkgCount = parseInt(document.getElementById('inv-pkg-count')?.value||1);
+  const tara = parseFloat(document.getElementById('inv-tara-weight')?.value||0);
+  const name = _invProducts[_invIndex];
+  const p = STOCK_PRODUCTS[name];
+  const box = document.getElementById('inv-einzel-inputs');
+  if(!box) return;
+
+  let html = '';
+  for(let i=1; i<=pkgCount; i++){
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+      '<span style="font-size:0.78rem;font-weight:700;min-width:60px;color:#475569">Packung '+i+':</span>' +
+      '<input type="number" id="inv-einzel-'+i+'" placeholder="Brutto (g)" min="0" step="1" ' +
+      'style="width:110px;border:1.5px solid var(--pool-blue);border-radius:8px;padding:6px;font-size:0.9rem;font-weight:700;text-align:center;font-family:Nunito,sans-serif" ' +
+      'oninput="invCalcEinzel()"> g' +
+      '<span id="inv-einzel-netto-'+i+'" style="font-size:0.75rem;color:#16a34a;min-width:60px"></span>' +
+    '</div>';
+  }
+  box.innerHTML = html;
+}
+
+function invCalcEinzel(){
+  const pkgCount = parseInt(document.getElementById('inv-pkg-count')?.value||1);
+  const tara = parseFloat(document.getElementById('inv-tara-weight')?.value||0);
+  const name = _invProducts[_invIndex];
+  const p = STOCK_PRODUCTS[name];
+  let totalNetto = 0;
+  let allFilled = true;
+
+  for(let i=1; i<=pkgCount; i++){
+    const brutto = parseFloat(document.getElementById('inv-einzel-'+i)?.value||0);
+    const nettoG = Math.max(0, brutto - tara);
+    const nettoEl = document.getElementById('inv-einzel-netto-'+i);
+    if(brutto > 0){
+      const nettoDisplay = p.type==='tabs' && p.tabWeightG
+        ? '= '+Math.round(nettoG/p.tabWeightG)+' Stk'
+        : '= '+nettoG+'g netto';
+      if(nettoEl) nettoEl.textContent = nettoDisplay;
+      if(p.type==='tabs' && p.tabWeightG){
+        totalNetto += Math.round(nettoG/p.tabWeightG);
+      } else {
+        totalNetto += nettoG;
+      }
+    } else {
+      if(nettoEl) nettoEl.textContent = '';
+      allFilled = false;
+    }
+  }
+
+  const sumEl = document.getElementById('inv-einzel-sum');
+  if(totalNetto > 0){
+    const unit = p.unit||'g';
+    if(sumEl) sumEl.textContent = '✅ Gesamt: '+totalNetto+' '+unit+' → ins Hauptfeld übernehmen?';
+    // Auto-fill main qty field
+    const qtyEl = document.getElementById('inv-qty');
+    if(qtyEl){ 
+      qtyEl.value = totalNetto;
+      qtyEl.style.borderColor = '#16a34a';
+      setTimeout(()=>{ if(qtyEl) qtyEl.style.borderColor='var(--pool-blue)'; }, 1500);
+    }
+    // Also update total weight field for consistency
+    const totalWeightEl = document.getElementById('inv-total-weight');
+    if(totalWeightEl) totalWeightEl.value = '';
+    const resultEl = document.getElementById('inv-scale-result');
+    if(resultEl) resultEl.textContent = '';
+  } else {
+    if(sumEl) sumEl.textContent = '';
+  }
+}
+
+
 function invToggleWaage(){
   const box=document.getElementById('inv-waage-box');
   const arr=document.getElementById('inv-waage-arrow');
@@ -12608,10 +12721,6 @@ function invCalcFromScale(){
   } else {
     if(res) res.textContent='';
   }
-}
-function invPkgAdj(d){
-  const el=document.getElementById('inv-pkg-count');
-  if(el){ el.value=Math.max(1,(parseInt(el.value)||1)+d); invCalcFromScale(); }
 }
 function invSaveTara(){
   const name=_invProducts[_invIndex];
