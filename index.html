@@ -790,6 +790,38 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
         <span style="font-weight:700;color:var(--text-muted)">Stk</span>
       </div>
     </div>
+    <!-- Verpackung gewechselt -->
+    <div id="task-confirm-pkg-switch-wrap" style="display:none;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" id="task-confirm-pkg-switch" onchange="togglePkgSwitch(this.checked)" style="width:18px;height:18px;accent-color:var(--pool-blue)">
+        <span style="font-weight:700;font-size:0.88rem">📦 Verpackung gewechselt</span>
+      </label>
+      <div id="task-confirm-pkg-switch-detail" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px;display:none">
+        <div style="font-size:0.78rem;color:#0369a1;margin-bottom:8px">Wieviel kam aus Packung 1 (leer), wieviel aus Packung 2?</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:0.75rem;font-weight:700;color:var(--text-muted)">📦 Packung 1 (leer)</label>
+            <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
+              <input type="number" id="pkg1-qty" min="0" step="0.1" placeholder="0"
+                style="width:75px;border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:0.9rem;font-weight:800;text-align:center"
+                oninput="onPkg1Change()">
+              <span id="pkg-switch-unit" style="font-size:0.8rem;color:var(--text-muted)">g</span>
+            </div>
+            <div style="font-size:0.7rem;color:#dc2626;margin-top:2px">→ wird als verbraucht markiert</div>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;font-weight:700;color:var(--text-muted)">📦 Packung 2 (neu)</label>
+            <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
+              <input type="number" id="pkg2-qty" min="0" step="0.1" placeholder="0"
+                style="width:75px;border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:0.9rem;font-weight:800;text-align:center">
+              <span style="font-size:0.8rem;color:var(--text-muted)" id="pkg-switch-unit2">g</span>
+            </div>
+            <div style="font-size:0.7rem;color:#16a34a;margin-top:2px">→ von neuer Packung</div>
+          </div>
+        </div>
+        <div id="pkg-switch-sum" style="font-size:0.78rem;margin-top:8px;color:var(--text-secondary)"></div>
+      </div>
+    </div>
     <div class="form-group">
       <label class="form-label">Notiz (optional)</label>
       <input type="text" id="task-confirm-note" placeholder="z.B. 4 Tabs statt 3">
@@ -1995,6 +2027,66 @@ function renderPoolAvatar(){
     + '</div>';
   updateAvatarToggleUI();
 }
+// ── Verpackung gewechselt ────────────────────────────────────
+var _pkgSwitchStockName = null;
+var _pkgSwitchUnit = 'g';
+
+function togglePkgSwitch(checked){
+  const detail = document.getElementById('task-confirm-pkg-switch-detail');
+  if(detail) detail.style.display = checked ? 'grid' : 'none';
+  if(checked){
+    // Auto-fill pkg1 with current gebinde qty
+    const g = _pkgSwitchStockName && chemStock[_pkgSwitchStockName];
+    if(g && Array.isArray(g.gebinde)){
+      const angebr = g.gebinde.find(x=>x.status==='angebrochen');
+      if(angebr){
+        const el = document.getElementById('pkg1-qty');
+        if(el) el.value = angebr.qty;
+      }
+    }
+    onPkg1Change();
+  }
+}
+
+function onPkg1Change(){
+  const total = parseFloat(document.getElementById('task-confirm-qty')?.value||0);
+  const pkg1 = parseFloat(document.getElementById('pkg1-qty')?.value||0);
+  const pkg2El = document.getElementById('pkg2-qty');
+  const sumEl = document.getElementById('pkg-switch-sum');
+  if(pkg2El && !isNaN(total) && !isNaN(pkg1)){
+    const pkg2 = Math.max(0, total - pkg1);
+    pkg2El.value = Math.round(pkg2 * 10) / 10;
+  }
+  if(sumEl){
+    const p1 = parseFloat(document.getElementById('pkg1-qty')?.value||0);
+    const p2 = parseFloat(document.getElementById('pkg2-qty')?.value||0);
+    const sum = Math.round((p1+p2)*10)/10;
+    sumEl.textContent = `Gesamt: ${sum} ${_pkgSwitchUnit} (Packung 1: ${p1} ${_pkgSwitchUnit} leer + Packung 2: ${p2} ${_pkgSwitchUnit})`;
+    sumEl.style.color = Math.abs(sum - parseFloat(document.getElementById('task-confirm-qty')?.value||0)) < 0.1 
+      ? '#16a34a' : '#d97706';
+  }
+}
+
+function showPkgSwitchIfMultiGebinde(stockName, unit){
+  _pkgSwitchStockName = stockName;
+  _pkgSwitchUnit = unit || 'g';
+  const wrap = document.getElementById('task-confirm-pkg-switch-wrap');
+  const cb = document.getElementById('task-confirm-pkg-switch');
+  const u1 = document.getElementById('pkg-switch-unit');
+  const u2 = document.getElementById('pkg-switch-unit2');
+  if(u1) u1.textContent = unit||'g';
+  if(u2) u2.textContent = unit||'g';
+  if(cb) cb.checked = false;
+  const detail = document.getElementById('task-confirm-pkg-switch-detail');
+  if(detail) detail.style.display = 'none';
+  // Show toggle only if there are ≥2 gebinde or 1 gebinde with low qty
+  const g = stockName && chemStock[stockName];
+  const show = g && Array.isArray(g.gebinde) && 
+    g.gebinde.filter(x=>x.status!=='verbraucht').length >= 1;
+  if(wrap) wrap.style.display = show ? 'block' : 'none';
+}
+
+
 function closeNavMore(){
   const dd=document.getElementById('nav-more-dropdown');
   if(dd)dd.classList.remove('open');
@@ -3083,6 +3175,7 @@ function quickCompleteTask(id){
       document.getElementById('task-confirm-qty').value=p.perUse;
       document.getElementById('task-confirm-qty-label').textContent=`Verwendete Menge (Standard: ${p.perUse} ${p.unit})`;
       document.getElementById('task-confirm-unit').textContent=p.unit;
+      showPkgSwitchIfMultiGebinde(p.stockName||p.key, p.unit||'g');
     } else {
       qtyRow.style.display='none';
     }
@@ -3141,7 +3234,26 @@ function confirmTask(){
   // Bestand abziehen
   if(stockName&&chemStock[stockName]&&qty>0){
     const gebinde=chemStock[stockName].gebinde;
-    if(Array.isArray(gebinde)){
+    const pkgSwitch=document.getElementById('task-confirm-pkg-switch')?.checked;
+    if(pkgSwitch && Array.isArray(gebinde)){
+      const pkg1=parseFloat(document.getElementById('pkg1-qty')?.value||0);
+      const pkg2=parseFloat(document.getElementById('pkg2-qty')?.value||0);
+      const unit=document.getElementById('task-confirm-unit')?.textContent||'g';
+      // Packung 1: als verbraucht markieren (tatsächliche Menge war pkg1)
+      const angebr=gebinde.find(g=>g.status==='angebrochen');
+      if(angebr){angebr.qty=0;angebr.status='verbraucht';}
+      // Packung 2: von nächstem Gebinde abziehen
+      const naechste=gebinde.find(g=>g.status!=='verbraucht');
+      if(naechste&&pkg2>0){
+        naechste.qty=Math.max(0,naechste.qty-pkg2);
+        naechste.status=naechste.qty<=0?'verbraucht':'angebrochen';
+      }
+      chemStock[stockName].qty=gebinde.filter(g=>g.status!=='verbraucht').reduce((a,g)=>a+g.qty,0);
+      // Extra Historie-Eintrag
+      if(typeof logHistory==='function')
+        logHistory({type:'wartung',time:new Date().toISOString(),
+          note:'📦 Packung gewechselt: '+pkg1+' '+unit+' aus Packung 1 (leer) + '+pkg2+' '+unit+' aus neuer Packung'});
+    } else if(Array.isArray(gebinde)){
       let rem=qty;
       gebinde.filter(g=>g.status!=='verbraucht').sort((a,b)=>a.status==='angebrochen'?-1:1).forEach(g=>{
         if(rem<=0)return;const take=Math.min(rem,g.qty);g.qty-=take;rem-=take;if(g.qty<=0)g.status='verbraucht';
