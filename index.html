@@ -9847,6 +9847,9 @@ function renderCoverStatusCard(){
       const key=new Date(d).toISOString().slice(0,10);
       dayMap[key]='swim';
     }
+    // Heute immer als swim markieren wenn Pool aktuell offen ist
+    // (auch wenn seit < Mitternacht heute)
+    dayMap[new Date().toISOString().slice(0,10)]='swim';
   }
   // Wenn history leer und Pool offen: heute markieren
   if(timeline.length===0&&!coverState.covered){
