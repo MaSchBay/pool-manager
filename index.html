@@ -6551,6 +6551,7 @@ function renderStockDashboard(){
   if(_peakDirty) sd('stock_peak_qty', _peakMap);
 
   el.innerHTML=Object.entries(chemStock).map(([name,s])=>{
+    try{
     const p=STOCK_PRODUCTS[name];if(!p)return'';
     // Balken: qty / peakQty (wie viel vom Maximalbestand bleibt)
     // Fallback: pkgDefault wenn noch kein Peak bekannt
@@ -6608,6 +6609,7 @@ function renderStockDashboard(){
       ${buyBtn}
     </div>
     <div class="stock-bar-wrap"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>`;
+    }catch(_se){console.warn('[PM] stock:',name,_se);return '';}
   }).join('');
 }
 
