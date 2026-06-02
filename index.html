@@ -3322,10 +3322,18 @@ function confirmTask(){
   }
   // Dosierung-Pending setzen
   if(id==='chlor_tabs') addDosierungPending('chlor', 6);
-  // Langzeit-Tabs → Skimmer-Tab-Prognose aktualisieren
+  // Langzeit-Tabs → Skimmer-Tab-Prognose: neuen Batch anlegen
   if(_dualTask && qty > 0 && typeof skimmerTabState !== 'undefined'){
+    if(!skimmerTabState.batches) skimmerTabState.batches = [];
+    // Alte Batches >14 Tage entfernen
+    skimmerTabState.batches = skimmerTabState.batches.filter(function(b){
+      return (Date.now() - new Date(b.eingelgtAm).getTime()) < 14*86400000;
+    });
+    // Neuen Batch anlegen
+    var _now = new Date().toISOString();
+    skimmerTabState.batches.push({tabs: qty, eingelgtAm: _now});
     skimmerTabState.tabsEingelegt = (skimmerTabState.tabsEingelegt||0) + qty;
-    skimmerTabState.eingelgtAm = new Date().toISOString();
+    skimmerTabState.eingelgtAm = _now;
     skimmerTabState.facKorr = 1.0;
     saveSkimmerTabState();
   }
@@ -11499,21 +11507,32 @@ async function haFetchSensors() {
     filterRunMin = calcRunMinutes(fh, haSettings.powerThreshold || 150, midnight, now);
   }
 
-  // Wassertemp-History (nur wenn Sensor konfiguriert)
+  // Wassertemp-History mit echtem Min/Max (SA→SU = Tag, SU→SA = Nacht)
   let nightDrop = null, dayRise = null;
+  let waterTempMin = null, waterTempMax = null;
   if (haSettings.waterTempEntity && ydSunset && sunrise) {
     const [nightHist, dayHist] = await Promise.all([
       haFetchHistory(base, headers, haSettings.waterTempEntity, ydSunset, sunrise),
       haFetchHistory(base, headers, haSettings.waterTempEntity, sunrise, now),
     ]);
-    // Nacht: Temp bei SA - Temp bei gestrigem SU (= Abkühlung/Erwärmung in der Nacht)
-    const nightFirst = nightHist.length ? parseFloat(nightHist[0].state) : NaN;
-    const nightLast  = nightHist.length ? parseFloat(nightHist[nightHist.length-1].state) : NaN;
-    if (!isNaN(nightFirst) && !isNaN(nightLast)) nightDrop = +(nightLast - nightFirst).toFixed(1);
-    // Tag: Aktuelle Temp - Temp bei SA (= Erwärmung/Abkühlung tagsüber)
-    const dayFirst   = dayHist.length ? parseFloat(dayHist[0].state) : NaN;
-    const dayCurrent = dayHist.length ? parseFloat(dayHist[dayHist.length-1].state) : NaN;
-    if (!isNaN(dayFirst) && !isNaN(dayCurrent)) dayRise = +(dayCurrent - dayFirst).toFixed(1);
+
+    // Nacht (SU gestern → SA heute): Min-Wert = kälteste Stelle der Nacht
+    if (nightHist.length >= 2) {
+      const nightVals = nightHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
+      const nightStart = nightVals[0];
+      const nightMin = Math.min(...nightVals);
+      waterTempMin = +nightMin.toFixed(1);
+      nightDrop = +(nightMin - nightStart).toFixed(1); // negativ = Abkühlung
+    }
+
+    // Tag (SA → jetzt): Max-Wert = wärmste Stelle des Tages
+    if (dayHist.length >= 2) {
+      const dayVals = dayHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
+      const dayStart = dayVals[0];
+      const dayMax = Math.max(...dayVals);
+      waterTempMax = +dayMax.toFixed(1);
+      dayRise = +(dayMax - dayStart).toFixed(1); // positiv = Erwärmung
+    }
   }
 
   // Filter-Status + Sondermodus aus HA
@@ -11544,7 +11563,7 @@ async function haFetchSensors() {
     sd('shelly_gfci_warning', false);
   }
 
-  haLiveData = { airTemp, humidity, waterTemp, filterRunMin, filterOn, filterPower, filterRunning, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
+  haLiveData = { airTemp, humidity, waterTemp, waterTempMin, waterTempMax, filterRunMin, filterOn, filterPower, filterRunning, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
 
   // Messfeld vorausfüllen
   if (waterTemp !== null) {
@@ -11586,6 +11605,11 @@ function renderHaCard() {
 
   // Wassertemp
   const wStr  = d.waterTemp !== null ? d.waterTemp.toFixed(1) + ' °C' : '-- °C';
+  const wMinMax = (d.waterTempMin !== null || d.waterTempMax !== null)
+    ? (d.waterTempMin !== null ? d.waterTempMin + '° min' : '') +
+      (d.waterTempMin !== null && d.waterTempMax !== null ? ' / ' : '') +
+      (d.waterTempMax !== null ? d.waterTempMax + '° max' : '')
+    : null;
   const wSub  = d.waterTemp !== null ? '' : '<span style="font-size:0.72rem;color:var(--text-muted)"> Sensor Di.</span>';
 
   // Nacht-Abkühlung / Tages-Erwärmung
@@ -11632,7 +11656,7 @@ function renderHaCard() {
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">' +
       _haKachel('🌡️', d.airTemp  !== null ? d.airTemp.toFixed(1)  + ' °C' : '-- °C', 'Luft',    d.airTemp  !== null) +
       _haKachel('💧', d.humidity !== null ? Math.round(d.humidity) + ' %'  : '-- %',  'Feuchte', d.humidity !== null) +
-      _haKachel('🌊', wStr, 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''),         d.waterTemp !== null) +
+      _haKachel('🌊', wStr, (wMinMax ? wMinMax + '<br>' : '') + 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''), d.waterTemp !== null) +
     '</div>' +
 
     // Filter-Laufzeit + Steuerung
