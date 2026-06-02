@@ -6533,7 +6533,7 @@ function calcReichweite(stockName){
 }
 function renderStockDashboard(){
   const el=document.getElementById('dash-stock');if(!el){console.warn('[PM] dash-stock not found');return;}
-  console.log('[PM] renderStockDashboard start, chemStock keys:', Object.keys(chemStock||{}));
+
   // Build a map of stockName → poolProdukt for image & amazon lookup
   const stockToPoolId={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Langzeit-Chlortabs':'langzeit_chlortabs','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen','Alca-Plus':'alca_plus'};
   // Ensure all STOCK_PRODUCTS entries are in chemStock
@@ -6577,13 +6577,12 @@ function renderStockDashboard(){
     const imgHtml=prod&&prod.img?`<img class="stock-item-img" src="${prod.img}" alt="${name}">`:`<div class="stock-item-img-placeholder">🧪</div>`;
     const buyBtn=prod&&prod.amazon&&pct<50&&prod.active!==false?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
     // warn für inaktive Produkte unterdrücken (prod jetzt verfügbar)
-    const _warnFinal = (prod&&prod.active===false) ? '' : _warnRech;
-    const _reich=calcReichweite(name);
-    let reichHtml='';
-    if(_reich){reichHtml=`<div style="font-size:0.65rem;color:${_reich.color};font-weight:800;white-space:nowrap">${_reich.days}d</div>`;}
-    // Nachkaufen-Warnung basierend auf Reichweite
-    const _warnRech=_reich&&_reich.days<14?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':
+    var _reich=null;try{_reich=calcReichweite(name);}catch(e){}
+    var reichHtml='';
+    if(_reich){reichHtml='<div style="font-size:0.65rem;color:'+_reich.color+';font-weight:800;white-space:nowrap">'+_reich.days+'d</div>';}
+    var _warnRech=_reich&&_reich.days<14?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':
                     _reich&&_reich.days<19?'<span style="color:#d97706;font-size:0.68rem;font-weight:800;margin-left:4px">📦 Bald bestellen</span>':'';
+    var _warnFinal = (prod&&prod.active===false) ? '' : _warnRech;
     // Gebinde display - compact dashboard view
     const ank=s.gebinde.find(function(g){return g.status==='angebrochen';});
     const verschl=s.gebinde.filter(function(g){return g.status==='verschlossen';});
