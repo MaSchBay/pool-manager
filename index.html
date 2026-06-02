@@ -2943,8 +2943,18 @@ function renderEmpfehlungen(id){
     const _chlorTaskDone = maintenanceTasks.find(t=>t.id==='chlor_tabs')?.lastDone;
     const _chlorTabsRecent = _chlorTaskDone && (Date.now()-new Date(_chlorTaskDone).getTime()) < 8*3600000;
     const _measBeforeDose = !_chlorTaskDone || !last.time || new Date(last.time) < new Date(_chlorTaskDone);
-    if(last.chlor<s.chlor.min && !_chlorTabsRecent && !_measBeforeDose)tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} ppm) → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
-    else if(last.chlor<s.chlor.min && (_chlorTabsRecent || _measBeforeDose))tips.push({type:'tip',msg:`Chlor (${last.chlor} ppm) – Tabs bereits eingelegt, Wert steigt noch. Nach 4–6h nachmessen.`});
+    const _orpOk = last.orp !== undefined && last.orp >= (s.orp?.min || 650);
+    const _chlorLow = last.chlor < s.chlor.min;
+    if(_chlorLow && !_chlorTabsRecent && !_measBeforeDose){
+      if(_orpOk){
+        // FAC niedrig aber ORP gut → nur Hinweis, keine rote Warnung
+        tips.push({type:'tip',msg:`Chlor leicht niedrig (${last.chlor} ppm), aber ORP ${last.orp} mV ✅ – Desinfektionskraft ok. Tabs nachfüllen empfohlen.`});
+      } else {
+        // FAC niedrig UND ORP niedrig → echte Warnung
+        tips.push({type:'danger',msg:`Chlor zu niedrig (${last.chlor} ppm) + ORP ${last.orp||'?'} mV → Tabs zugeben oder Schockchlorung`,helpIdx:5,btnLabel:'➡ Hilfe starten'});
+      }
+    }
+    else if(_chlorLow && (_chlorTabsRecent || _measBeforeDose))tips.push({type:'tip',msg:`Chlor (${last.chlor} ppm) – Tabs bereits eingelegt, Wert steigt noch. Nach 4–6h nachmessen.`});
     else if(last.chlor>s.chlor.max)tips.push({type:'warn',msg:`Chlor zu hoch (${last.chlor} ppm) – Badeverbot bis <${s.chlor.max}`,helpIdx:6,btnLabel:'➡ Hilfe starten'});
     else if(last.chlor>s.chlor.target+0.5){
       const chlorTask=maintenanceTasks.find(t=>t.id==='chlor_tabs');
@@ -7633,6 +7643,8 @@ function collectAllData(){
     kinderBan:ld('kinder_ban',{}),
     poolParties:ld('pool_parties',[]),
     skimmerTabState:(typeof skimmerTabState!=='undefined'?skimmerTabState:null),
+    haSettings:(typeof haSettings!=='undefined'?haSettings:null),
+    shellySettings:(typeof shellySettings!=='undefined'?shellySettings:null),
     exportedAt:new Date().toISOString(),
     schemaVersion:3,
     deviceId:ld('device_id',(function(){var id='dev_'+Date.now();sd('device_id',id);return id;})())
@@ -7691,6 +7703,31 @@ function applyImportedData(d,mergeMode){
        (d.skimmerTabState.eingelgtAm && new Date(d.skimmerTabState.eingelgtAm) > new Date(skimmerTabState.eingelgtAm))){
       skimmerTabState = Object.assign({}, skimmerTabState, d.skimmerTabState);
       saveSkimmerTabState();
+    }
+  }
+  // HA + Shelly Einstellungen synchronisieren (URL/Token übernehmen wenn lokal leer)
+  if(d.haSettings && typeof haSettings !== 'undefined'){
+    // Nur übernehmen wenn lokal kein Token gesetzt ist, oder remote hat neuere Daten
+    if(!haSettings.token && d.haSettings.token){
+      haSettings = Object.assign({}, haSettings, d.haSettings);
+      sd('ha_settings', haSettings);
+    } else if(d.haSettings.token) {
+      // Sensor Entity-IDs immer übernehmen (können sich ändern)
+      haSettings.waterTempEntity = d.haSettings.waterTempEntity || haSettings.waterTempEntity;
+      haSettings.airTempEntity = d.haSettings.airTempEntity || haSettings.airTempEntity;
+      haSettings.humidityEntity = d.haSettings.humidityEntity || haSettings.humidityEntity;
+      haSettings.shellyPowerEntity = d.haSettings.shellyPowerEntity || haSettings.shellyPowerEntity;
+      haSettings.url = d.haSettings.url || haSettings.url;
+      // Token nur übernehmen wenn lokal leer
+      if(!haSettings.token) haSettings.token = d.haSettings.token;
+      haSettings.enabled = d.haSettings.enabled;
+      sd('ha_settings', haSettings);
+    }
+  }
+  if(d.shellySettings && typeof shellySettings !== 'undefined'){
+    if(!shellySettings.cloudAuthKey && d.shellySettings.cloudAuthKey){
+      shellySettings = Object.assign({}, shellySettings, d.shellySettings);
+      sd('shelly_settings', shellySettings);
     }
   }
 
