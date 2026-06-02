@@ -6532,7 +6532,8 @@ function calcReichweite(stockName){
   return {days,color,label,orderSoon};
 }
 function renderStockDashboard(){
-  const el=document.getElementById('dash-stock');if(!el)return;
+  const el=document.getElementById('dash-stock');if(!el){console.warn('[PM] dash-stock not found');return;}
+  console.log('[PM] renderStockDashboard start, chemStock keys:', Object.keys(chemStock||{}));
   // Build a map of stockName → poolProdukt for image & amazon lookup
   const stockToPoolId={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Langzeit-Chlortabs':'langzeit_chlortabs','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen','Alca-Plus':'alca_plus'};
   // Ensure all STOCK_PRODUCTS entries are in chemStock
@@ -6609,7 +6610,7 @@ function renderStockDashboard(){
       ${buyBtn}
     </div>
     <div class="stock-bar-wrap"><div class="stock-bar-fill ${barCls}" style="width:${Math.min(100,pct)}%"></div></div>`;
-    }catch(_se){console.warn('[PM] stock:',name,_se);return '';}
+    }catch(_se){console.error('[PM] stock item error:',name, _se.message, _se.stack?.split('\n')[1]);return '';}
   }).join('');
 }
 
