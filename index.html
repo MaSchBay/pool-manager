@@ -926,8 +926,37 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
   <!-- Statistik-Kacheln -->
   <div class="grid-3" id="dash-stats-grid" style="margin-bottom:16px"></div>
 
+
+  <!-- Badeplaner -->
+  <div class="card">
+    <div class="card-title" style="justify-content:space-between">
+      <span>🏊 Badeplaner – nächste 24h</span>
+      <span style="font-size:0.75rem;color:var(--text-muted);font-weight:600">basierend auf Wetter + Wasserqualität</span>
+    </div>
+    <div id="dash-badeplaner"></div>
+  </div>
+
   <div class="grid-2">
-    <!-- Pool-Score Gauge + Messwerte -->
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between;flex-wrap:wrap;gap:6px;row-gap:6px">
+        <span>📋 Aufgaben</span>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0">
+          <select id="quick-task-select" style="max-width:160px;min-width:0;padding:6px 8px;font-size:0.78rem;border-radius:8px;border:2px solid var(--border)">
+            <option value="">➕ Arbeit eintragen…</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="quickLogTask()">Eintragen</button>
+        </div>
+      </div>
+      <div id="tasks-dashboard"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🌤 Aktuelles Wetter</div>
+      <div id="wetter-dashboard"></div>
+      <div id="dash-swim-advice" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
     <div class="card">
       <div class="card-title">🎯 Pool-Qualität</div>
       <div class="pool-gauge-wrap">
@@ -962,36 +991,7 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div id="messung-meta" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px"></div>
       <div id="messwerte-temp-row" style="margin-top:6px;padding-top:8px;border-top:1px solid #f1f5f9"></div>
     </div>
-    <div class="card">
-      <div class="card-title">🌤 Aktuelles Wetter</div>
-      <div id="wetter-dashboard"></div>
-      <div id="dash-swim-advice" style="margin-top:10px"></div>
-    </div>
-  </div>
-
-  <!-- Badeplaner -->
-  <div class="card">
-    <div class="card-title" style="justify-content:space-between">
-      <span>🏊 Badeplaner – nächste 24h</span>
-      <span style="font-size:0.75rem;color:var(--text-muted);font-weight:600">basierend auf Wetter + Wasserqualität</span>
-    </div>
-    <div id="dash-badeplaner"></div>
-  </div>
-
-  <div class="grid-2">
-    <!-- Aufgaben -->
-    <div class="card">
-      <div class="card-title" style="justify-content:space-between;flex-wrap:wrap;gap:6px;row-gap:6px">
-        <span>📋 Aufgaben</span>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0">
-          <select id="quick-task-select" style="max-width:160px;min-width:0;padding:6px 8px;font-size:0.78rem;border-radius:8px;border:2px solid var(--border)">
-            <option value="">➕ Arbeit eintragen…</option>
-          </select>
-          <button class="btn btn-primary btn-sm" onclick="quickLogTask()">Eintragen</button>
-        </div>
-      </div>
-      <div id="tasks-dashboard"></div>
-    </div>
+    <!-- Vorrat -->
     <!-- Vorrat -->
     <div class="card">
       <div class="card-title" style="justify-content:space-between;flex-wrap:wrap;gap:6px;row-gap:6px">
@@ -1005,7 +1005,6 @@ body.dark-mode .badge-tested{background:#2e1065;color:#c4b5fd}
       <div id="dash-stock"></div>
     </div>
   </div>
-
   <div class="card">
     <div class="card-title">🚫 Badeverbot</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
