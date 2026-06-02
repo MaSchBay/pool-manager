@@ -5,22 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>
-window.onerror=function(msg,src,line,col,err){
-  document.body.style.cssText='padding:20px;font-family:monospace;background:#fee2e2';
-  document.body.innerHTML='<h2 style="color:#dc2626">🚨 JS Runtime Error</h2>'
-    +'<p><strong>'+msg+'</strong></p>'
-    +'<p>'+src+' line '+line+'</p>'
-    +'<pre>'+(err&&err.stack||'')+'</pre>';
-  return false;
-};
-window.onunhandledrejection=function(e){
-  document.body.style.cssText='padding:20px;font-family:monospace;background:#fee2e2';
-  document.body.innerHTML='<h2 style="color:#dc2626">🚨 Unhandled Promise Rejection</h2>'
-    +'<p><strong>'+(e.reason||e)+'</strong></p>'
-    +'<pre>'+(e.reason&&e.reason.stack||'')+'</pre>';
-};
-</script>
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Pool Manager</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -3055,7 +3040,25 @@ function getTaskDoseHint(taskId){
     const sc=settings.chlor||DEFAULT_SETTINGS.chlor;
     if(last&&last.chlor!==undefined){
       if(last.chlor<sc.min){
-        return`⚠️ Vorgezogen: Chlor zu niedrig (${last.chlor} ppm) – 4 Langzeit-Tabs + ${Math.round((sc.min-last.chlor)/0.1+1)} Schnell-Tab(s) empfohlen`;
+        // Smarte Empfehlung: ORP ist primärer Indikator, FAC sekundär
+        const _orpOk = last.orp && last.orp >= 650;
+        const _deficit = sc.target - last.chlor;
+        const _schnellNeed = Math.max(1, Math.round(_deficit / 0.3));
+        if(last.chlor < 0.8 && !_orpOk){
+          // FAC sehr niedrig UND ORP niedrig → Schockchlorung
+          return `🚨 Schockchlorung nötig (FAC ${last.chlor} ppm, ORP ${last.orp||'?'} mV) → Chlor Plus Granulat`;
+        } else if(last.chlor < 0.8 && _orpOk){
+          // FAC sehr niedrig aber ORP ok → Schnell-Tabs reichen
+          return `⚡ FAC niedrig (${last.chlor} ppm) aber ORP ${last.orp} mV ok → ${_schnellNeed} Schnell-Tab(s) empfohlen`;
+        } else if(last.chlor < sc.min && !_orpOk){
+          // FAC unter Minimum UND ORP niedrig → Tabs + evtl. Granulat
+          return `⚠️ Chlor zu niedrig (${last.chlor} ppm, ORP ${last.orp||'?'} mV) → ${_schnellNeed} Schnell-Tab(s) + 4 Langzeit-Tabs`;
+        } else if(last.chlor < sc.min && _orpOk){
+          // FAC unter Minimum aber ORP gut → nur Langzeit-Tabs
+          return `💡 FAC ${last.chlor} ppm – ORP ${last.orp} mV ✅ ok → 4 Langzeit-Tabs als Basis reichen`;
+        } else {
+          return `✅ Chlorversorgung gut (FAC ${last.chlor} ppm, ORP ${last.orp||'–'} mV)`;
+        }
       } else if(last.chlor<sc.target-0.3){
         return`⚠️ Vorgezogen: Chlor grenzwertig (${last.chlor} ppm) – 4 Langzeit-Tabs + ggf. 1–2 Schnell-Tabs`;
       } else if(last.chlor>sc.target+0.5){
@@ -6166,9 +6169,13 @@ function renderBadeplaner(weatherData){
   if(!weatherData){el.innerHTML='<p style="color:var(--text-muted);font-size:0.85rem">⏳ Wetterdaten werden geladen…</p>';return;}
   const now=new Date();
   const last=getLastMeasurement();
+  const _orpOkBp = last&&last.orp!==undefined ? last.orp>=(settings.orp?.min||650) : true; // ORP ok oder nicht gemessen
+  const _chlorOkBp = last&&last.chlor!==undefined ? last.chlor>=settings.chlor.min&&last.chlor<=settings.chlor.max : true;
+  const _chlorLowButOrpOk = last&&last.chlor!==undefined&&last.chlor<settings.chlor.min && _orpOkBp;
   const waterOk=last&&last.ph!==undefined&&last.chlor!==undefined
     &&last.ph>=settings.ph.min&&last.ph<=settings.ph.max
-    &&last.chlor>=settings.chlor.min&&last.chlor<=settings.chlor.max;
+    &&(last.chlor<=settings.chlor.max) // Chlor-Maximum prüfen
+    &&(_chlorOkBp || _chlorLowButOrpOk); // FAC low aber ORP ok → noch ok
   const banUntil=ban&&new Date(ban.until)>now?new Date(ban.until):null;
   const sunTimes=getSunTimes(weatherData);
 
@@ -6458,20 +6465,22 @@ function estimateWeeklyUsage(stockName){
   try{
     const hist=ld('history_v2',[]);
     const now=new Date();
-    const cutoff=new Date(now-28*864e5);
+    const cutoff=new Date(now-30*864e5); // 30 Tage
     const p=STOCK_PRODUCTS[stockName];if(!p)return 0;
     const keyMap={
       'Chlor Plus':['chlor plus','schockchlorung','chlorgranulat'],
+      'Langzeit-Chlortabs':['langzeit-chlor','langzeit chlor','lz-tab','langzeittab'],
       'Schnell-Chlortabs':['schnell-chlortab','schnellchlor','chlortab'],
       'pH-Minus':['ph-minus','ph minus','ph senken'],
       'pH-Plus':['ph-plus','ph plus','ph heben'],
       'Flockmittel':['flockmittel','floc'],
       'Poolklar':['poolklar','pool klar'],
       'Algenschutz':['algenschutz','algen'],
+      'Alca-Plus':['alca','kh heben','karbonathärte'],
       'Teststreifen':['teststreifen']
     };
     const keys=keyMap[stockName]||[stockName.toLowerCase()];
-    let total=0;
+    let total=0; let daysCovered=0;
     hist.forEach(function(e){
       if(!e||!e.time)return;
       const t=new Date(e.time);if(isNaN(t)||t<cutoff)return;
@@ -6483,9 +6492,44 @@ function estimateWeeklyUsage(stockName){
         if(u==='kg')amt*=1000;if(u==='l'&&p.unit==='ml')amt*=1000;
         total+=amt;
       } else { total+=p.perUse||0; }
+      daysCovered=30;
     });
-    return total/4;
+    // Fallback: Dosierungsempfehlung aus Produkt
+    if(total===0&&p.perUse){
+      // Schätzung: bei Chlor 2x/Woche, andere 1x/Woche
+      const freq=stockName.includes('Chlor')?2:1;
+      return p.perUse*freq;
+    }
+    const baseWeekly = daysCovered>0 ? (total/daysCovered)*7 : 0;
+    // Temperatur-Faktor: wärmere Wochen = mehr Chlorverbrauch
+    // Hole 7-Tage-Durchschnitt aus Wetterprognose wenn verfügbar
+    let tempFactor=1.0;
+    try{
+      if(typeof haLiveData!=='undefined'&&haLiveData.airTemp!==null){
+        const t=haLiveData.airTemp;
+        // >28°C: +30% Verbrauch, >25°C: +15%, <20°C: -15%
+        if(t>28)tempFactor=1.3;
+        else if(t>25)tempFactor=1.15;
+        else if(t<20)tempFactor=0.85;
+      }
+    }catch(e){}
+    // Nur Chlorprodukte temperaturabhängig
+    const isChlorProd=stockName.includes('Chlor');
+    return baseWeekly*(isChlorProd?tempFactor:1.0);
   }catch(e){return 0;}
+}
+
+function calcReichweite(stockName){
+  // Gibt {days, color, label, orderSoon} zurück
+  const s=chemStock[stockName];if(!s||s.qty<=0)return null;
+  const weekly=estimateWeeklyUsage(stockName);
+  if(weekly<=0)return null;
+  const days=Math.round((s.qty/weekly)*7);
+  // Lieferzeit 2d + Puffer 3d = 5d → Warnung bei <14+5=19d, dringend bei <14d
+  const color=days<14?'#dc2626':days<19?'#d97706':'#16a34a';
+  const orderSoon=days<19;
+  const label=days<14?'⏱ ~'+days+'d 🔴':days<19?'⏱ ~'+days+'d ⚠️':'⏱ ~'+days+'d';
+  return {days,color,label,orderSoon};
 }
 function renderStockDashboard(){
   const el=document.getElementById('dash-stock');if(!el)return;
@@ -6531,10 +6575,13 @@ function renderStockDashboard(){
     const imgHtml=prod&&prod.img?`<img class="stock-item-img" src="${prod.img}" alt="${name}">`:`<div class="stock-item-img-placeholder">🧪</div>`;
     const buyBtn=prod&&prod.amazon&&pct<50&&prod.active!==false?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
     // warn für inaktive Produkte unterdrücken (prod jetzt verfügbar)
-    const _warnFinal = (prod&&prod.active===false) ? '' : warn;
-    const wkUsage=estimateWeeklyUsage(name);
+    const _warnFinal = (prod&&prod.active===false) ? '' : _warnRech;
+    const _reich=calcReichweite(name);
     let reichHtml='';
-    if(wkUsage>0&&s.qty>0){const days=Math.round((s.qty/wkUsage)*7);const rc=days<7?'#dc2626':days<21?'#d97706':'#16a34a';reichHtml=`<div style="font-size:0.65rem;color:${rc};font-weight:800;white-space:nowrap">~${days}d</div>`;}
+    if(_reich){reichHtml=`<div style="font-size:0.65rem;color:${_reich.color};font-weight:800;white-space:nowrap">${_reich.days}d</div>`;}
+    // Nachkaufen-Warnung basierend auf Reichweite
+    const _warnRech=_reich&&_reich.days<14?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':
+                    _reich&&_reich.days<19?'<span style="color:#d97706;font-size:0.68rem;font-weight:800;margin-left:4px">📦 Bald bestellen</span>':'';
     // Gebinde display - compact dashboard view
     const ank=s.gebinde.find(function(g){return g.status==='angebrochen';});
     const verschl=s.gebinde.filter(function(g){return g.status==='verschlossen';});
