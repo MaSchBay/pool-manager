@@ -5688,72 +5688,167 @@ function renderActiveTodos(){
 // ============================================================
 function renderErklaerung(){
   document.getElementById('erklaerung-content').innerHTML=`
-  <div class="erkl-section"><h2>🏊 Was ist der Pool Manager?</h2>
-    <p>Dein persönlicher Assistent für den <strong>Bestway Steel Pro MAX 3,66m</strong> (~10,5 m³). Verbindet Messwerterfassung, Dosierungsrechner, Wartungsplanung, Vorratsverwaltung und Live-Wetterdaten.</p>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0">
-      ${['🧪 Messen','📊 Auswerten','⚗️ Dosieren','🔧 Warten','📦 Vorrat','🏊 Baden!'].map((s,i,a)=>`<div style="background:var(--pool-light);border:2px solid var(--pool-blue);border-radius:10px;padding:7px 12px;font-size:0.85rem;font-weight:700;color:var(--pool-dark)">${s}</div>${i<a.length-1?'<span style="color:var(--pool-blue);font-weight:800">→</span>':''}`).join('')}
+  <style>
+    .erkl-section{margin-bottom:18px}
+    .erkl-section h2{font-size:0.95rem;font-weight:800;color:var(--pool-dark);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+    .erkl-details{display:none;margin-top:8px}
+    .erkl-details.open{display:block}
+    .erkl-toggle{cursor:pointer;font-size:0.72rem;color:var(--pool-blue);font-weight:700;margin-left:auto;background:none;border:none;padding:2px 8px;border-radius:6px;background:var(--pool-light)}
+    .erkl-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:0.82rem;gap:8px}
+    .erkl-row:last-child{border-bottom:none}
+    .erkl-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:0.72rem;font-weight:700}
+    .badge-blue{background:#dbeafe;color:#1d4ed8}
+    .badge-green{background:#dcfce7;color:#15803d}
+    .badge-orange{background:#fef3c7;color:#92400e}
+    .badge-red{background:#fee2e2;color:#dc2626}
+    .erkl-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:0.82rem;margin-top:8px}
+    .erkl-box.green{background:#f0fdf4;border-color:#bbf7d0}
+    .erkl-box.orange{background:#fffbeb;border-color:#fde68a}
+  </style>
+
+  <!-- SYSTEM ÜBERSICHT -->
+  <div class="erkl-section">
+    <h2>🏠 System-Übersicht</h2>
+    <div class="erkl-box">
+      <div style="font-weight:800;margin-bottom:8px">Pool-Manager besteht aus 4 Komponenten:</div>
+      <div class="erkl-row"><span>📱 <strong>Pool App</strong></span><span style="color:#0369a1">Anzeige + Bedienung (diese App)</span></div>
+      <div class="erkl-row"><span>🏠 <strong>Home Assistant</strong></span><span style="color:#0369a1">Logik + Ausführung (RPi 5)</span></div>
+      <div class="erkl-row"><span>☁️ <strong>Google Drive</strong></span><span style="color:#0369a1">Sync zwischen Geräten</span></div>
+      <div class="erkl-row"><span>🐙 <strong>GitHub Pages</strong></span><span style="color:#0369a1">Hosting der App (maschbay.github.io)</span></div>
+    </div>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div class="erkl-row"><span>Pool App macht</span><span><span class="erkl-badge badge-blue">Messwerte eingeben</span> <span class="erkl-badge badge-blue">Aufgaben abhaken</span> <span class="erkl-badge badge-blue">Timer setzen</span></span></div>
+      <div class="erkl-row"><span>HA macht</span><span><span class="erkl-badge badge-green">Pumpe schalten</span> <span class="erkl-badge badge-green">8h-Regel</span> <span class="erkl-badge badge-green">Automationen</span></span></div>
+      <div class="erkl-row"><span>Google Drive</span><span><span class="erkl-badge badge-orange">Messwerte</span> <span class="erkl-badge badge-orange">Einstellungen</span> <span class="erkl-badge badge-orange">HA-Zugangsdaten</span></span></div>
+      <div class="erkl-row"><span>GitHub Pages</span><span><span class="erkl-badge badge-orange">App-Updates manuell hochladen</span></span></div>
     </div>
   </div>
-  <div class="erkl-section"><h2>⚙️ Zielwerte (einstellbar)</h2>
-    <p>Alle Zielwerte und Bereiche sind unter <strong>⚙️ Einstellungen</strong> individuell anpassbar. Empfohlene Bereiche für deinen Pool (gemessen mit GIDIGI 7-in-1):</p>
-    <div class="example-data">
-      <div class="example-row"><span>pH</span><span style="font-weight:700;color:#16a34a">7,0 – 7,6 | Ziel: 7,3</span></div>
-      <div class="example-row"><span>Chlor</span><span style="font-weight:700;color:#16a34a">1,0 – 3,0 ppm | Ziel: 2,0</span></div>
+
+  <!-- HOME ASSISTANT -->
+  <div class="erkl-section">
+    <h2>🏠 Home Assistant (HA)</h2>
+    <p style="font-size:0.82rem;margin-bottom:8px">HA läuft auf dem Raspberry Pi 5 (4GB) und übernimmt die gesamte Pumpenlogik. Die App schickt nur Befehle – HA führt aus.</p>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div style="font-weight:800;font-size:0.82rem;margin-bottom:6px">Sensoren:</div>
+      <div class="erkl-row"><span>sensor.poolfilter_laufzeit_heute</span><span style="color:#16a34a">Filterlaufzeit heute (Stunden)</span></div>
+      <div class="erkl-row"><span>sensor.gtb_klima_temperatur</span><span style="color:#16a34a">Lufttemperatur</span></div>
+      <div class="erkl-row"><span>sensor.gtb_klima_luftfeuchtigkeit</span><span style="color:#16a34a">Luftfeuchtigkeit</span></div>
+      <div class="erkl-row"><span>sensor.sonoff_snzb_02ld</span><span style="color:#16a34a">Wassertemperatur (Live)</span></div>
+      <div class="erkl-row"><span>switch.shelly1pmminig3_e4b063f25a98</span><span style="color:#16a34a">Shelly Schalter (Pumpe)</span></div>
+      <div style="font-weight:800;font-size:0.82rem;margin:10px 0 6px">Helfer:</div>
+      <div class="erkl-row"><span>input_datetime.poolfilter_dosier_timer</span><span style="color:#0369a1">Timer für Abschaltung</span></div>
+      <div class="erkl-row"><span>input_boolean.poolfilter_sondermodus</span><span style="color:#0369a1">Blockiert Automationen</span></div>
+      <div style="font-weight:800;font-size:0.82rem;margin:10px 0 6px">Automationen:</div>
+      <div class="erkl-row"><span>poolfilter_8h_ziel</span><span style="color:#d97706">Abschalten wenn >7.99h Laufzeit</span></div>
+      <div class="erkl-row"><span>poolfilter_dosier_timer_ende</span><span style="color:#d97706">Abschalten wenn Timer abläuft</span></div>
     </div>
   </div>
-  <div class="erkl-section"><h2>🎯 Pool-Qualitäts-Score</h2>
-    <p>Der Halbkreis-Tacho auf dem Dashboard berechnet einen Score (0–100) aus <strong>pH (25%), Chlor/FAC (25%), ORP/Desinfektionskraft (30%) und TDS/Wasserbelastung (20%)</strong>. Fehlende Werte werden herausgerechnet – kein 0-Penalty bei unvollständiger Messung. Die 4 Balken-Gauges zeigen jeden Wert mit dem Zielbereich (grün) und dem aktuellen Messwert.</p>
-  </div>
-  <div class="erkl-section"><h2>⚡ Desinfektionskraft (ORP)</h2>
-    <p><strong>ORP (Oxidations-Reduktions-Potenzial)</strong> ist die wichtigste Kennzahl für die tatsächliche Desinfektionskraft des Poolwassers – direkt gemessen in Millivolt (mV) mit dem GIDIGI 7-in-1 Messgerät. Ein hoher ORP-Wert bedeutet: Chlor ist aktiv und tötet Keime effektiv ab.</p>
-    <div class="example-data">
-      <div class="example-row"><span>Idealbereich</span><span style="font-weight:700;color:#16a34a">650 – 750 mV</span></div>
-      <div class="example-row"><span>Zielwert</span><span style="font-weight:700;color:#16a34a">700 mV</span></div>
-      <div class="example-row"><span>Zu niedrig (&lt; 650 mV)</span><span style="font-weight:700;color:#dc2626">Desinfektion unzureichend → Chlor erhöhen</span></div>
-      <div class="example-row"><span>Zu hoch (&gt; 750 mV)</span><span style="font-weight:700;color:#d97706">Evtl. überdosiert → pH und Chlor prüfen</span></div>
-    </div>
-    <p style="margin-top:8px">💡 Tipp: pH-Wert beeinflusst ORP stark. Bei pH 7,2 ist Chlor wirksamer als bei pH 7,8. Immer zuerst pH einstellen, dann ORP prüfen.</p>
-  </div>
-  <div class="erkl-section"><h2>💧 Wasserbelastung (TDS)</h2>
-    <p><strong>TDS (Total Dissolved Solids)</strong> misst alle gelösten Stoffe im Wasser: Mineralien, Salze, Chemikalierückstände. Mit der Zeit steigt TDS – das Wasser wird „verbraucht". Zu hoher TDS reduziert die Chlorwirksamkeit und macht das Wasser trüb.</p>
-    <div class="example-data">
-      <div class="example-row"><span>Zielwert</span><span style="font-weight:700;color:#16a34a">~800 ppm</span></div>
-      <div class="example-row"><span>Idealbereich</span><span style="font-weight:700;color:#16a34a">250 – 1500 ppm</span></div>
-      <div class="example-row"><span>Zu hoch (&gt; 1200 ppm)</span><span style="font-weight:700;color:#dc2626">Wasser teilweise ablassen + Frischwasser</span></div>
-    </div>
-    <div style="background:#eff6ff;border:1px solid #60a5fa;border-radius:10px;padding:12px;margin-top:10px">
-      <div style="font-weight:800;font-size:0.88rem;color:#1d4ed8;margin-bottom:4px">📐 Ablassformel (Pool: 10.520 Liter)</div>
-      <div style="font-family:monospace;font-size:0.85rem;color:#1e40af;background:white;padding:8px;border-radius:6px">Abzulassen (L) = 10.520 × (aktueller TDS − 800) / aktueller TDS</div>
-      <div style="font-size:0.78rem;color:#3b82f6;margin-top:6px">Beispiel: TDS = 1000 → 10520 × (1000−800)/1000 = <strong>2104 L ablassen</strong></div>
+
+  <!-- PUMPENSTEUERUNG -->
+  <div class="erkl-section">
+    <h2>⚙️ Pumpensteuerung</h2>
+    <p style="font-size:0.82rem;margin-bottom:8px">Die App zeigt den Status an und setzt Timer – HA schaltet die Pumpe.</p>
+    <div class="erkl-box green">
+      <div class="erkl-row"><span>▲ Ein / ▼ Aus</span><span style="color:#16a34a">Direktbefehl an Shelly (manuell gewollt)</span></div>
+      <div class="erkl-row"><span>🏊 Baden beendet</span><span style="color:#0369a1">Setzt Timer: max(1h, Restzeit bis 8h) → HA schaltet ab</span></div>
+      <div class="erkl-row"><span>Nach Dosierung</span><span style="color:#0369a1">Setzt Nachlauf-Timer → HA schaltet ab</span></div>
+      <div class="erkl-row"><span>8h-Regel</span><span style="color:#d97706">Nur Anzeige – HA schaltet autonom ab bei >7.99h</span></div>
+      <div class="erkl-row"><span>24h AUS</span><span style="color:#dc2626">Sondermodus blockiert alle Automationen</span></div>
     </div>
   </div>
-  <div class="erkl-section"><h2>📦 Vorratsverwaltung</h2>
-    <p>Im Dashboard unter <strong>Vorrat</strong> siehst du den aktuellen Bestand aller Mittel und Teststreifen. Beim Abhaken einer Aufgabe oder Dokumentieren einer Dosierung wird der Bestand automatisch abgezogen. Beim Nachkauf kannst du die Packungsgröße angeben – nützlich wenn du z.B. einen 5-kg-Eimer kaufst. Mit <strong>„Aus Historie schätzen"</strong> kannst du den Startbestand einmalig aus allen gespeicherten Dosierungen berechnen lassen.</p>
-    <div class="example-data">
-      <div class="example-row"><span>Aufgabe abhaken</span><span style="font-weight:700;color:#15803d">→ Menge bestätigen, Bestand wird abgezogen</span></div>
-      <div class="example-row"><span>Nachkauf</span><span style="font-weight:700;color:#15803d">→ Packungsgröße eingeben, +Kauf drücken</span></div>
-      <div class="example-row"><span>Inventur</span><span style="font-weight:700;color:#15803d">→ Direkteingabe im Bestand-Feld</span></div>
+
+  <!-- MESSWERTE & SENSOREN -->
+  <div class="erkl-section">
+    <h2>🧪 Messwerte & Sensoren</h2>
+    <p style="font-size:0.82rem;margin-bottom:8px">pH, FAC, ORP, TDS, KH werden manuell mit dem <strong>GIDIGI 7-in-1</strong> gemessen. Wassertemperatur kommt Live vom HA-Sensor.</p>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div class="erkl-row"><span>pH (Ziel: 7.3)</span><span style="color:#16a34a">Säuregehalt · 7.0–7.6 Idealbereich</span></div>
+      <div class="erkl-row"><span>FAC / Chlor (Ziel: 2 ppm)</span><span style="color:#16a34a">Freies Chlor · primär ORP prüfen</span></div>
+      <div class="erkl-row"><span>ORP (Ziel: 700 mV)</span><span style="color:#16a34a">Desinfektionskraft · wichtiger als FAC</span></div>
+      <div class="erkl-row"><span>TDS (Ziel: 800 ppm)</span><span style="color:#16a34a">Wasserbelastung · >1200 → Wasser ablassen</span></div>
+      <div class="erkl-row"><span>KH (Ziel: 6 °dKH)</span><span style="color:#16a34a">Karbonathärte · pH-Puffer</span></div>
+      <div class="erkl-row"><span>Wassertemp</span><span style="color:#0369a1">Live vom Sonoff SNZB-02LD via HA</span></div>
+      <div class="erkl-box orange" style="margin-top:8px">
+        💡 <strong>ORP ist der primäre Indikator:</strong> FAC 0.9 ppm + ORP 700 mV = sicheres Wasser. Warnung erst wenn FAC <em>und</em> ORP niedrig sind.
+      </div>
     </div>
   </div>
-  <div class="erkl-section"><h2>🚫 Badeverbot-Automatik</h2>
-    <p>Badeverbote werden gesetzt durch: manuelle Eingabe, Chlor > Maximalwert (automatisch 4h), oder nach Dosierung (produktspezifisch).</p>
-    <div class="example-data">
-      <div class="example-row"><span>Chlor Plus (Schockchlorung)</span><span style="color:#dc2626;font-weight:700">8h</span></div>
-      <div class="example-row"><span>pH-Minus / pH-Plus</span><span style="color:#d97706;font-weight:700">4h</span></div>
-      <div class="example-row"><span>Poolklar / Algenschutz</span><span style="color:#d97706;font-weight:700">2h</span></div>
-      <div class="example-row"><span>Schnellchlortabs / Flockmittel</span><span style="color:#16a34a;font-weight:700">kein Verbot</span></div>
+
+  <!-- CHLOR-LOGIK -->
+  <div class="erkl-section">
+    <h2>💊 Chlor-Empfehlung</h2>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div class="erkl-row"><span>FAC &lt;0.8 + ORP &lt;650</span><span><span class="erkl-badge badge-red">Schockchlorung – Chlor Plus</span></span></div>
+      <div class="erkl-row"><span>FAC &lt;0.8 + ORP ok</span><span><span class="erkl-badge badge-orange">Schnell-Tabs reichen</span></span></div>
+      <div class="erkl-row"><span>FAC &lt;1.0 + ORP &lt;650</span><span><span class="erkl-badge badge-orange">Schnell-Tabs + Langzeit-Tabs</span></span></div>
+      <div class="erkl-row"><span>FAC &lt;1.0 + ORP ok</span><span><span class="erkl-badge badge-green">Nur Langzeit-Tabs</span></span></div>
+      <div class="erkl-row"><span>Langzeit-Tabs</span><span style="color:#64748b">4 Tabs im Skimmer als Basis (20g/Tab, ~9 Tage)</span></div>
+      <div class="erkl-row"><span>Schnell-Tabs</span><span style="color:#64748b">Booster bei akutem Bedarf (lösen sich schnell)</span></div>
     </div>
   </div>
-  <div class="erkl-section"><h2>⚡ FAB – Schnellzugriff</h2>
-    <p>Der blaue <strong>+</strong>-Button unten rechts bietet Schnellzugriff auf: Schnell messen (mit +/− Steppern), Dosierungsrechner, Filterdruck ablesen und Problemlösung starten.</p>
+
+  <!-- GOOGLE DRIVE SYNC -->
+  <div class="erkl-section">
+    <h2>☁️ Google Drive Sync</h2>
+    <p style="font-size:0.82rem;margin-bottom:8px">Hält Mac und iPhone automatisch synchron. Alle Daten liegen im Browser (localStorage) – Google Drive ist die Brücke.</p>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div class="erkl-row"><span>Messwerte</span><span class="erkl-badge badge-green">✅ synchronisiert</span></div>
+      <div class="erkl-row"><span>Aufgaben & Wartung</span><span class="erkl-badge badge-green">✅ synchronisiert</span></div>
+      <div class="erkl-row"><span>Vorrat & Gebinde</span><span class="erkl-badge badge-green">✅ synchronisiert</span></div>
+      <div class="erkl-row"><span>HA-Einstellungen + Token</span><span class="erkl-badge badge-green">✅ synchronisiert</span></div>
+      <div class="erkl-row"><span>Skimmer-Tab-Prognose</span><span class="erkl-badge badge-green">✅ synchronisiert</span></div>
+      <div class="erkl-row"><span>Merge-Strategie</span><span style="color:#64748b;font-size:0.78rem">Neuester Zeitstempel gewinnt</span></div>
+      <div class="erkl-box" style="margin-top:8px">🔐 HA-Token wird nur übertragen wenn lokal leer – verhindert versehentliches Überschreiben.</div>
+    </div>
   </div>
-  <div class="erkl-section"><h2>⏰ Timer-Todos & Hilfe</h2>
-    <p>Jedes Problem-Szenario startet eine geführte Schritt-für-Schritt-Liste. Schritte mit ⏰ setzen einen Timer. Schritte mit 🧪 öffnen direkt die Messeingabe. Empfehlungen im Dashboard sind anklickbar und starten direkt den passenden Hilfe-Todo.</p>
+
+  <!-- GITHUB / UPDATES -->
+  <div class="erkl-section">
+    <h2>🐙 GitHub & Updates</h2>
+    <p style="font-size:0.82rem;margin-bottom:8px">Die App läuft auf <strong>maschbay.github.io/pool-manager/</strong>. Updates werden manuell als neue index.html hochgeladen.</p>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div class="erkl-row"><span>Update-Workflow</span><span style="color:#64748b;font-size:0.78rem">Neue index.html → GitHub Desktop → Push → Live</span></div>
+      <div class="erkl-row"><span>Nach Update</span><span style="color:#d97706;font-size:0.78rem">Cmd+Shift+R (Hard Reload) – Cache leeren!</span></div>
+      <div class="erkl-row"><span>Daten bleiben</span><span class="erkl-badge badge-green">✅ localStorage bleibt bei Updates</span></div>
+    </div>
   </div>
-  <div class="erkl-section"><h2>💾 Datensicherung</h2>
-    <p>Daten werden im Browser (localStorage) gespeichert. Für Mehrgeräte-Zugriff: Hilfe-Board → <strong>Exportieren</strong> → Datei in iCloud Drive speichern → auf anderem Gerät importieren.</p>
+
+  <!-- WETTER & PROGNOSE -->
+  <div class="erkl-section">
+    <h2>🌤️ Wetter & Pool-Prognose</h2>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div class="erkl-row"><span>Wetterdaten</span><span style="color:#0369a1">Open-Meteo API (kostenlos, kein Key)</span></div>
+      <div class="erkl-row"><span>HA-Wetterdaten</span><span style="color:#0369a1">Luft/Feuchte live vom GTB-Klima-Sensor</span></div>
+      <div class="erkl-row"><span>Wassertemp min/max</span><span style="color:#0369a1">SA→SU Zeitraum aus HA-History</span></div>
+      <div class="erkl-row"><span>Änderung-Nacht</span><span style="color:#0369a1">Max−Min zwischen SU und SA (Schwankung)</span></div>
+      <div class="erkl-row"><span>Änderung-Tag</span><span style="color:#0369a1">Max−Min zwischen SA und SU (Schwankung)</span></div>
+      <div class="erkl-row"><span>Badeplaner</span><span style="color:#0369a1">Kombiniert Wetter + Wasserqualität + Badeverbote</span></div>
+      <div class="erkl-row"><span>Pool-Temperaturprognose</span><span style="color:#0369a1">7-Tage basierend auf Lufttemp + Plane</span></div>
+    </div>
+  </div>
+
+  <!-- VORRAT & REICHWEITE -->
+  <div class="erkl-section">
+    <h2>📦 Vorrat & Reichweite</h2>
+    <button class="erkl-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.nextElementSibling.classList.contains('open')?'▲ weniger':'▼ Details'">▼ Details</button>
+    <div class="erkl-details">
+      <div class="erkl-row"><span>Balken</span><span style="color:#64748b">Bestand ÷ aktive Gebinde-Kapazität</span></div>
+      <div class="erkl-row"><span>Reichweite</span><span style="color:#64748b">Aus 30-Tage Verbrauchshistorie berechnet</span></div>
+      <div class="erkl-row"><span>Temperatur-Faktor</span><span style="color:#64748b">&gt;28°C: +30% · &gt;25°C: +15% · &lt;20°C: -15%</span></div>
+      <div class="erkl-row"><span style="color:#dc2626">🔴 &lt;14 Tage</span><span>⚠️ Nachkaufen!</span></div>
+      <div class="erkl-row"><span style="color:#d97706">🟡 14–19 Tage</span><span>📦 Bald bestellen</span></div>
+      <div class="erkl-row"><span style="color:#16a34a">🟢 &gt;19 Tage</span><span>✅ Ausreichend</span></div>
+    </div>
   </div>`;
 }
+
 
 // ============================================================
 // EXPORT / IMPORT
@@ -11558,13 +11653,13 @@ async function haFetchSensors() {
       const nightHist = await haFetchHistory(base, headers, haSettings.waterTempEntity, ydSunset, nightEnd);
       if (nightHist.length >= 2) {
         const nVals = nightHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
-        nightDrop = +(Math.min(...nVals) - nVals[0]).toFixed(1);
+        nightDrop = +(Math.max(...nVals) - Math.min(...nVals)).toFixed(1);
       }
     }
-    // Tag-Änderung: nur wenn SA bereits vergangen
+    // Tag-Änderung: aktueller Wert minus Startwert bei SA (zeigt auch Abfall)
     if (haSettings.waterTempEntity && now > sunrise && wDayHist.length >= 2) {
       const wVals = wDayHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
-      dayRise = +(Math.max(...wVals) - wVals[0]).toFixed(1);
+      dayRise = +(Math.max(...wVals) - Math.min(...wVals)).toFixed(1);
     }
   }
 
@@ -11646,8 +11741,8 @@ function renderHaCard() {
   const wSub  = d.waterTemp !== null ? '' : '<span style="font-size:0.72rem;color:var(--text-muted)"> Sensor Di.</span>';
 
   // Nacht-Abkühlung / Tages-Erwärmung
-  const nightStr = d.nightDrop !== null ? (d.nightDrop >= 0 ? '+' : '') + d.nightDrop + ' °C' : '-- °C';
-  const dayStr   = d.dayRise   !== null ? (d.dayRise   >= 0 ? '+' : '') + d.dayRise  + ' °C' : '-- °C';
+  const nightStr = d.nightDrop !== null ? '±' + d.nightDrop + ' °C' : '-- °C';
+  const dayStr   = d.dayRise   !== null ? '±' + d.dayRise  + ' °C' : '-- °C';
   const nightCol = d.nightDrop !== null ? (d.nightDrop < 0 ? '#0ea5e9' : '#f59e0b') : 'var(--text-muted)';
   const dayCol   = d.dayRise   !== null ? (d.dayRise   > 0 ? '#f59e0b' : '#0ea5e9') : 'var(--text-muted)';
 
