@@ -6133,10 +6133,7 @@ function renderStatKacheln(){
       <div class="stat-kachel-val">${last?.chlor!==undefined?last.chlor.toFixed(1)+'&nbsp;'+trend(last.chlor,prev?.chlor):'–'}</div>
       <div class="stat-kachel-lbl">🟡 FAC / Chlor ppm</div>
     </div>
-    <div class="stat-kachel">
-      <div class="stat-kachel-val">${last?.temp!==undefined?last.temp+'°':'–'}</div>
-      <div class="stat-kachel-lbl">🌡️ Wassertemp</div>
-    </div>
+
     <div class="stat-kachel">
       <div class="stat-kachel-val" style="font-size:1.4rem">${ageStr}</div>
       <div class="stat-kachel-lbl">⏱ Letzte Messung</div>
@@ -7058,7 +7055,6 @@ function renderMesswerteCardEnhanced(targetId, metaId){
     <span style="font-weight:700;font-size:0.85rem">🌡️ Wassertemperatur</span>
     <div style="text-align:right">
       <span style="font-weight:900;font-size:0.92rem;color:${tempColor(last.temp,settings.temp)}">${last.temp.toFixed(1)} °C</span>
-      ${tempMin!==null&&tempMax!==null&&todayMeas.length>1?`<div style="font-size:0.68rem;color:var(--text-muted)">Heute: ${tempMin.toFixed(1)}° min / ${tempMax.toFixed(1)}° max</div>`:''}
     </div>
   </div>`:'';
 
@@ -11500,38 +11496,75 @@ async function haFetchSensors() {
   const sunset   = calcSunTime(now, false);
   const ydSunset = calcSunTime(new Date(now - 86400000), false);
 
-  // Filter-Laufzeit heute
+  // Filter-Laufzeit heute: direkt aus HA-Sensor sensor.poolfilter_laufzeit_heute
   let filterRunMin = null;
-  if (haSettings.shellyPowerEntity) {
-    const fh = await haFetchHistory(base, headers, haSettings.shellyPowerEntity, midnight, now);
-    filterRunMin = calcRunMinutes(fh, haSettings.powerThreshold || 150, midnight, now);
+  try {
+    const laufzeitUrl = base + '/api/states/sensor.poolfilter_laufzeit_heute';
+    const laufzeitRes = await fetch(laufzeitUrl, {headers});
+    if (laufzeitRes.ok) {
+      const laufzeitData = await laufzeitRes.json();
+      const stunden = parseFloat(laufzeitData.state);
+      if (!isNaN(stunden)) filterRunMin = Math.round(stunden * 60);
+    }
+  } catch(e) {
+    // Fallback: aus Power-History berechnen
+    if (haSettings.shellyPowerEntity) {
+      const fh = await haFetchHistory(base, headers, haSettings.shellyPowerEntity, midnight, now);
+      filterRunMin = calcRunMinutes(fh, haSettings.powerThreshold || 150, midnight, now);
+    }
   }
 
-  // Wassertemp-History mit echtem Min/Max (SA→SU = Tag, SU→SA = Nacht)
+  // Min/Max zwischen SA und SU für alle drei Sensoren
   let nightDrop = null, dayRise = null;
   let waterTempMin = null, waterTempMax = null;
-  if (haSettings.waterTempEntity && ydSunset && sunrise) {
-    const [nightHist, dayHist] = await Promise.all([
-      haFetchHistory(base, headers, haSettings.waterTempEntity, ydSunset, sunrise),
-      haFetchHistory(base, headers, haSettings.waterTempEntity, sunrise, now),
-    ]);
+  let airTempMin = null, airTempMax = null;
+  let humidityMin = null, humidityMax = null;
 
-    // Nacht (SU gestern → SA heute): Min-Wert = kälteste Stelle der Nacht
-    if (nightHist.length >= 2) {
-      const nightVals = nightHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
-      const nightStart = nightVals[0];
-      const nightMin = Math.min(...nightVals);
-      waterTempMin = +nightMin.toFixed(1);
-      nightDrop = +(nightMin - nightStart).toFixed(1); // negativ = Abkühlung
+  if (sunrise && sunset) {
+    // Nur SA→SU Zeitraum für min/max
+    const histPromises = [];
+    if (haSettings.waterTempEntity) histPromises.push(haFetchHistory(base, headers, haSettings.waterTempEntity, sunrise, sunset));
+    else histPromises.push(Promise.resolve([]));
+    if (haSettings.airTempEntity) histPromises.push(haFetchHistory(base, headers, haSettings.airTempEntity, sunrise, sunset));
+    else histPromises.push(Promise.resolve([]));
+    if (haSettings.humidityEntity) histPromises.push(haFetchHistory(base, headers, haSettings.humidityEntity, sunrise, sunset));
+    else histPromises.push(Promise.resolve([]));
+
+    const [wDayHist, aDayHist, hDayHist] = await Promise.all(histPromises);
+
+    // Wassertemp SA→SU
+    if (wDayHist.length >= 2) {
+      const wVals = wDayHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
+      waterTempMin = +Math.min(...wVals).toFixed(1);
+      waterTempMax = +Math.max(...wVals).toFixed(1);
+    }
+    // Lufttemp SA→SU
+    if (aDayHist.length >= 2) {
+      const aVals = aDayHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
+      airTempMin = +Math.min(...aVals).toFixed(1);
+      airTempMax = +Math.max(...aVals).toFixed(1);
+    }
+    // Feuchte SA→SU
+    if (hDayHist.length >= 2) {
+      const hVals = hDayHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
+      humidityMin = Math.round(Math.min(...hVals));
+      humidityMax = Math.round(Math.max(...hVals));
     }
 
-    // Tag (SA → jetzt): Max-Wert = wärmste Stelle des Tages
-    if (dayHist.length >= 2) {
-      const dayVals = dayHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
-      const dayStart = dayVals[0];
-      const dayMax = Math.max(...dayVals);
-      waterTempMax = +dayMax.toFixed(1);
-      dayRise = +(dayMax - dayStart).toFixed(1); // positiv = Erwärmung
+    // Nacht-Änderung (SU gestern → SA heute) für Wassertemp
+    if (haSettings.waterTempEntity && ydSunset) {
+      // Nacht: SU gestern → jetzt (wenn vor SA) oder → SA (wenn nach SA)
+      const nightEnd = now < sunrise ? now : sunrise;
+      const nightHist = await haFetchHistory(base, headers, haSettings.waterTempEntity, ydSunset, nightEnd);
+      if (nightHist.length >= 2) {
+        const nVals = nightHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
+        nightDrop = +(Math.min(...nVals) - nVals[0]).toFixed(1);
+      }
+    }
+    // Tag-Änderung: nur wenn SA bereits vergangen
+    if (haSettings.waterTempEntity && now > sunrise && wDayHist.length >= 2) {
+      const wVals = wDayHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
+      dayRise = +(Math.max(...wVals) - wVals[0]).toFixed(1);
     }
   }
 
@@ -11563,7 +11596,7 @@ async function haFetchSensors() {
     sd('shelly_gfci_warning', false);
   }
 
-  haLiveData = { airTemp, humidity, waterTemp, waterTempMin, waterTempMax, filterRunMin, filterOn, filterPower, filterRunning, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
+  haLiveData = { airTemp, humidity, waterTemp, waterTempMin, waterTempMax, airTempMin, airTempMax, humidityMin, humidityMax, filterRunMin, filterOn, filterPower, filterRunning, sondermodusOn, nightDrop, dayRise, sunrise, sunset, fetchedAt: Date.now() };
 
   // Messfeld vorausfüllen
   if (waterTemp !== null) {
@@ -11653,11 +11686,16 @@ function renderHaCard() {
       : '') +
 
     // Zeile 1: Luft + Feuchte + Wasser
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">' +
-      _haKachel('🌡️', d.airTemp  !== null ? d.airTemp.toFixed(1)  + ' °C' : '-- °C', 'Luft',    d.airTemp  !== null) +
-      _haKachel('💧', d.humidity !== null ? Math.round(d.humidity) + ' %'  : '-- %',  'Feuchte', d.humidity !== null) +
-      _haKachel('🌊', wStr, (wMinMax ? wMinMax + '<br>' : '') + 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''), d.waterTemp !== null) +
+    // Min/Max Zeile helper
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px">' +
+      _haKachel('🌡️', d.airTemp  !== null ? d.airTemp.toFixed(1)  + ' °C' : '-- °C',
+        (d.airTempMin!==null&&d.airTempMax!==null ? d.airTempMin+'° / '+d.airTempMax+'°<br>' : '') + 'Luft', d.airTemp !== null) +
+      _haKachel('💧', d.humidity !== null ? Math.round(d.humidity) + ' %'  : '-- %',
+        (d.humidityMin!==null&&d.humidityMax!==null ? d.humidityMin+'% / '+d.humidityMax+'%<br>' : '') + 'Feuchte', d.humidity !== null) +
+      _haKachel('🌊', wStr,
+        (d.waterTempMin!==null&&d.waterTempMax!==null ? d.waterTempMin+'° / '+d.waterTempMax+'°<br>' : '') + 'Wasser' + (d.waterTemp === null ? ' (Di.)' : ''), d.waterTemp !== null) +
     '</div>' +
+    '<div style="font-size:0.62rem;color:var(--text-muted);text-align:center;margin-bottom:8px">min/Max zwischen SA u. SU</div>' +
 
     // Filter-Laufzeit + Steuerung
     '<div style="background:var(--card-bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">' +
@@ -12094,11 +12132,13 @@ async function shellyPushDoseTimer(productKey){
   const timeStr = fireAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
   const namen = {chlorplus:'Chlor Plus',poolklar:'Poolklar',flockmittel:'Flockmittel'};
 
-  // Wenn HA konfiguriert: Timer über HA setzen (intelligente Logik in HA-Automation)
+  // Wenn HA konfiguriert: Timer über HA setzen (NIEMALS in der Vergangenheit)
   if(haSettings.enabled && haSettings.url && haSettings.token){
-    const dtOk = await haSetDatetime('input_datetime.poolfilter_dosier_timer', fireAt);
-    const swOk = await haCallService('switch','turn_on',{entity_id:'switch.shelly1pmminig3_e4b063f25a98'});
-    if(dtOk || swOk){
+    // Sicherstellen dass Timer immer in der Zukunft liegt (min. 30 Sekunden)
+    const safeFireAt = new Date(Math.max(fireAt.getTime(), Date.now() + 30000));
+    const dtOk = await haSetDatetime('input_datetime.poolfilter_dosier_timer', safeFireAt);
+    // NICHT direkt Shelly schalten - HA-Automation übernimmt nach Timer
+    if(dtOk){
       if(typeof logHistory==='function')
         logHistory({type:'wartung',time:new Date().toISOString(),
           note:'⚗️ HA-Timer: Nach '+namen[productKey]+' – Filter bis '+timeStr+' Uhr (HA übernimmt)'});
@@ -12260,21 +12300,22 @@ async function shellyManualOff(){
 // Baden beendet: Filter läuft mindestens 1h, aber mind. bis 8h-Tagesziel erreicht
 async function shellyBadenNachlauf(){
   // Restlaufzeit bis 8h berechnen
-  const targetMin = (shellySettings.dailyTargetH || 8) * 60;
+  const targetMin = 7.99 * 60; // Trigger bei >7.99h = 479.4 min
   const alreadyRun = haLiveData.filterRunMin ?? getShellyRuntime().minutes ?? 0;
   const remainingToTarget = Math.max(0, targetMin - alreadyRun);
-  // Mindestens 60 min, aber maximal was noch bis 8h fehlt (sofern >60)
+  // Mindestens 60 min, aber maximal was noch bis 7.99h fehlt (sofern >60)
   const nachlaufMin = Math.max(60, remainingToTarget);
   const nachlaufSek = nachlaufMin * 60;
-  const fireAt = new Date(Date.now() + nachlaufSek * 1000);
+  // Timer immer in der Zukunft (min. 30 Sekunden)
+  const fireAt = new Date(Math.max(Date.now() + nachlaufSek * 1000, Date.now() + 30000));
   const timeStr = fireAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
   const label = nachlaufMin > 60
     ? nachlaufMin + 'min (bis 8h Tagesziel)'
     : '1h Nachlauf';
 
   if(haSettings.enabled && haSettings.url && haSettings.token){
+    // Nur Timer setzen - HA-Automation übernimmt Ein- und Abschaltung
     await haSetDatetime('input_datetime.poolfilter_dosier_timer', fireAt);
-    await haCallService('switch','turn_on',{entity_id:'switch.shelly1pmminig3_e4b063f25a98'});
     if(typeof logHistory==='function')
       logHistory({type:'wartung',time:new Date().toISOString(),
         note:'🏊 Baden beendet – Filter läuft '+label+', HA schaltet um '+timeStr+' Uhr ab'});
