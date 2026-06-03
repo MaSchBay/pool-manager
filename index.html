@@ -12429,18 +12429,23 @@ async function shellyManualOff(){
 // Baden beendet: Filter läuft mindestens 1h, aber mind. bis 8h-Tagesziel erreicht
 async function shellyBadenNachlauf(){
   // Restlaufzeit bis 8h berechnen
-  const targetMin = 7.99 * 60; // Trigger bei >7.99h = 479.4 min
-  const alreadyRun = haLiveData.filterRunMin ?? getShellyRuntime().minutes ?? 0;
+  const targetMin = 7.99 * 60; // 479.4 min
+  const alreadyRun = (typeof haLiveData!=='undefined' && haLiveData.filterRunMin !== null)
+    ? haLiveData.filterRunMin : (getShellyRuntime().minutes ?? 0);
   const remainingToTarget = Math.max(0, targetMin - alreadyRun);
-  // Mindestens 60 min, aber maximal was noch bis 7.99h fehlt (sofern >60)
+
+  // Baden beendet = immer 60min Nachlauf
+  // Aber: Timer darf 8h-Laufzeit nicht verkürzen
+  // → Timer = max(60min, Restlaufzeit bis 8h)
+  // Wenn Restlaufzeit > 60min: Timer auf Restlaufzeit (Filter läuft eh bis 8h)
+  // Wenn Restlaufzeit ≤ 60min oder 8h schon voll: Timer auf 60min
   const nachlaufMin = Math.max(60, remainingToTarget);
   const nachlaufSek = nachlaufMin * 60;
-  // Timer immer in der Zukunft (min. 30 Sekunden)
   const fireAt = new Date(Math.max(Date.now() + nachlaufSek * 1000, Date.now() + 30000));
   const timeStr = fireAt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-  const label = nachlaufMin > 60
-    ? nachlaufMin + 'min (bis 8h Tagesziel)'
-    : '1h Nachlauf';
+  const label = remainingToTarget > 60
+    ? Math.round(remainingToTarget) + 'min (bis 8h Tagesziel)'
+    : '60min Nachlauf';
 
   if(haSettings.enabled && haSettings.url && haSettings.token){
     // Nur Timer setzen - HA-Automation übernimmt Ein- und Abschaltung
