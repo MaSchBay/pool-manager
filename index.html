@@ -12238,8 +12238,17 @@ async function shellyPushDoseTimer(productKey){
       if(typeof logHistory==='function')
         logHistory({type:'wartung',time:new Date().toISOString(),
           note:'⚗️ Kein Extra-Timer nach '+namen[productKey]+' – 8h-Automation reicht (Rest: '+Math.round(restlaufzeit)+'min)'});
-      if(typeof toast==='function')
-        toast('⚗️ Nach '+namen[productKey]+' – 8h-Automation übernimmt','info',4000);
+      const _fr = typeof haLiveData!=='undefined' && haLiveData.filterRunning;
+      const _fo = typeof haLiveData!=='undefined' && haLiveData.filterOn;
+      if(!_fr){
+        const _h = !_fo
+          ? '⚠️ Filter einschalten! 8h-Automation schaltet ab.'
+          : '⚠️ Steckdose an aber <50W – FI prüfen!';
+        if(typeof toast==='function') toast(_h,'warn',8000);
+      } else {
+        if(typeof toast==='function')
+          toast('⚗️ Nach '+namen[productKey]+' – 8h-Automation übernimmt','info',4000);
+      }
       return;
     }
     // extraMin > 0: Timer auf jetzt + extraMin setzen
@@ -12250,8 +12259,20 @@ async function shellyPushDoseTimer(productKey){
       if(typeof logHistory==='function')
         logHistory({type:'wartung',time:new Date().toISOString(),
           note:'⚗️ HA-Timer: Nach '+namen[productKey]+' – '+Math.round(extraMin)+'min Extra-Nachlauf bis '+timeStr+' Uhr'});
-      if(typeof toast==='function')
-        toast('⚗️ '+namen[productKey]+' – Extra-Nachlauf '+Math.round(extraMin)+'min, HA schaltet um '+timeStr+' Uhr ab','info',5000);
+      // Prüfen ob Filter läuft (Shelly an UND >50W)
+      const _filterRunning = typeof haLiveData!=='undefined' && haLiveData.filterRunning;
+      const _filterOn = typeof haLiveData!=='undefined' && haLiveData.filterOn;
+      if(!_filterRunning){
+        // Filter läuft nicht – Hinweis anzeigen
+        const _hint = !_filterOn
+          ? '⚠️ Filter einschalten! HA schaltet um '+timeStr+' Uhr ab.'
+          : '⚠️ Steckdose an aber <50W – FI prüfen! HA schaltet um '+timeStr+' Uhr ab.';
+        if(typeof toast==='function')
+          toast(_hint,'warn',8000);
+      } else {
+        if(typeof toast==='function')
+          toast('⚗️ '+namen[productKey]+' – Extra-Nachlauf '+Math.round(extraMin)+'min, HA schaltet um '+timeStr+' Uhr ab','info',5000);
+      }
       return;
     }
   }
