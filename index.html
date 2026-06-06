@@ -11647,10 +11647,26 @@ async function haFetchSensors() {
     }
 
     // Nacht-Änderung (SU gestern → SA heute) für Wassertemp
-    if (haSettings.waterTempEntity && ydSunset) {
-      // Nacht: SU gestern → jetzt (wenn vor SA) oder → SA (wenn nach SA)
-      const nightEnd = now < sunrise ? now : sunrise;
-      const nightHist = await haFetchHistory(base, headers, haSettings.waterTempEntity, ydSunset, nightEnd);
+    if (haSettings.waterTempEntity) {
+      // Nacht-Periode bestimmen:
+      // Vor SA:  SU gestern → jetzt  (Nacht läuft noch)
+      // SA→SU:   SU gestern → SA     (letzte Nacht, abgeschlossen)
+      // Nach SU: SU heute   → jetzt  (neue Nacht hat begonnen)
+      let nightStart, nightEnd2;
+      if (now < sunrise) {
+        // Vor Sonnenaufgang: Nacht läuft noch (SU gestern → jetzt)
+        nightStart = ydSunset;
+        nightEnd2 = now;
+      } else if (now >= sunrise && now < sunset) {
+        // Tagsüber: zeige letzte Nacht (SU gestern → SA heute)
+        nightStart = ydSunset;
+        nightEnd2 = sunrise;
+      } else {
+        // Nach Sonnenuntergang: neue Nacht hat begonnen (SU heute → jetzt)
+        nightStart = sunset;
+        nightEnd2 = now;
+      }
+      const nightHist = await haFetchHistory(base, headers, haSettings.waterTempEntity, nightStart, nightEnd2);
       if (nightHist.length >= 2) {
         const nVals = nightHist.map(x => parseFloat(x.state)).filter(v => !isNaN(v));
         nightDrop = +(Math.max(...nVals) - Math.min(...nVals)).toFixed(1);
