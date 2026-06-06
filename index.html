@@ -3103,8 +3103,12 @@ function renderTasksDashboard(){
   sorted.forEach(t=>{
     const over=daysOverdue(t),next=nextDue(t),du=Math.ceil((next-today)/86400000);
     let cls='',lbl='';
-    if(over>0){cls='overdue';lbl=`⚠️ ${hoursOverdue(t)}h überfällig`}
-    else if(du===0){cls='due-today';lbl='📅 Heute fällig'}
+    const nextDate=new Date(next); const todayDate=new Date(today);
+    const isDueToday = nextDate.toDateString()===todayDate.toDateString() ||
+                       (over>0 && new Date(t.lastDone?new Date(t.lastDone).getTime()+t.interval*86400000:0).toDateString()===todayDate.toDateString());
+    const overToday = over>0 && new Date(Date.now()-over*3600000*hoursOverdue(t)).toDateString()===todayDate.toDateString();
+    if(over>0 && !isDueToday){cls='overdue';lbl=`⚠️ ${Math.round(hoursOverdue(t)/24)}d überfällig`}
+    else if(over>0 || du===0){cls='due-today';lbl='📅 Heute fällig'}
     else if(du<=3){cls='upcoming';lbl=`📅 in ${du}d`}
     else return;
     shown++;
@@ -7848,7 +7852,22 @@ function applyImportedData(d,mergeMode){
   if(d.skimmerTabState && typeof skimmerTabState !== 'undefined'){
     if(!mergeMode || !skimmerTabState.eingelgtAm ||
        (d.skimmerTabState.eingelgtAm && new Date(d.skimmerTabState.eingelgtAm) > new Date(skimmerTabState.eingelgtAm))){
+      // Batches mergen: alle eindeutigen Batches aus beiden Quellen zusammenführen
+      var localBatches = skimmerTabState.batches || [];
+      var remoteBatches = (d.skimmerTabState && d.skimmerTabState.batches) || [];
+      var mergedBatches = localBatches.slice();
+      remoteBatches.forEach(function(rb){
+        var exists = mergedBatches.some(function(lb){
+          return Math.abs(new Date(lb.eingelgtAm) - new Date(rb.eingelgtAm)) < 60000; // <1min = gleicher Batch
+        });
+        if(!exists) mergedBatches.push(rb);
+      });
+      // Nach Datum sortieren, >14 Tage entfernen
+      mergedBatches = mergedBatches
+        .filter(function(b){ return (Date.now() - new Date(b.eingelgtAm).getTime()) < 14*86400000; })
+        .sort(function(a,b){ return new Date(a.eingelgtAm) - new Date(b.eingelgtAm); });
       skimmerTabState = Object.assign({}, skimmerTabState, d.skimmerTabState);
+      skimmerTabState.batches = mergedBatches;
       saveSkimmerTabState();
     }
   }
