@@ -11637,11 +11637,13 @@ async function haFetchSensors() {
   if (sunrise && sunset) {
     // Nur SA→SU Zeitraum für min/max
     const histPromises = [];
-    if (haSettings.waterTempEntity) histPromises.push(haFetchHistory(base, headers, haSettings.waterTempEntity, sunrise, sunset));
+    // Nur bis jetzt abfragen wenn Tag noch läuft, sonst bis SU (abgeschlossen)
+    const dayEnd = now < sunset ? now : sunset;
+    if (haSettings.waterTempEntity) histPromises.push(haFetchHistory(base, headers, haSettings.waterTempEntity, sunrise, dayEnd));
     else histPromises.push(Promise.resolve([]));
-    if (haSettings.airTempEntity) histPromises.push(haFetchHistory(base, headers, haSettings.airTempEntity, sunrise, sunset));
+    if (haSettings.airTempEntity) histPromises.push(haFetchHistory(base, headers, haSettings.airTempEntity, sunrise, dayEnd));
     else histPromises.push(Promise.resolve([]));
-    if (haSettings.humidityEntity) histPromises.push(haFetchHistory(base, headers, haSettings.humidityEntity, sunrise, sunset));
+    if (haSettings.humidityEntity) histPromises.push(haFetchHistory(base, headers, haSettings.humidityEntity, sunrise, dayEnd));
     else histPromises.push(Promise.resolve([]));
 
     const [wDayHist, aDayHist, hDayHist] = await Promise.all(histPromises);
