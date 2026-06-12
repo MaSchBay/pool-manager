@@ -2982,7 +2982,17 @@ function renderEmpfehlungen(id){
       });
     }
   }
-  _visibleTasks().forEach(t=>{const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`});}}); 
+  _visibleTasks().forEach(t=>{
+    if(t.id==='alca_plus_check'){
+      const _skh=settings.kh||DEFAULT_SETTINGS.kh;
+      const _last=getLastMeasurement();
+      if(_last&&_last.kh!==undefined&&_last.kh>=_skh.target){
+        const _measAfterDone=!t.lastDone||new Date(_last.time||0)>new Date(t.lastDone);
+        if(_measAfterDone) return;
+      }
+    }
+    const d=daysOverdue(t);if(d>0){const hOver=hoursOverdue(t);tips.push({type:'warn',msg:`Wartung überfällig: "${t.name}" (${hOver<24?hOver+'h':Math.round(hOver/24)+'d'} überfällig)`});}
+  }); 
   el.innerHTML=tips.map(t=>`
     <div class="empfehlung ${t.type}" style="cursor:${t.helpIdx!==undefined?'pointer':'default'};justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px" ${t.helpIdx!==undefined?`onclick="showBoard('hilfe');setTimeout(()=>startTodo(${t.helpIdx}),100)"`:''}>
       <span>💡 ${t.msg}</span>
@@ -5118,13 +5128,12 @@ function _onMeasurementSaved(entry){
     const curYear=new Date().getFullYear();
     const stored=ld('kh_season_max',{max:null,year:null});
     // Jahreszahl passt + neuer Wert ist niedriger (oder noch kein Wert): updaten
-    if(stored.year!==curYear||stored.max===null||entry.kh<stored.max){
-      sd('kh_season_max',{max:Math.round(entry.kh),year:curYear});
-      // settings.kh.max dynamisch anpassen
-      if(settings.kh&&entry.kh>settings.kh.max){
-        settings.kh.max=Math.round(entry.kh);
-        sd('settings',settings);
-      }
+    // Saisonaler Max schrumpft nur Richtung Ziel, steigt nie wieder
+    const skh=settings.kh||DEFAULT_SETTINGS.kh;
+    if(stored.year!==curYear||stored.max===null){
+      sd('kh_season_max',{max:Math.max(Math.round(entry.kh),skh.target),year:curYear});
+    } else if(entry.kh<stored.max){
+      sd('kh_season_max',{max:Math.max(Math.round(entry.kh),skh.target),year:curYear});
     }
     // KH-pending löschen
     const list=ld('pool_dosierung_pending',[]).filter(x=>x.typ!=='kh');
@@ -7065,10 +7074,11 @@ function drawSparkline(canvasId, values, color, min, max){
 function gaugeHtmlKH(val, s){
   if(val===undefined||val===null) return null;
   const ppm=Math.round(val*17.8);
-  // Saisonaler Max: Skala dynamisch anpassen
+  // Saisonaler Max: Skala dynamisch anpassen (kann nur Richtung Ziel schrumpfen, nie wieder steigen)
   const khSeason=ld('kh_season_max',{max:null,year:null});
-  const isSeasonal=khSeason.year===new Date().getFullYear()&&khSeason.max!=null&&khSeason.max>s.max;
-  const scaleMax=isSeasonal?khSeason.max:s.max;
+  const seasonActive=khSeason.year===new Date().getFullYear()&&khSeason.max!=null;
+  const scaleMax=seasonActive?Math.max(khSeason.max,s.target):s.max;
+  const isSeasonal=seasonActive&&scaleMax!==s.max;
   // Erweiterte Skala mit etwas Rand (wie Standard-Gauges)
   const extMin=s.min-1;
   const extMax=scaleMax+1;
@@ -7076,7 +7086,7 @@ function gaugeHtmlKH(val, s){
   const pct=Math.max(2,Math.min(98,((val-extMin)/extRange)*100));
   const targetPct=Math.max(0,Math.min(100,((s.target-extMin)/extRange)*100));
   const minPct=Math.max(0,Math.min(100,((s.min-extMin)/extRange)*100));
-  const defMaxPct=Math.max(0,Math.min(100,((s.max-extMin)/extRange)*100));
+  const defMaxPct=Math.max(0,Math.min(100,((scaleMax-extMin)/extRange)*100));
   // Farbe: unter Minimum = rot, sonst grün
   const col=val<s.min?'#ef4444':'#22c55e';
   const icon=val<s.min?'❌':'✅';
