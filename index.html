@@ -2090,7 +2090,7 @@ document.addEventListener('click',function(e){
 // ============================================================
 async function fetchWeather(){
   const now=Date.now();
-  if(weatherCache&&(now-weatherCacheT)<30*60*1000){weatherData=weatherCache;return weatherData}
+  if(weatherCache&&(now-weatherCacheT)<10*60*1000){weatherData=weatherCache;return weatherData}
   try{
     const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=48.83&longitude=12.96&current=temperature_2m,weathercode,windspeed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weathercode,precipitation_probability,precipitation&daily=weathercode,temperature_2m_max,temperature_2m_min,sunset,sunrise&timezone=Europe%2FBerlin&forecast_days=7&past_days=1');
     weatherData=await r.json();weatherCache=weatherData;weatherCacheT=now;
@@ -2759,10 +2759,28 @@ function renderWeatherWarning(id,w){
   const now=new Date();
   const LOOKAHEAD_H=4;
   let events=[];
+
+  // Live-Check: regnet es JETZT laut current-Werten?
+  if(w.current && w.current.precipitation > 0){
+    const curCode = w.current.weathercode || 0;
+    if(curCode>=95){
+      events.push({type:'thunder',icon:'⚡',msg:'Gewitter/Blitz – jetzt aktiv',pri:3});
+    } else if(curCode>=80&&curCode<95){
+      events.push({type:'shower',icon:'⛈️',msg:'Starke Schauer – jetzt aktiv',pri:2});
+    } else if(curCode>=51){
+      events.push({type:'rain',icon:'🌧️',msg:'Regen – jetzt aktiv',pri:1});
+    }
+  }
+
   for(let i=0;i<w.hourly.time.length;i++){
     const t=new Date(w.hourly.time[i]);
     const diffMin=(t-now)/60000;
-    if(diffMin<0||diffMin>LOOKAHEAD_H*60)continue;
+    // Aktuelle Stunde (diffMin zwischen -59 und 0) auch berücksichtigen
+    if(diffMin<-59||diffMin>LOOKAHEAD_H*60)continue;
+    if(diffMin<0){
+      // Aktuelle Stunde: nur für "jetzt" relevant, oben schon behandelt via current
+      continue;
+    }
     const code=w.hourly.weathercode[i]||0;
     const prob=w.hourly.precipitation_probability?.[i]??0;
     const h=Math.floor(diffMin/60),m=Math.round(diffMin%60);
@@ -3027,12 +3045,22 @@ function getTaskDoseHint(taskId){
       return '🧪 Nach Dosierung: '+parts.join(' + ')+' — bitte jetzt messen!';
     }
   }
-  // Alca-Plus Erhaltungsgabe: only recommend if TDS suggests TA might be low
+  // Alca-Plus Erhaltungsgabe: dynamisch basierend auf KH-Wert
   if(taskId==='alca_plus_check'){
-    if(!last||last.tds===undefined)return '→ 190g Alca-Plus als Erhaltungsdosis. TDS messen für genauere Empfehlung.';
-    if(last.tds>600)return '→ TDS '+last.tds+' ppm: Erhaltungsdosis 190g ausreichend. Im Eimer lösen, Pumpe 4h.';
-    if(last.tds>300)return '→ TDS '+last.tds+' ppm: 190g Alca-Plus empfohlen. Im Eimer lösen, Pumpe 4h, dann pH prüfen.';
-    return '→ TDS '+last.tds+' ppm (niedrig): 2–3 Runden à 190g empfohlen. Jeweils 4h Abstand, pH zwischen Runden messen.';
+    const skh=settings.kh||DEFAULT_SETTINGS.kh;
+    if(!last||last.kh===undefined)return '→ KH messen für genaue Empfehlung. Richtwert: 190g Alca-Plus.';
+    if(last.kh>=skh.target){
+      return '✅ KH '+last.kh+' °dKH (Ziel: '+skh.target+') – keine Gabe nötig.';
+    }
+    const defizit=skh.target-last.kh; // °dKH
+    const defPpm=Math.round(defizit*17.8);
+    const alcaG=Math.round(defPpm/10*180*POOL_VOLUME/10);
+    if(defizit<=2){
+      return '→ KH '+last.kh+' °dKH (Ziel '+skh.target+') – '+defizit.toFixed(1)+' °dKH fehlen → ~'+alcaG+'g Alca-Plus empfohlen. Im Eimer lösen, Pumpe 4h.';
+    }
+    const portionen=Math.ceil(defizit/2);
+    const proPortion=Math.round(alcaG/portionen);
+    return '→ KH '+last.kh+' °dKH (Ziel '+skh.target+') – '+defizit.toFixed(1)+' °dKH fehlen → ~'+alcaG+'g gesamt, in '+portionen+' Portionen à ~'+proPortion+'g (4h Abstand, pH zwischen Portionen prüfen).';
   }
   // Smart chlor hint – recommends extra tab when chlor is low
   if(taskId==='chlor_tabs'||taskId==='langzeit_chlor'){
@@ -4581,6 +4609,20 @@ function getDosierungPendingForTyp(typ){
 function nextDue(t){
   if(!t.lastDone)return new Date(0);
   const base=new Date(new Date(t.lastDone).getTime()+t.interval*86400000);
+
+  // Alca-Plus: nicht überfällig wenn KH bereits >= Ziel
+  if(t.id==='alca_plus_check'){
+    const skh=settings.kh||DEFAULT_SETTINGS.kh;
+    const last=getLastMeasurement();
+    if(last&&last.kh!==undefined){
+      const measAfterDone = !t.lastDone || new Date(last.time||0) > new Date(t.lastDone);
+      if(measAfterDone && last.kh>=skh.target){
+        // KH ok → Aufgabe nicht überfällig, auf "base" zurücksetzen (oder weiter in Zukunft)
+        return base>new Date()?base:new Date(Date.now()+86400000); // mindestens morgen
+      }
+    }
+    return base;
+  }
 
   // Chlor-Smart: NUR triggern wenn KEIN pending (sonst: Dosierung läuft noch)
   if(t.id==='chlor_tabs'){
