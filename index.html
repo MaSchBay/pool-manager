@@ -3176,7 +3176,8 @@ function quickLogTask(){
 // Task-Bestätigungs-Modal
 const TASK_STOCK_MAP={
   chlor_tabs:'Langzeit-Chlortabs', langzeit_chlor:'Langzeit-Chlortabs', algischutz:'Algenschutz', poolklar:'Poolklar',
-  flockmittel:'Flockmittel', test:'Teststreifen'
+  flockmittel:'Flockmittel', flocken:'Flockmittel', test:'Teststreifen',
+  ph_minus:'pH-Minus', ph_plus:'pH-Plus', chlorplus:'Chlor Plus', alca_plus_check:'Alca-Plus'
 };
 
 function quickCompleteTask(id){
@@ -3227,8 +3228,24 @@ function quickCompleteTask(id){
     qty2Row.style.display='none';
     if(p){
       qtyRow.style.display='block';
-      document.getElementById('task-confirm-qty').value=p.perUse;
-      document.getElementById('task-confirm-qty-label').textContent=`Verwendete Menge (Standard: ${p.perUse} ${p.unit})`;
+      let defaultQty=p.perUse;
+      let labelExtra='';
+      // Alca-Plus: dynamische Menge basierend auf KH-Defizit
+      if(id==='alca_plus_check'){
+        const skh=settings.kh||DEFAULT_SETTINGS.kh;
+        const last=getLastMeasurement();
+        if(last&&last.kh!==undefined&&last.kh<skh.target){
+          const defizit=skh.target-last.kh;
+          const defPpm=Math.round(defizit*17.8);
+          defaultQty=Math.round(defPpm/10*180*POOL_VOLUME/10);
+          labelExtra=` – KH ${last.kh} °dKH, Ziel ${skh.target}`;
+        } else if(last&&last.kh!==undefined){
+          defaultQty=0;
+          labelExtra=` – KH ${last.kh} °dKH ✅ ok, eigentlich nicht nötig`;
+        }
+      }
+      document.getElementById('task-confirm-qty').value=defaultQty;
+      document.getElementById('task-confirm-qty-label').textContent=`Verwendete Menge (Standard: ${defaultQty} ${p.unit})${labelExtra}`;
       document.getElementById('task-confirm-unit').textContent=p.unit;
       showPkgSwitchIfMultiGebinde(p.stockName||p.key, p.unit||'g');
     } else {
@@ -5127,13 +5144,14 @@ function _onMeasurementSaved(entry){
   if(entry&&entry.kh!==undefined){
     const curYear=new Date().getFullYear();
     const stored=ld('kh_season_max',{max:null,year:null});
-    // Jahreszahl passt + neuer Wert ist niedriger (oder noch kein Wert): updaten
-    // Saisonaler Max schrumpft nur Richtung Ziel, steigt nie wieder
+    // Grüner Bereich = aktueller Wert+1, schrumpft mit sinkendem KH Richtung Ziel
+    // Floor: s.max (Standard-Obergrenze, z.B. 7). Steigt nie wieder, nur schrumpfen.
     const skh=settings.kh||DEFAULT_SETTINGS.kh;
+    const candidate=Math.max(Math.round(entry.kh)+1, skh.max);
     if(stored.year!==curYear||stored.max===null){
-      sd('kh_season_max',{max:Math.max(Math.round(entry.kh),skh.target),year:curYear});
-    } else if(entry.kh<stored.max){
-      sd('kh_season_max',{max:Math.max(Math.round(entry.kh),skh.target),year:curYear});
+      sd('kh_season_max',{max:candidate,year:curYear});
+    } else if(candidate<stored.max){
+      sd('kh_season_max',{max:candidate,year:curYear});
     }
     // KH-pending löschen
     const list=ld('pool_dosierung_pending',[]).filter(x=>x.typ!=='kh');
@@ -6531,7 +6549,8 @@ function markGebindeVerbraucht(stockKey,gebindeId){
   const s=chemStock[stockKey];if(!s||!s.gebinde)return;
   const g=s.gebinde.find(x=>x.id===gebindeId);
   if(!g)return;
-  // Mark as verbraucht
+  // Verpackung leer: Restmenge abschreiben (egal was im Eingabefeld stand), aus Bestand nehmen
+  g.qty=0;
   g.status='verbraucht';
   // Find next verschlossen → open it with actual qty confirmation
   const next=s.gebinde.find(x=>x.status==='verschlossen');
@@ -6953,6 +6972,7 @@ function saveQMess(){
 function renderStockWarning(){
   const _spid={'pH-Minus':'ph_minus','pH-Plus':'ph_plus','Langzeit-Chlortabs':'langzeit_chlortabs','Schnell-Chlortabs':'chlortabs','Chlor Plus':'chlorplus','Algenschutz':'algischutz','Flockmittel':'flockmittel','Poolklar':'poolklar','Teststreifen':'teststreifen','Alca-Plus':'alca_plus'};
   let warnings=[];
+  let ordered=[];
   Object.entries(chemStock).forEach(([name,s])=>{
     const p=STOCK_PRODUCTS[name];if(!p)return;
     // Inaktive Produkte überspringen
@@ -6964,14 +6984,30 @@ function renderStockWarning(){
     const ag=s.gebinde.filter(g=>g.status!=='verbraucht');
     const cap=(ag.length>0?ag.length:1)*p.pkgDefault;
     const pct=cap>0?Math.round((s.qty/cap)*100):0;
-    if(pct<20)warnings.push(`${name} (${pct}%)`);
+    if(pct<20){
+      if(prod&&prod.bestellt){
+        const lieferStr=prod.lieferDatum?prod.lieferDatum.split('-').reverse().join('.'):'?';
+        ordered.push(`${name}: Bestellt, Lieferung am ${lieferStr}`);
+      } else {
+        warnings.push(`${name} (${pct}%)`);
+      }
+    }
   });
   const el=document.getElementById('dash-stock-warning');if(!el)return;
-  if(!warnings.length){el.innerHTML='';return;}
-  el.innerHTML=`<div style="background:linear-gradient(135deg,#fff7ed,#fed7aa);border:2px solid #f97316;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:0.85rem;font-weight:700;color:#9a3412">
-    <span style="font-size:1.3rem">📦</span>
-    <span>Vorrat niedrig: ${warnings.join(', ')} → <button class="btn btn-warn btn-sm" onclick="openStockModal()" style="font-size:0.78rem;padding:4px 10px">Nachkauf eintragen</button></span>
-  </div>`;
+  let html='';
+  if(warnings.length){
+    html+=`<div style="background:linear-gradient(135deg,#fff7ed,#fed7aa);border:2px solid #f97316;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:0.85rem;font-weight:700;color:#9a3412">
+      <span style="font-size:1.3rem">📦</span>
+      <span>Vorrat niedrig: ${warnings.join(', ')} → <button class="btn btn-warn btn-sm" onclick="openStockModal()" style="font-size:0.78rem;padding:4px 10px">Nachkauf eintragen</button></span>
+    </div>`;
+  }
+  if(ordered.length){
+    html+=`<div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:2px solid #38bdf8;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:0.85rem;font-weight:700;color:#075985">
+      <span style="font-size:1.3rem">📦</span>
+      <span>${ordered.join(' · ')}</span>
+    </div>`;
+  }
+  el.innerHTML=html;
 }
 
 // ----- ÜBERFÄLLIGE AUFGABEN BADGE im Nav -----
@@ -9973,17 +10009,15 @@ function applyCovertIntervals(){
   const curYear=new Date().getFullYear();
   const stored=ld('kh_season_max',{max:null,year:null});
   if(stored.year===curYear&&stored.max!==null) return; // bereits gesetzt
-  // Alle KH-Messungen des aktuellen Jahres durchsuchen
+  // Letzte KH-Messung des aktuellen Jahres: grüner Bereich = letzter Wert+1 (floor: s.max)
   const khMeasurements=measurements.filter(function(m){
     return m.kh!=null&&m.time&&new Date(m.time).getFullYear()===curYear;
-  });
+  }).sort(function(a,b){return new Date(b.time)-new Date(a.time);});
   if(!khMeasurements.length) return;
-  const maxKH=Math.round(Math.max.apply(null,khMeasurements.map(function(m){return m.kh;})));
-  sd('kh_season_max',{max:maxKH,year:curYear});
-  if(settings.kh&&maxKH>settings.kh.max){
-    settings.kh.max=maxKH;
-    sd('settings',settings);
-  }
+  const skh=settings.kh||DEFAULT_SETTINGS.kh;
+  const lastKH=Math.round(khMeasurements[0].kh);
+  const candidate=Math.max(lastKH+1, skh.max);
+  sd('kh_season_max',{max:candidate,year:curYear});
 })();
 
 // Migration: kh_messen Task hinzufügen
@@ -11153,7 +11187,7 @@ function openProduktDetail(poolId){
         <span style="width:9px;height:9px;border-radius:50%;background:${dot};flex-shrink:0"></span>
         <input type="number" id="pdg-qty-${g.id}" min="0" value="${g.qty}" style="width:85px;border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:0.88rem;font-weight:${isAnk?700:400}">
         <span style="font-size:0.8rem;color:var(--text-muted);flex:1">${stockProd?stockProd.unit:''} <em>${isAnk?'angebrochen':'verschlossen'}</em></span>
-        ${isAnk?`<button onclick="markGebindeVerbraucht('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;cursor:pointer">✗ verbraucht</button>`
+        ${isAnk?`<button onclick="markGebindeVerbraucht('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;cursor:pointer">📭 Verpackung leer</button>`
                :`<button onclick="gebindeOeffnen('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;cursor:pointer">↑ öffnen</button>`}
         <button onclick="(function(){const s=chemStock['${stockKey}'];s.gebinde=s.gebinde.filter(x=>x.id!==${g.id});s.qty=s.gebinde.filter(x=>x.status!=='verbraucht').reduce((a,x)=>a+x.qty,0);sd('chem_stock_v2',chemStock);openProduktDetail('${poolId}');})()" style="font-size:0.72rem;padding:3px 7px;border-radius:6px;background:none;color:#94a3b8;border:1px solid var(--border);cursor:pointer">🗑</button>
       </div>`;
