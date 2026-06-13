@@ -5146,8 +5146,7 @@ function _onMeasurementSaved(entry){
     const stored=ld('kh_season_max',{max:null,year:null});
     // Grüner Bereich = aktueller Wert+1, schrumpft mit sinkendem KH Richtung Ziel
     // Floor: s.max (Standard-Obergrenze, z.B. 7). Steigt nie wieder, nur schrumpfen.
-    const skh=settings.kh||DEFAULT_SETTINGS.kh;
-    const candidate=Math.max(Math.round(entry.kh)+1, skh.max);
+    const candidate=Math.max(Math.round(entry.kh)+1, DEFAULT_SETTINGS.kh.max);
     if(stored.year!==curYear||stored.max===null){
       sd('kh_season_max',{max:candidate,year:curYear});
     } else if(candidate<stored.max){
@@ -6753,7 +6752,13 @@ function renderStockDashboard(){
     var _reich=null;try{_reich=calcReichweite(name);}catch(e){}
     var reichHtml='';
     if(_reich){reichHtml='<div style="font-size:0.65rem;color:'+_reich.color+';font-weight:800;white-space:nowrap">'+_reich.days+'d</div>';}
-    var _warnRech=_reich&&_reich.days<14?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':
+    var _bestelltInfo='';
+    if(prod&&prod.bestellt){
+      var _lieferStr=prod.lieferDatum?prod.lieferDatum.split('-').reverse().join('.'):'?';
+      _bestelltInfo='<span style="color:#0369a1;font-size:0.68rem;font-weight:800;margin-left:4px">📦 Bestellt, Lieferung am '+_lieferStr+'</span>';
+    }
+    var _warnRech=_bestelltInfo? _bestelltInfo :
+                    _reich&&_reich.days<14?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':
                     _reich&&_reich.days<19?'<span style="color:#d97706;font-size:0.68rem;font-weight:800;margin-left:4px">📦 Bald bestellen</span>':'';
     var _warnFinal = (prod&&prod.active===false) ? '' : _warnRech;
     // Gebinde display - compact dashboard view
@@ -7210,12 +7215,9 @@ function renderMesswerteCardEnhanced(targetId, metaId){
   const _khProd=typeof poolProdukte!=='undefined'?poolProdukte.find(function(p){return p.poolId==='kh_test_jbl';}):null;
   const _khActive=!_khProd||_khProd.active!==false;
   const _khVal=last.kh!=null&&_khActive?last.kh:undefined;
-  // Saisonaler KH-Max: settings.kh.max dynamisch anpassen
+  // KH-Settings: scaleMax wird in gaugeHtmlKH selbst aus kh_season_max berechnet
   const _khSettings=Object.assign({},settings.kh||DEFAULT_SETTINGS.kh);
-  const _khSeason=ld('kh_season_max',{max:null,year:null});
-  if(_khSeason.year===new Date().getFullYear()&&_khSeason.max!=null&&_khSeason.max>_khSettings.max){
-    _khSettings.max=_khSeason.max;
-  }
+  if(_khSettings.max>DEFAULT_SETTINGS.kh.max) _khSettings.max=DEFAULT_SETTINGS.kh.max; // Alten gestuckten Wert korrigieren
   // FAC: Minimum ORP-basiert anpassen
   const _chlorSettings=Object.assign({},settings.chlor||DEFAULT_SETTINGS.chlor);
   if(last.orp!==undefined&&last.orp!==null){
@@ -10004,6 +10006,29 @@ function applyCovertIntervals(){
   if(maintenanceTasks.length!==before) sd('maintenance',maintenanceTasks);
 })();
 
+// Einmalige Korrektur: settings.kh.max und kh_season_max auf alte gestuckte Werte (>7) korrigieren
+(function(){
+  let changed=false;
+  if(settings.kh&&settings.kh.max>DEFAULT_SETTINGS.kh.max){
+    settings.kh.max=DEFAULT_SETTINGS.kh.max; changed=true;
+  }
+  if(changed) sd('settings',settings);
+  const curYear=new Date().getFullYear();
+  const stored=ld('kh_season_max',{max:null,year:null});
+  if(stored.year===curYear&&stored.max!=null){
+    const khMeasurements=measurements.filter(function(m){
+      return m.kh!=null&&m.time&&new Date(m.time).getFullYear()===curYear;
+    }).sort(function(a,b){return new Date(b.time)-new Date(a.time);});
+    if(khMeasurements.length){
+      const lastKH=Math.round(khMeasurements[0].kh);
+      const candidate=Math.max(lastKH+1, DEFAULT_SETTINGS.kh.max);
+      if(candidate<stored.max){
+        sd('kh_season_max',{max:candidate,year:curYear});
+      }
+    }
+  }
+})();
+
 // Migration: saisonales KH-Max aus vorhandenen Messungen ermitteln
 (function(){
   const curYear=new Date().getFullYear();
@@ -10016,8 +10041,13 @@ function applyCovertIntervals(){
   if(!khMeasurements.length) return;
   const skh=settings.kh||DEFAULT_SETTINGS.kh;
   const lastKH=Math.round(khMeasurements[0].kh);
-  const candidate=Math.max(lastKH+1, skh.max);
+  const candidate=Math.max(lastKH+1, DEFAULT_SETTINGS.kh.max);
   sd('kh_season_max',{max:candidate,year:curYear});
+  // Stale settings.kh.max korrigieren falls noch auf altem hohen Wert
+  if(settings.kh&&settings.kh.max>DEFAULT_SETTINGS.kh.max){
+    settings.kh.max=DEFAULT_SETTINGS.kh.max;
+    sd('settings',settings);
+  }
 })();
 
 // Migration: kh_messen Task hinzufügen
