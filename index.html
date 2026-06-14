@@ -8351,7 +8351,10 @@ function predictChlorDecay(){
   const daysUntilMin=(last.chlor-settings.chlor.min)/(-ratePerDay);
   if(daysUntilMin<0||daysUntilMin>30)return null;
   const predictedDate=new Date(new Date(last.time).getTime()+daysUntilMin*86400000);
-  return{days:daysUntilMin,date:predictedDate,ratePerDay:ratePerDay,lastChlor:last.chlor};
+  // Datum nie in der Vergangenheit anzeigen: min. heute
+  const today=new Date(); today.setHours(0,0,0,0);
+  const displayDate=predictedDate<today?today:predictedDate;
+  return{days:daysUntilMin,date:displayDate,ratePerDay:ratePerDay,lastChlor:last.chlor};
 }
 
 function renderChlorDecayCard(){
