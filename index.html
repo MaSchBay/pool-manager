@@ -3133,13 +3133,22 @@ function _visibleTasks(){
 function renderTasksDashboard(){
   const el=document.getElementById('tasks-dashboard');if(!el)return;
   const today=new Date();let html='',shown=0;
+  const _effOverdue=(t)=>{
+    let o=daysOverdue(t);
+    if(t.id==='alca_plus_check' && nextDue(t)>today) o=0;
+    return o;
+  };
   const sorted=[...maintenanceTasks].sort((a,b)=>{
-    const oa=daysOverdue(a),ob=daysOverdue(b);
+    const oa=_effOverdue(a),ob=_effOverdue(b);
     if(oa>0&&ob>0)return ob-oa;if(oa>0)return-1;if(ob>0)return 1;
     return Math.ceil((nextDue(a)-today)/86400000)-Math.ceil((nextDue(b)-today)/86400000);
   });
   sorted.forEach(t=>{
-    const over=daysOverdue(t),next=nextDue(t),du=Math.ceil((next-today)/86400000);
+    // alca_plus_check: KH ok -> nicht überfällig (nextDue() liefert dann zukünftiges Datum)
+    let over=daysOverdue(t);
+    const next=nextDue(t),du=Math.ceil((next-today)/86400000);
+    if(t.id==='alca_plus_check' && next>today) over=0;
+    
     let cls='',lbl='';
     const nextDate=new Date(next); const todayDate=new Date(today);
     const isDueToday = nextDate.toDateString()===todayDate.toDateString() ||
@@ -4631,6 +4640,13 @@ function getActiveDosierungPending(){
 }
 function getDosierungPendingForTyp(typ){
   return getActiveDosierungPending().find(x=>x.typ===typ)||null;
+}
+
+// Überfällig-Status der Aufgabe unter Berücksichtigung von Spezialfällen (z.B. alca_plus_check: KH ok -> nicht überfällig)
+function effectiveDaysOverdue(t){
+  const o=daysOverdue(t);
+  if(o>0 && t.id==='alca_plus_check' && nextDue(t)>new Date()) return 0;
+  return o;
 }
 
 function nextDue(t){
@@ -6128,6 +6144,16 @@ function renderSkimmerTabPrognose(){
     // Migration: alten State in Batch umwandeln
     batches = [{tabs: skimmerTabState.tabsEingelegt, eingelgtAm: skimmerTabState.eingelgtAm}];
   }
+  // Vollständig aufgelöste Batches (0%) entfernen - außer es ist der einzige Batch
+  var _activeBatches = batches.filter(function(b){
+    var daysIn = (Date.now() - new Date(b.eingelgtAm).getTime()) / 86400000;
+    return daysIn < totalDays;
+  });
+  if(_activeBatches.length > 0 && _activeBatches.length < batches.length){
+    skimmerTabState.batches = _activeBatches;
+    saveSkimmerTabState();
+  }
+  batches = _activeBatches.length > 0 ? _activeBatches : batches;
   batches.forEach(function(b, i){
     var daysIn = (Date.now() - new Date(b.eingelgtAm).getTime()) / 86400000;
     var pct = Math.max(0, Math.min(100, Math.round((1 - daysIn/totalDays)*100)));
@@ -6290,7 +6316,7 @@ function renderStatKacheln(){
   let seasonDays='–';
   if(season.start){const d=Math.round((Date.now()-new Date(season.start))/86400000);seasonDays=d>0?`${d}`:'-';}
   // Overdue tasks
-  const overdueCount=_visibleTasks().filter(t=>daysOverdue(t)>0).length;
+  const overdueCount=_visibleTasks().filter(t=>effectiveDaysOverdue(t)>0).length;
   el.innerHTML=`
     <div class="stat-kachel">
       <div class="stat-kachel-val">${last?.ph!==undefined?last.ph.toFixed(1)+'&nbsp;'+trend(last.ph,prev?.ph):'–'}</div>
@@ -7017,7 +7043,7 @@ function renderStockWarning(){
 
 // ----- ÜBERFÄLLIGE AUFGABEN BADGE im Nav -----
 function updateOverdueBadge(){
-  const count=maintenanceTasks.filter(t=>daysOverdue(t)>0).length+activeTodos.filter(t=>!t.closed&&!t.steps.every(s=>s.done)).length;
+  const count=maintenanceTasks.filter(t=>effectiveDaysOverdue(t)>0).length+activeTodos.filter(t=>!t.closed&&!t.steps.every(s=>s.done)).length;
   const navBtn=document.getElementById('nav-hilfe');
   const mnavBtn=document.getElementById('mnav-hilfe');
   const badge=count>0?` <span style="background:#ef4444;color:white;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:800;margin-left:2px">${count}</span>`:'';
@@ -7076,7 +7102,7 @@ function renderWartungSummary(){
   const el=document.getElementById('wartung-summary');if(!el)return;
   const total=_visibleTasks().filter(t=>!t.hidden).length;
   if(!total){el.innerHTML='';return;}
-  const overdueN=_visibleTasks().filter(t=>!t.hidden&&daysOverdue(t)>0).length;
+  const overdueN=_visibleTasks().filter(t=>!t.hidden&&effectiveDaysOverdue(t)>0).length;
   const dueN=_visibleTasks().filter(t=>!t.hidden&&daysOverdue(t)===0&&Math.ceil((nextDue(t)-new Date())/86400000)<=0).length;
   const okN=total-overdueN-dueN;
   const pct=Math.round((okN/total)*100);
