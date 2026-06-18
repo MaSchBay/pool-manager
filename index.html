@@ -6440,7 +6440,7 @@ function renderSwimAdvice(id, weatherData){
 const STOCK_PRODUCTS = {
   'pH-Minus':          {unit:'g',   pkgDefault:1500, type:'granulat',    perUse:Math.round(((7.5-7.3)/0.2)*150*POOL_VOLUME/10), useName:'Dosierung (pH ~7,5→7,3)'},
   'pH-Plus':           {unit:'g',   pkgDefault:1000, type:'granulat',    perUse:Math.round(((7.3-7.1)/0.2)*100*POOL_VOLUME/10), useName:'Dosierung (pH ~7,1→7,3)'},
-  'Langzeit-Chlortabs':{unit:'Stk', pkgDefault:100,  type:'tabs', tabWeightG:20, perUse:Math.round(4*POOL_VOLUME/10),  useName:'Wöchentlich (4 Tabs/10m³)'},
+  'Langzeit-Chlortabs':{unit:'Stk', pkgDefault:50,   type:'tabs', tabWeightG:20, perUse:Math.round(4*POOL_VOLUME/10),  useName:'Wöchentlich (4 Tabs/10m³)'},
   'Schnell-Chlortabs': {unit:'Stk', pkgDefault:50,   type:'tabs', tabWeightG:20, perUse:Math.round(3*POOL_VOLUME/10),  useName:'Regeldosierung (3 Tabs/10m³)'},
   'Chlor Plus':        {unit:'g',   pkgDefault:1000, type:'granulat',    perUse:Math.round(175*POOL_VOLUME/10),        useName:'Schockchlorung'},
   'Flockmittel':       {unit:'ml',  pkgDefault:1000, type:'fluessigkeit', perUse:Math.round(12*POOL_VOLUME/10),        useName:'Kontinuierlich'},
