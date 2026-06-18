@@ -1843,7 +1843,7 @@ if(!maintenanceTasks.find(t=>t.id==='filter_reinigen')){
   sd('maintenance',maintenanceTasks);
 }
 // Migration: remove retired tasks (Skimmerkorb, Poolwände bürsten)
-{const retired=['skimmer','wand_brush','skimmerkorb','pool_walls'];const before=maintenanceTasks.length;maintenanceTasks=maintenanceTasks.filter(t=>!retired.includes(t.id));if(maintenanceTasks.length!==before)sd('maintenance',maintenanceTasks);}
+{const retired=['skimmer','wand_brush','skimmerkorb','pool_walls','boden_saug'];const before=maintenanceTasks.length;maintenanceTasks=maintenanceTasks.filter(t=>!retired.includes(t.id));if(maintenanceTasks.length!==before)sd('maintenance',maintenanceTasks);}
 let weatherData   = null;
 let weatherCache  = ld('weather_cache',null);
 let weatherCacheT = ld('weather_cache_time',0);
@@ -1925,7 +1925,6 @@ function defaultMaintenance(){
     {id:'poolklar',name:'Poolklar zugeben',interval:7,lastDone:null,cat:'chemie'},
     {id:'flockmittel',name:'Flockmittel zugeben',interval:3,lastDone:null,cat:'chemie'},
     {id:'filter_clean',name:'Sandfilter rückspülen',interval:30,lastDone:null,cat:'filter'},
-    {id:'boden_saug',name:'Poolboden absaugen',interval:7,lastDone:null,cat:'reinigung'},
     {id:'abdeckung',name:'Plane reinigen & prüfen',interval:14,lastDone:null,cat:'reinigung'},
     {id:'filter_sand',name:'Filtersand erneuern',interval:365,lastDone:null,cat:'filter'},
     {id:'saisonstart',name:'Saisonstart: Erstbehandlung',interval:365,lastDone:null,cat:'saison'},
