@@ -6508,7 +6508,17 @@ function stockDeductDosierung(productKey, amount){
       const versch=chemStock[name].gebinde.find(function(g){return g.status==='verschlossen';});
       if(versch){versch.status='angebrochen';ank=versch;}
     }
-    if(ank){ank.qty=Math.max(0,ank.qty-num);}
+    if(ank){
+      // Split-Prüfung: reicht das aktuelle Gebinde?
+      if(ank.qty>0&&ank.qty<num){
+        // Nicht genug im aktuellen Gebinde → Split-Modal anzeigen
+        openSplitEntnahmeModal(name,ank,num,p);
+        return; // Modal übernimmt den Abzug
+      }
+      ank.qty=Math.max(0,ank.qty-num);
+      // Auto-markiere verbraucht wenn 0
+      if(ank.qty===0)ank.status='verbraucht';
+    }
     else{chemStock[name].qty=Math.max(0,chemStock[name].qty-num);}
     chemStock[name].qty=chemStock[name].gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);
   } else {
@@ -6560,14 +6570,16 @@ function initGebinde(stockKey){
   }
 }
 
-function addGebinde(stockKey,qty){
+function addGebinde(stockKey,qty,tara){
   const s=chemStock[stockKey];if(!s)return;
   initGebinde(stockKey);
-  s.gebinde.push({id:Date.now(),qty:Math.max(0,qty),status:'verschlossen'});
+  var g={id:Date.now(),qty:Math.max(0,qty),status:'verschlossen'};
+  if(tara!=null&&tara>0)g.tara=tara;
+  s.gebinde.push(g);
   s.qty=s.gebinde.filter(g=>g.status!=='verbraucht').reduce((a,g)=>a+g.qty,0);
   sd('chem_stock_v2',chemStock);
   renderStockDashboard();
-  if(typeof toast==='function')toast('📦 Neues Gebinde hinzugefügt','success',2000);
+  if(typeof toast==='function')toast('📦 Neues Gebinde hinzugefügt'+(tara?` (Tara: ${tara}g)`:''),'success',2000);
 }
 
 function markGebindeVerbraucht(stockKey,gebindeId){
@@ -6608,6 +6620,165 @@ function markGebindeVerbraucht(stockKey,gebindeId){
   }
 }
 
+// ============================================================
+// SPLIT-ENTNAHME: Behälter reicht nicht für gesamte Entnahme
+// ============================================================
+function openSplitEntnahmeModal(stockName, ank, totalNeeded, sp){
+  var existing=document.getElementById('split-entnahme-modal');
+  if(existing)existing.remove();
+  const fromFirst=ank.qty; // was im aktuellen Gebinde noch drin ist
+  const fromNext=totalNeeded-fromFirst;
+  const unit=sp?sp.unit:'Stk';
+  // Nächstes verschlossenes Gebinde suchen
+  const s=chemStock[stockName];
+  const next=s.gebinde&&s.gebinde.find(function(g){return g.status==='verschlossen';});
+  const modal=document.createElement('div');
+  modal.id='split-entnahme-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:14px;padding:20px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">'+
+    '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1rem;color:#b45309;margin-bottom:6px">📭 Behälter wird nicht reichen</div>'+
+    '<div style="font-size:0.82rem;color:#374151;margin-bottom:12px;line-height:1.5">'+
+      'Du brauchst <strong>'+totalNeeded+' '+unit+'</strong>, im aktuellen Behälter sind noch <strong>'+fromFirst+' '+unit+'</strong>.'+
+      '<div style="margin-top:6px;padding:8px;background:#fffbeb;border-radius:8px;border-left:3px solid #f59e0b">'+
+        '→ <strong>'+fromFirst+' '+unit+'</strong> aus aktuellem Behälter (wird als leer markiert)<br>'+
+        '→ <strong>'+fromNext+' '+unit+'</strong> aus '+(next?'neuem Behälter':'⚠️ kein weiterer Behälter!')+'</div>'+
+    '</div>'+
+    // Korrektur-Felder
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'+
+    '<span style="font-size:0.78rem;font-weight:700;width:140px">Aus diesem Behälter:</span>'+
+    '<input type="number" id="split-from-first" value="'+fromFirst+'" min="0" max="'+fromFirst+'" style="flex:1;padding:8px;border:1.5px solid #f59e0b;border-radius:7px;font-weight:700;font-size:0.9rem">'+
+    '<span style="font-size:0.75rem">'+unit+'</span>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">'+
+    '<span style="font-size:0.78rem;font-weight:700;width:140px">Aus nächstem Behälter:</span>'+
+    '<input type="number" id="split-from-next" value="'+fromNext+'" min="0" style="flex:1;padding:8px;border:1.5px solid #bae6fd;border-radius:7px;font-weight:700;font-size:0.9rem">'+
+    '<span style="font-size:0.75rem">'+unit+'</span>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px">'+
+    '<button id="split-cancel-btn" style="flex:1;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;background:#f9fafb;font-family:Nunito,sans-serif;font-weight:800;font-size:0.85rem;cursor:pointer;color:#374151">Abbrechen</button>'+
+    '<button id="split-confirm-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#f59e0b;font-family:Nunito,sans-serif;font-weight:800;font-size:0.85rem;cursor:pointer;color:#fff">✅ Entnahme buchen</button>'+
+    '</div>'+
+    '</div>';
+  modal.addEventListener('click',function(e){if(e.target===modal)modal.remove();});
+  document.body.appendChild(modal);
+  // Sync-Felder: Änderung in "aus diesem" → "aus nächstem" passt sich an
+  setTimeout(function(){
+    const inp1=document.getElementById('split-from-first');
+    const inp2=document.getElementById('split-from-next');
+    const cancelBtn=document.getElementById('split-cancel-btn');
+    const confirmBtn=document.getElementById('split-confirm-btn');
+    if(inp1)inp1.addEventListener('input',function(){
+      const v1=parseFloat(inp1.value)||0;
+      const rest=Math.max(0,totalNeeded-v1);
+      if(inp2)inp2.value=rest;
+    });
+    if(cancelBtn)cancelBtn.addEventListener('click',function(){var m=document.getElementById('split-entnahme-modal');if(m)m.remove();});
+    if(confirmBtn)confirmBtn.addEventListener('click',function(){
+      const v1=Math.min(parseFloat(inp1&&inp1.value)||0, ank.qty);
+      const v2=parseFloat(inp2&&inp2.value)||0;
+      // Aktuellen Behälter abziehen und als leer markieren
+      ank.qty=Math.max(0,ank.qty-v1);
+      if(ank.qty===0)ank.status='verbraucht';
+      // Nächsten Behälter öffnen falls nötig
+      if(v2>0){
+        let nextGb=s.gebinde&&s.gebinde.find(function(g){return g.status==='verschlossen';});
+        if(nextGb){
+          // Füllmenge bestätigen
+          const spObj=STOCK_PRODUCTS[stockName];
+          const defQty=spObj?spObj.pkgDefault:nextGb.qty;
+          nextGb.status='angebrochen';
+          nextGb.qty=Math.max(0,nextGb.qty-v2);
+          if(typeof toast==='function')toast('📦 Neue Packung geöffnet, '+v2+' '+unit+' entnommen','success',2500);
+        } else {
+          if(typeof toast==='function')toast('⚠️ Kein weiterer Behälter! Bitte '+v2+' '+unit+' manuell abziehen.','warn',4000);
+        }
+      }
+      s.qty=s.gebinde.filter(function(g){return g.status!=='verbraucht';}).reduce(function(a,g){return a+g.qty;},0);
+      sd('chem_stock_v2',chemStock);
+      renderStockDashboard&&renderStockDashboard();
+      var m=document.getElementById('split-entnahme-modal');if(m)m.remove();
+      if(typeof toast==='function')toast('✅ Entnahme gebucht: '+v1+'+'+v2+' '+unit+' aus 2 Behältern','success',3000);
+    });
+    if(inp1)inp1.focus();
+  },0);
+}
+
+
+// ============================================================
+// TARA: Eimer wiegen → Restmenge aus Gesamtgewicht errechnen
+// ============================================================
+function openEimerWiegenModal(stockKey,gebindeId,tara,poolId){
+  var existing=document.getElementById('eimer-wiegen-modal');
+  if(existing)existing.remove();
+  const sp=STOCK_PRODUCTS[stockKey];
+  const s=chemStock[stockKey];if(!s)return;
+  const g=s.gebinde&&s.gebinde.find(function(x){return x.id===gebindeId;});if(!g)return;
+  const modal=document.createElement('div');
+  modal.id='eimer-wiegen-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:14px;padding:20px;max-width:320px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">'+
+    '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:1rem;color:#0369a1;margin-bottom:4px">⚖️ Eimer wiegen – '+stockKey+'</div>'+
+    '<div style="font-size:0.78rem;color:#6b7280;margin-bottom:12px">Tara (Leergewicht Behälter): <strong>'+tara+'g</strong><br>Gesamtgewicht jetzt eingeben → App errechnet Restmenge.</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'+
+    '<span style="font-size:0.85rem;font-weight:700">Gewicht jetzt (g):</span>'+
+    '<input type="number" id="eimer-wiegen-input" min="'+tara+'" step="1" placeholder="z.B. 2840" style="flex:1;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-family:Nunito,sans-serif;font-size:1rem;font-weight:700;color:#111">'+
+    '</div>'+
+    '<div id="eimer-wiegen-preview" style="font-size:0.82rem;color:#0369a1;min-height:20px;margin-bottom:12px;font-weight:700"></div>'+
+    '<div style="display:flex;gap:8px">'+
+    '<button id="eimer-cancel-btn" style="flex:1;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;background:#f9fafb;font-family:Nunito,sans-serif;font-weight:800;font-size:0.85rem;cursor:pointer;color:#374151">Abbrechen</button>'+
+    '<button id="eimer-confirm-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#0369a1;font-family:Nunito,sans-serif;font-weight:800;font-size:0.85rem;cursor:pointer;color:#fff">✅ Übernehmen</button>'+
+    '</div>'+
+    '</div>';
+  modal.addEventListener('click',function(e){if(e.target===modal)modal.remove();});
+  document.body.appendChild(modal);
+  setTimeout(function(){
+    const inp=document.getElementById('eimer-wiegen-input');
+    const preview=document.getElementById('eimer-wiegen-preview');
+    const cancelBtn=document.getElementById('eimer-cancel-btn');
+    const confirmBtn=document.getElementById('eimer-confirm-btn');
+    if(inp){
+      inp.addEventListener('input',function(){
+        const total=parseFloat(inp.value);
+        if(isNaN(total)||total<=tara){preview.textContent='';return;}
+        const restG=total-tara;
+        // Für Tabs: Gramm → Stück umrechnen
+        let restAnzeige;
+        if(sp&&sp.type==='tabs'&&sp.tabWeightG){
+          const stk=Math.round(restG/sp.tabWeightG);
+          restAnzeige=stk+' '+sp.unit+' ('+restG+'g)';
+        } else {
+          restAnzeige=restG+(sp?' '+sp.unit:'g');
+        }
+        preview.textContent='→ Restmenge: '+restAnzeige;
+      });
+      inp.focus();
+    }
+    if(cancelBtn)cancelBtn.addEventListener('click',function(){var m=document.getElementById('eimer-wiegen-modal');if(m)m.remove();});
+    if(confirmBtn)confirmBtn.addEventListener('click',function(){
+      const inp2=document.getElementById('eimer-wiegen-input');
+      const total=parseFloat(inp2&&inp2.value);
+      if(isNaN(total)||total<=tara){if(typeof toast==='function')toast('Gewicht muss größer als Tara ('+tara+'g) sein','warn',2000);return;}
+      const restG=total-tara;
+      let restQty;
+      if(sp&&sp.type==='tabs'&&sp.tabWeightG){
+        restQty=Math.round(restG/sp.tabWeightG);
+      } else {
+        restQty=restG;
+      }
+      g.qty=Math.max(0,restQty);
+      s.qty=s.gebinde.filter(function(x){return x.status!=='verbraucht';}).reduce(function(a,x){return a+x.qty;},0);
+      sd('chem_stock_v2',chemStock);
+      renderStockDashboard();
+      if(poolId)openProduktDetail(poolId);
+      var m=document.getElementById('eimer-wiegen-modal');if(m)m.remove();
+      if(typeof toast==='function')toast('⚖️ Restmenge aktualisiert: '+restQty+(sp?' '+sp.unit:'g'),'success',2500);
+    });
+  },0);
+}
+
+
 function updateGebindeQty(stockKey,gebindeId,qty){
   const s=chemStock[stockKey];if(!s||!s.gebinde)return;
   const g=s.gebinde.find(x=>x.id===gebindeId);
@@ -6623,15 +6794,44 @@ function openAddGebindeModal(stockKey){
   if(existingInput){existingInput.remove();return;}
   const wrap=document.createElement('div');
   wrap.id='add-gebinde-inline-'+stockKey;
-  wrap.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;background:#f0f9ff;border-radius:8px;padding:8px 10px;border:1px solid #bae6fd';
+  wrap.style.cssText='margin-top:8px;background:#f0f9ff;border-radius:8px;padding:10px 12px;border:1px solid #bae6fd';
   const def=sp.pkgDefault||1000;
-  const inp=document.createElement('input');
-  inp.type='number';inp.id='add-gebinde-qty-'+stockKey;
-  inp.value=def;inp.min=1;inp.step=1;
-  inp.style.cssText='width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem';
+  // Haupt-Row: Menge
+  const rowMain=document.createElement('div');
+  rowMain.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px';
   const lbl=document.createElement('span');
   lbl.style.cssText='font-size:0.82rem;font-weight:700';
-  lbl.textContent='Menge ('+sp.unit+'):';
+  lbl.textContent='Inhalt laut Aufschrift ('+sp.unit+'):';
+  const inp=document.createElement('input');
+  inp.type='number';inp.id='add-gebinde-qty-'+stockKey;
+  inp.value=def;inp.min=1;inp.step=sp.type==='tabs'?1:10;
+  inp.style.cssText='width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem';
+  rowMain.appendChild(lbl);rowMain.appendChild(inp);
+  wrap.appendChild(rowMain);
+  // Tara-Row (für Eimer/Gebinde mit Gewicht)
+  const taraRow=document.createElement('div');
+  taraRow.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px';
+  const taraToggle=document.createElement('button');
+  taraToggle.style.cssText='font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;cursor:pointer;font-weight:700';
+  taraToggle.textContent='⚖️ Eimer wiegen (Tara erfassen)';
+  const taraFields=document.createElement('div');
+  taraFields.id='tara-fields-'+stockKey;
+  taraFields.style.cssText='display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;width:100%';
+  taraFields.innerHTML=
+    '<span style="font-size:0.78rem;font-weight:700;color:#0369a1">Gesamtgewicht beim Wiegen (g):</span>'+
+    '<input type="number" id="add-gebinde-total-'+stockKey+'" min="1" step="1" placeholder="z.B. 5340" style="width:90px;border:1px solid #bae6fd;border-radius:6px;padding:4px 8px;font-size:0.85rem">'+
+    '<span style="font-size:0.72rem;color:#64748b">Tara = Gesamtgewicht − Inhalt</span>';
+  taraToggle.onclick=function(){
+    const shown=taraFields.style.display!=='none'&&taraFields.style.display!=='';
+    taraFields.style.display=shown?'none':'flex';
+    taraToggle.style.background=shown?'#e0f2fe':'#bfdbfe';
+  };
+  taraRow.appendChild(taraToggle);
+  taraRow.appendChild(taraFields);
+  wrap.appendChild(taraRow);
+  // Buttons
+  const btnRow=document.createElement('div');
+  btnRow.style.cssText='display:flex;gap:8px';
   const btnOk=document.createElement('button');
   btnOk.className='btn btn-primary btn-sm';
   btnOk.textContent='✅ Hinzufügen';
@@ -6640,7 +6840,8 @@ function openAddGebindeModal(stockKey){
   btnCancel.className='btn btn-outline btn-sm';
   btnCancel.textContent='✕';
   btnCancel.onclick=function(){wrap.remove();};
-  wrap.appendChild(lbl);wrap.appendChild(inp);wrap.appendChild(btnOk);wrap.appendChild(btnCancel);
+  btnRow.appendChild(btnOk);btnRow.appendChild(btnCancel);
+  wrap.appendChild(btnRow);
   const triggerBtn=document.querySelector('[onclick*="openAddGebindeModal"]');
   if(triggerBtn&&triggerBtn.parentNode){triggerBtn.parentNode.insertBefore(wrap,triggerBtn.nextSibling);}
   inp.focus();
@@ -6652,7 +6853,19 @@ function confirmNeuesGebinde(stockKey){
   if(!qtyEl)return;
   const qty=parseFloat(qtyEl.value);
   if(isNaN(qty)||qty<=0){if(typeof toast==='function')toast('Bitte gültige Menge eingeben','warn',2000);return;}
-  addGebinde(stockKey,qty);
+  // Tara erfassen?
+  var tara=null;
+  const totalEl=document.getElementById('add-gebinde-total-'+stockKey);
+  if(totalEl&&totalEl.value){
+    const total=parseFloat(totalEl.value);
+    if(!isNaN(total)&&total>0){
+      // Tara = Gesamtgewicht − Inhalt (in Gramm; für Tabs: qty*tabWeightG)
+      const contentG=sp.type==='tabs'?qty*(sp.tabWeightG||20):qty;
+      tara=Math.max(0,Math.round(total-contentG));
+      if(tara>0&&typeof toast==='function')toast('⚖️ Tara gespeichert: '+tara+'g (Behälter-Leergewicht)','info',3000);
+    }
+  }
+  addGebinde(stockKey,qty,tara);
   const wrap=document.getElementById('add-gebinde-inline-'+stockKey);
   if(wrap)wrap.remove();
 }
@@ -8156,11 +8369,13 @@ function applyImportedData(d,mergeMode){
       ['Lukas','Simon','Jakob'].forEach(function(name){
         var local=localKB[name],remote=remoteKB[name];
         if(!local&&!remote){mergedKB[name]=null;}
+        else if(!local&&!remote){mergedKB[name]=null;}
         else if(!local){mergedKB[name]=remote;}
         else if(!remote){mergedKB[name]=local;}
         else{
-          // Beide aktiv: neueres setAt gewinnt
-          mergedKB[name]=new Date(remote.setAt||0)>new Date(local.setAt||0)?remote:local;
+          // Neueres setAt gewinnt – auch cleared-Marker schlägt altes Verbot
+          var winner=new Date(remote.setAt||0)>new Date(local.setAt||0)?remote:local;
+          mergedKB[name]=winner;
         }
       });
       sd('kinder_ban',mergedKB);
@@ -9101,7 +9316,7 @@ function checkPushNotifications(){
   const kban=ld('kinder_ban',{});
   ['Lukas','Simon','Jakob'].forEach(function(name){
     const b=kban[name];
-    if(!b||!b.until)return;
+    if(!b||!b.until||b.cleared)return;
     const remaining=new Date(b.until)-now;
     if(remaining>0&&remaining<15*60000){
       const key='push_kban_'+name+'_'+b.until.slice(0,16);
@@ -9536,7 +9751,7 @@ function kinderBanState(){
 function setKinderBan(name,days){
   const state=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
   const existing=state[name];
-  const currentDays=(existing&&new Date(existing.until)>new Date()&&existing.days)?existing.days:0;
+  const currentDays=(existing&&!existing.cleared&&new Date(existing.until)>new Date()&&existing.days)?existing.days:0;
   const newDays=currentDays+days;
   const until=new Date(Date.now()+newDays*86400000).toISOString();
   state[name]={until,setAt:new Date().toISOString(),days:newDays};
@@ -9607,7 +9822,9 @@ function openKinderBanDatePicker(name){
 
 function aufhebenKinderBan(name){
   const state=ld('kinder_ban',{Lukas:null,Simon:null,Jakob:null});
-  state[name]=null;
+  // Nicht null setzen – sonst gewinnt Remote beim nächsten Sync wieder.
+  // Stattdessen: cleared-Marker mit Zeitstempel, Merge erkennt das als "jünger".
+  state[name]={cleared:true,clearedAt:new Date().toISOString(),setAt:new Date().toISOString()};
   sd('kinder_ban',state);
   logHistory({type:'kinder_ban',time:new Date().toISOString(),
     note:'✅ Gute Führung – Badeverbot '+name+' aufgehoben',name,aufgehoben:true});
@@ -9634,7 +9851,7 @@ function renderKinderBan(){
   el.innerHTML='';
   KINDER.forEach(function(name){
     const b=state[name];
-    const active=b&&new Date(b.until)>new Date();
+    const active=b&&!b.cleared&&new Date(b.until)>new Date();
     const cd=active?kinderBanCountdown(b.until):null;
     const initial=name[0];
     const div=document.createElement('div');
@@ -9675,7 +9892,7 @@ function renderKinderBanDashboard(){
   // Kompakt-Banner im Dashboard
   const el=document.getElementById('kinder-ban-dashboard');if(!el)return;
   const state=kinderBanState();
-  const active=KINDER.filter(n=>state[n]&&new Date(state[n].until)>new Date());
+  const active=KINDER.filter(n=>state[n]&&!state[n].cleared&&new Date(state[n].until)>new Date());
   if(!active.length){el.innerHTML='';return;}
   el.innerHTML='<div style="background:linear-gradient(135deg,#fff1f2,#fecaca);border:1.5px solid #ef4444;border-radius:10px;padding:10px 14px;margin-bottom:10px">'+
     '<div style="font-family:Nunito,sans-serif;font-weight:900;font-size:0.82rem;color:#b91c1c;margin-bottom:6px">🚫 Kinder-Badeverbot aktiv</div>'+
@@ -9696,7 +9913,7 @@ function renderKinderBanMary(){
   const state=kinderBanState();
   el.innerHTML=KINDER.map(name=>{
     const b=state[name];
-    const active=b&&new Date(b.until)>new Date();
+    const active=b&&!b.cleared&&new Date(b.until)>new Date();
     const cd=active?kinderBanCountdown(b.until):null;
     return'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:5px;'+
       (active?'background:linear-gradient(135deg,#fff1f2,#fecaca);border:1.5px solid #ef4444':'background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #22c55e')+'">'+
@@ -10779,6 +10996,35 @@ let poolProdukte = (function(){
 
 function saveProdukte(){ sd('pool_produkte_v1', poolProdukte); }
 
+// ============================================================
+// MIGRATION: Amazon-Bestellungen 27.06.2026 eintragen
+// Schnell-ChorTabs 5kg → Lieferung 02.07.2026
+// Langzeit-MiniChlorTabs 5kg (4×) → Lieferung 09.07.2026–10.07.2026
+// ============================================================
+(function(){
+  var changed=false;
+  // Schnell-Chlortabs 5kg: Lieferung 02.07.2026
+  var pSchnell=poolProdukte.find(function(p){return p.poolId==='chlortabs';});
+  if(pSchnell&&!pSchnell.bestellt){
+    pSchnell.bestellt=true;
+    pSchnell.bestelltMenge='5 kg (1 Eimer)';
+    pSchnell.bestelltAm=new Date('2026-06-27').toISOString();
+    pSchnell.lieferDatum='2026-07-02';
+    changed=true;
+  }
+  // Langzeit-MiniChlorTabs 5kg: Lieferung 09.07.–10.07.2026 (nehme 09.07.)
+  var pLZ=poolProdukte.find(function(p){return p.poolId==='langzeit_chlortabs';});
+  if(pLZ&&!pLZ.bestellt){
+    pLZ.bestellt=true;
+    pLZ.bestelltMenge='5 kg (4× Dosen + Dosierschwimmer)';
+    pLZ.bestelltAm=new Date('2026-06-27').toISOString();
+    pLZ.lieferDatum='2026-07-09';
+    changed=true;
+  }
+  if(changed){saveProdukte();if(typeof renderProduktBoard==='function')renderProduktBoard();if(typeof renderStockDashboard==='function')renderStockDashboard();}
+})();
+
+
 // Migration: Langzeit-Chlortabs hinzufügen falls nicht vorhanden
 (function(){
   if(!poolProdukte.find(function(p){return p.poolId==='langzeit_chlortabs';})){
@@ -11291,6 +11537,7 @@ function openProduktDetail(poolId){
         <span style="font-size:0.8rem;color:var(--text-muted);flex:1">${stockProd?stockProd.unit:''} <em>${isAnk?'angebrochen':'verschlossen'}</em></span>
         ${isAnk?`<button onclick="markGebindeVerbraucht('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;cursor:pointer">📭 Verpackung leer</button>`
                :`<button onclick="gebindeOeffnen('${stockKey}',${g.id})" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;cursor:pointer">↑ öffnen</button>`}
+        ${isAnk&&g.tara?`<button onclick="openEimerWiegenModal('${stockKey}',${g.id},${g.tara},'${poolId}')" style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;cursor:pointer">⚖️ Wiegen</button>`:''}
         <button onclick="(function(){const s=chemStock['${stockKey}'];s.gebinde=s.gebinde.filter(x=>x.id!==${g.id});s.qty=s.gebinde.filter(x=>x.status!=='verbraucht').reduce((a,x)=>a+x.qty,0);sd('chem_stock_v2',chemStock);openProduktDetail('${poolId}');})()" style="font-size:0.72rem;padding:3px 7px;border-radius:6px;background:none;color:#94a3b8;border:1px solid var(--border);cursor:pointer">🗑</button>
       </div>`;
     }).join('');
@@ -11309,7 +11556,7 @@ function openProduktDetail(poolId){
   const stockHtml=stockKey&&stockProd?`<div class="card" style="margin-bottom:8px;background:var(--pool-surface)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div class="card-title" style="font-size:0.78rem;margin:0">📦 Vorrat & Gebinde (${stockProd.unit})</div>
-      <button onclick="(function(){const qty=parseFloat(prompt('Menge neues Gebinde (${stockProd.unit}):','${stockProd.pkgDefault||1000}'));if(!isNaN(qty)&&qty>0){addGebinde('${stockKey}',qty);openProduktDetail('${poolId}');}})()" style="font-size:0.72rem;padding:3px 10px;border-radius:6px;background:var(--pool-blue);color:white;border:none;cursor:pointer">+ Gebinde</button>
+      <button onclick="openAddGebindeModal('${stockKey}')" style="font-size:0.72rem;padding:3px 10px;border-radius:6px;background:var(--pool-blue);color:white;border:none;cursor:pointer">+ Gebinde</button>
     </div>
     <div id="pd-gebinde-list-${poolId}">${renderGebindeRows()}</div>
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:6px;display:flex;justify-content:space-between;align-items:center">
