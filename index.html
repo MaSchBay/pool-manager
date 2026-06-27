@@ -6965,15 +6965,13 @@ function renderStockDashboard(){
   el.innerHTML=Object.entries(chemStock).map(([name,s])=>{
     try{
     const p=STOCK_PRODUCTS[name];if(!p)return'';
-    // Balken: qty / peakQty (wie viel vom Maximalbestand bleibt)
-    // Fallback: pkgDefault wenn noch kein Peak bekannt
-    // Balken: qty / (aktive Packungen × pkgDefault) = wie voll sind alle Packungen zusammen
+    // Balken: Reichweite in Tagen (max 90d = 100%)
+    // Farbe: grün ≥19d, orange 14–19d, rot <14d
     initGebinde(name);
-    const _activeGeb=s.gebinde.filter(function(g){return g.status!=='verbraucht';});
-    const _totalCap=(_activeGeb.length>0?_activeGeb.length:1)*p.pkgDefault;
-    const pct=_totalCap>0?Math.round(s.qty/_totalCap*100):0;
-    const barCls=pct>=60?'stock-bar-ok':pct>=30?'stock-bar-warn':'stock-bar-empty';
-    const warn=pct<20?'<span style="color:#dc2626;font-size:0.68rem;font-weight:800;margin-left:4px">⚠️ Nachkaufen!</span>':'';
+    var _reichPct=null;try{var _rp=calcReichweite(name);if(_rp)_reichPct=_rp;}catch(e){}
+    const pct=_reichPct?Math.min(100,Math.round(_reichPct.days/90*100)):0;
+    const barCls=pct>=22?'stock-bar-ok':pct>=16?'stock-bar-warn':'stock-bar-empty';
+    const warn='';
     // Menge anzeigen: bei Tabs auch Gewicht
     let qtyStr=p.unit==='Stk'?s.qty+' Stk':(p.unit==='ml'&&s.qty>=1000?(s.qty/1000).toFixed(1)+' L':s.qty+' '+p.unit);
     if(p.type==='tabs'&&p.tabWeightG){
@@ -6986,7 +6984,7 @@ function renderStockDashboard(){
     // Inaktive Produkte im Dashboard ausblenden
     if(prod&&prod.active===false) return '';
     const imgHtml=prod&&prod.img?`<img class="stock-item-img" src="${prod.img}" alt="${name}">`:`<div class="stock-item-img-placeholder">🧪</div>`;
-    const buyBtn=prod&&prod.amazon&&pct<50&&prod.active!==false?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
+    const buyBtn=prod&&prod.amazon&&(!_reichPct||_reichPct.days<30)&&prod.active!==false?`<button class="stock-buy-btn" onclick="window.open('${prod.amazon}','_blank')" title="Bei Amazon nachbestellen">🛒</button>`:'';
     // warn für inaktive Produkte unterdrücken (prod jetzt verfügbar)
     var _reich=null;try{_reich=calcReichweite(name);}catch(e){}
     var reichHtml='';
@@ -7020,7 +7018,7 @@ function renderStockDashboard(){
         ${gebindeInfoHtml?`<div style="margin-top:2px;display:flex;flex-wrap:wrap;gap:3px;align-items:center">${gebindeInfoHtml}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;width:56px;gap:2px">
-        <div style="font-weight:800;font-size:0.78rem;text-align:right;color:${pct<20?'#dc2626':pct<50?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
+        <div style="font-weight:800;font-size:0.78rem;text-align:right;color:${_reichPct&&_reichPct.days<14?'#dc2626':_reichPct&&_reichPct.days<19?'#d97706':'var(--ok-green)'}">${qtyStr}</div>
         ${reichHtml}
       </div>
       ${buyBtn}
