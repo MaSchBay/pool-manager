@@ -11014,9 +11014,9 @@ function saveProdukte(){ sd('pool_produkte_v1', poolProdukte); }
   }
   // Langzeit-MiniChlorTabs 5kg: Lieferung 09.07.–10.07.2026 (nehme 09.07.)
   var pLZ=poolProdukte.find(function(p){return p.poolId==='langzeit_chlortabs';});
-  if(pLZ&&!pLZ.bestellt){
+  if(pLZ&&(pLZ.bestelltMenge==='5 kg (4× Dosen + Dosierschwimmer)'||!pLZ.bestellt)){
     pLZ.bestellt=true;
-    pLZ.bestelltMenge='5 kg (4× Dosen + Dosierschwimmer)';
+    pLZ.bestelltMenge='5 kg (5× Dosen + Dosierschwimmer)';
     pLZ.bestelltAm=new Date('2026-06-27').toISOString();
     pLZ.lieferDatum='2026-07-09';
     changed=true;
