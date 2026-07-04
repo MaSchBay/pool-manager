@@ -3233,6 +3233,8 @@ function quickCompleteTask(id){
     qty2Row.style.display='block';
     document.getElementById('task-confirm-qty2-label').textContent=scLabel;
     document.getElementById('task-confirm-qty2').value=scDefault;
+    // Pkg-Switch für Langzeit-Chlortabs anzeigen wenn angebrochenes Gebinde vorhanden
+    showPkgSwitchIfMultiGebinde('Langzeit-Chlortabs', 'Stk');
   } else {
     qty2Row.style.display='none';
     if(p){
